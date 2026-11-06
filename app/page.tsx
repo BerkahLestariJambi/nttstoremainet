@@ -12,15 +12,19 @@ declare global {
   }
 }
 
-// 🔑 KONFIGURASI — Sesuaikan dengan milikmu!
+// ==========================================
+// ⚙️ KONFIGURASI — CEK & SESUAIKAN!
+// ==========================================
 const CONFIG = {
   CLIENT_ID: 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s',
-  REDIRECT_URI: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
+  get REDIRECT_URI() {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/auth/callback`;
+  },
   SCOPE: 'username payments',
-  // ✅ Gunakan endpoint resmi Pi Sandbox
   PISIGN_SANDBOX_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox',
-  // Gunakan ini untuk Mainnet nanti:
-  // PISIGN_MAINNET_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth',
+  PISIGN_MAINNET_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth',
+  IS_SANDBOX: true, // UBAH KE FALSE SAAT PRODUKSI
 };
 
 export default function HomePage() {
@@ -29,26 +33,31 @@ export default function HomePage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [initDone, setInitDone] = useState<boolean>(false);
 
-  // Inisialisasi Pi SDK
+  // ==========================================
+  // 🔄 INISIALISASI PI SDK
+  // ==========================================
   useEffect(() => {
     let attempts = 0;
-    const maxAttempts = 15;
+    const maxAttempts = 20;
 
     const checkPiReady = () => {
       attempts++;
       if (typeof window !== 'undefined' && window.Pi) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: true });
+          window.Pi.init({ 
+            version: '2.0', 
+            sandbox: CONFIG.IS_SANDBOX 
+          });
           setIsPiBrowser(true);
-          console.log('✅ Pi SDK siap');
+          console.log('✅ Pi SDK Siap — Mode:', CONFIG.IS_SANDBOX ? 'Sandbox' : 'Mainnet');
         } catch (err) {
-          console.warn('Pi SDK init:', err);
+          console.warn('⚠️ Pi SDK Init Warning:', err);
         }
         setInitDone(true);
         return true;
       }
       if (attempts >= maxAttempts) {
-        console.log('ℹ️ Tidak terdeteksi di Pi Browser — gunakan PiSign mode');
+        console.log('ℹ️ Bukan di Pi Browser — Gunakan PiSign Mode');
         setInitDone(true);
         return true;
       }
@@ -58,46 +67,70 @@ export default function HomePage() {
     if (!checkPiReady()) {
       const timer = setInterval(() => {
         if (checkPiReady()) clearInterval(timer);
-      }, 400);
+      }, 300);
       return () => clearInterval(timer);
     }
   }, []);
 
-  // === Autentikasi ===
+  // ==========================================
+  // 🔐 FUNGSI AUTENTIKASI LENGKAP
+  // ==========================================
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 🌐 ALUR A: Di Pi Browser → Native SDK
+    // 🌐 ALUR 1: DI PI BROWSER → NATIVE SDK
     if (typeof window !== 'undefined' && window.Pi) {
+      console.log('🔐 Mulai Autentikasi Pi Browser...');
       try {
-        const auth = await window.Pi.authenticate(
-          ['username', 'payments'],
-          (payment: any) => console.log('Pembayaran belum selesai:', payment)
-        );
-        setPiUser({
-          username: auth.user.username,
-          accessToken: auth.accessToken,
-          uid: auth.user.uid,
+        const scopes = ['username', 'payments'];
+
+        const authResult = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Waktu habis — coba tutup & buka ulang Pi Browser'));
+          }, 20000);
+
+          window.Pi.authenticate(
+            scopes,
+            (payment: any) => console.log('📌 Pembayaran belum selesai:', payment)
+          )
+          .then((result: any) => {
+            clearTimeout(timeout);
+            resolve(result);
+          })
+          .catch((err: any) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
         });
+
+        console.log('✅ Login Berhasil — User:', authResult.user.username);
+        setPiUser({
+          username: authResult.user.username,
+          accessToken: authResult.accessToken,
+          uid: authResult.user.uid,
+        });
+
       } catch (err: any) {
-        alert(`❌ Gagal: ${err.message || 'Coba lagi'}`);
+        console.error('❌ Error Autentikasi:', err);
+        const pesan = err?.message || 'Gagal terhubung — coba lagi nanti';
+        alert(`⚠️ ${pesan}`);
       } finally {
-        setLoading(false);
+        setLoading(false); // ⚠️ PENTING: Selalu matikan loading
       }
       return;
     }
 
-    // 🔑 ALUR B: Browser Lain → PiSign Redirect
+    // 🔑 ALUR 2: DI BROWSER LAIN → PISIGN OAUTH
     try {
-      // 1. Buat state anti-CSRF
+      console.log('🔑 Mulai PiSign OAuth...');
+
+      // 1. Generate State Anti-CSRF
       const array = new Uint8Array(16);
       window.crypto.getRandomValues(array);
-      const state = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-      
-      // Simpan state untuk diverifikasi di halaman callback
+      const state = Array.from(array, b => b.toString(16).padStart(2, '0')).join();
       sessionStorage.setItem('pisign_state', state);
 
-      // 2. Bangun URL dengan parameter yang BENAR
+      // 2. Bangun URL
       const authUrl = new URL(CONFIG.PISIGN_SANDBOX_URL);
       authUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
       authUrl.searchParams.set('redirect_uri', CONFIG.REDIRECT_URI);
@@ -105,17 +138,19 @@ export default function HomePage() {
       authUrl.searchParams.set('scope', CONFIG.SCOPE);
       authUrl.searchParams.set('state', state);
 
-      console.log('➡️ Mengalihkan ke:', authUrl.toString());
-      
-      // 3. Redirect ke halaman login PiSign
+      console.log('➡️ Redirect ke:', authUrl.toString());
       window.location.href = authUrl.toString();
-      
+
     } catch (err: any) {
+      console.error('❌ Error PiSign:', err);
       alert(`❌ Gagal memulai login: ${err.message}`);
       setLoading(false);
     }
   }, [setPiUser]);
 
+  // ==========================================
+  // 🎨 TAMPILAN
+  // ==========================================
   return (
     <div className="space-y-8">
       {/* Hero Banner */}
@@ -143,7 +178,7 @@ export default function HomePage() {
               <button
                 onClick={handleAuthenticate}
                 disabled={loading || !initDone}
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-60"
               >
                 {loading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -152,7 +187,7 @@ export default function HomePage() {
                 ) : (
                   <ShieldCheck className="w-5 h-5 text-yellow-300" />
                 )}
-                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
+                {loading ? 'Memproses...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
               </button>
             )}
 
@@ -167,7 +202,7 @@ export default function HomePage() {
           {!isPiBrowser && !piUser && initDone && (
             <div className="mt-3 text-sm text-yellow-200/90 flex items-center gap-2 bg-black/10 p-3 rounded-xl">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>Di Chrome/Safari? Klik <strong>"Login via Pi Sign"</strong> — akan terbuka halaman Pi untuk masuk.</span>
+              <span>Di Chrome/Safari? Klik <strong>"Login via Pi Sign"</strong> untuk masuk dengan akun Pi.</span>
             </div>
           )}
         </div>
