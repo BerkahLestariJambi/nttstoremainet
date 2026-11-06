@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
-
 export default function HomePage() {
   return (
     <div className="space-y-8">
