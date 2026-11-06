@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
-import { Wallet, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -17,13 +17,13 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Deteksi akurat Pi Browser via UserAgent saat komponen dimuat
+  // Deteksi akurat apakah pengguna benar-benar membuka dari aplikasi Pi Browser (User Agent / Native Window)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userAgent = navigator.userAgent || '';
-      const isPiApp = userAgent.includes('PiBrowser');
+      const isPiUA = userAgent.includes('PiBrowser');
 
-      if (isPiApp && window.Pi) {
+      if (window.Pi && isPiUA) {
         try {
           window.Pi.init({ version: '2.0', sandbox: true });
           setIsPiBrowser(true);
@@ -35,22 +35,14 @@ export default function HomePage() {
   }, []);
 
   const handleAuthenticate = useCallback(async () => {
-    // 1. Cek langsung User Agent saat tombol diklik
-    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    const isPiApp = userAgent.includes('PiBrowser');
-
-    // 2. Jika BUKAN di dalam aplikasi Pi Browser (Chrome / Safari biasa)
-    if (!isPiApp) {
-      const currentUrl = window.location.href.replace(/^https?:\/\//, '');
-      // Langsung buka aplikasi Pi Browser tanpa set State loading yang bikin stuck
-      window.location.href = `pi://${currentUrl}`;
-      return;
-    }
-
-    // 3. Jika BENAR-BENAR dibuka di dalam Pi Browser App
     setLoading(true);
-    try {
-      if (typeof window !== 'undefined' && window.Pi) {
+
+    // 1. Jika BENAR-BENAR dibuka di dalam Pi Browser App
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isPiUA = userAgent.includes('PiBrowser');
+
+    if (typeof window !== 'undefined' && window.Pi && isPiUA) {
+      try {
         const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
@@ -62,12 +54,36 @@ export default function HomePage() {
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
+      } catch (error: any) {
+        alert(`Autentikasi Pi Browser gagal: ${error.message}`);
+      } finally {
+        setLoading(false);
       }
-    } catch (error: any) {
-      console.error('Auth Error:', error);
-      alert(`Gagal menghubungkan: ${error?.message || 'Terjadi kesalahan.'}`);
-    } finally {
-      // Pastikan status loading SELALU mati, apapun yang terjadi
+      return;
+    }
+
+    // 2. Jika dibuka di Chrome/Safari/Edge Biasa (PiSign OAuth Flow)
+    try {
+      // Generate State acak
+      const array = new Uint8Array(16);
+      window.crypto.getRandomValues(array);
+      const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+      // Simpan di sessionStorage
+      sessionStorage.setItem('pisign_state', state);
+      sessionStorage.setItem('pi_oauth_state', state);
+
+      const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`);
+      const scope = encodeURIComponent('username payments');
+
+      // Endpoint Otorisasi PiSign OAuth Sandbox
+      const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
+
+      // Force Redirect
+      window.location.href = piSignAuthUrl;
+    } catch (err: any) {
+      alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
       setLoading(false);
     }
   }, [setPiUser]);
@@ -78,7 +94,7 @@ export default function HomePage() {
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Ecosystem' : 'External Browser Mode'}
+            {isPiBrowser ? 'Pi Browser Native' : 'PiSign Multi-Browser Mode'}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
@@ -102,8 +118,8 @@ export default function HomePage() {
                 disabled={loading}
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
-                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ExternalLink className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Memproses...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Buka di Pi Browser'}
+                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
+                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
               </button>
             )}
 
@@ -114,6 +130,12 @@ export default function HomePage() {
               Jelajahi Produk
             </Link>
           </div>
+
+          {!isPiBrowser && !piUser && (
+            <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Klik <strong>Login via Pi Sign</strong> di atas.
+            </div>
+          )}
         </div>
       </section>
 
