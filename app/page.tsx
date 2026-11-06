@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
-import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
+import ProductGrid from '@/components/product/ProductGrid';
+import { Wallet, CheckCircle2, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -12,90 +12,106 @@ declare global {
   }
 }
 
+// 🔑 KONFIGURASI — Sesuaikan dengan milikmu!
+const CONFIG = {
+  CLIENT_ID: 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s',
+  REDIRECT_URI: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : '',
+  SCOPE: 'username payments',
+  // ✅ Gunakan endpoint resmi Pi Sandbox
+  PISIGN_SANDBOX_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox',
+  // Gunakan ini untuk Mainnet nanti:
+  // PISIGN_MAINNET_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth',
+};
+
 export default function HomePage() {
   const { piUser, setPiUser } = useCart();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [initDone, setInitDone] = useState<boolean>(false);
 
-  // Inisialisasi Pi Native SDK (Polling hingga objek window.Pi siap jika dibuka di Pi Browser)
+  // Inisialisasi Pi SDK
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
     let attempts = 0;
+    const maxAttempts = 15;
 
-    const checkAndInitPi = () => {
+    const checkPiReady = () => {
       attempts++;
       if (typeof window !== 'undefined' && window.Pi) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: true }); // Ubah sandbox: false untuk Mainnet
+          window.Pi.init({ version: '2.0', sandbox: true });
           setIsPiBrowser(true);
-          clearInterval(intervalId);
+          console.log('✅ Pi SDK siap');
         } catch (err) {
-          console.error('Pi SDK Init error:', err);
+          console.warn('Pi SDK init:', err);
         }
-      } else if (attempts >= 10) {
-        clearInterval(intervalId);
+        setInitDone(true);
+        return true;
       }
+      if (attempts >= maxAttempts) {
+        console.log('ℹ️ Tidak terdeteksi di Pi Browser — gunakan PiSign mode');
+        setInitDone(true);
+        return true;
+      }
+      return false;
     };
 
-    checkAndInitPi();
-    intervalId = setInterval(checkAndInitPi, 500);
-
-    return () => clearInterval(intervalId);
+    if (!checkPiReady()) {
+      const timer = setInterval(() => {
+        if (checkPiReady()) clearInterval(timer);
+      }, 400);
+      return () => clearInterval(timer);
+    }
   }, []);
 
-  // Fungsi Autentikasi Dual-Mode (Native SDK & PiSign OAuth)
+  // === Autentikasi ===
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // ==========================================
-    // ALUR 1: Dibuka di Pi Browser (Native SDK)
-    // ==========================================
+    // 🌐 ALUR A: Di Pi Browser → Native SDK
     if (typeof window !== 'undefined' && window.Pi) {
       try {
-        const scopes = ['username', 'payments'];
-        const onIncompletePaymentFound = (payment: any) => {
-          console.log('Incomplete payment found:', payment);
-        };
-
-        const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+        const auth = await window.Pi.authenticate(
+          ['username', 'payments'],
+          (payment: any) => console.log('Pembayaran belum selesai:', payment)
+        );
         setPiUser({
           username: auth.user.username,
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
-      } catch (error: any) {
-        alert(`Autentikasi Pi Browser gagal: ${error.message}`);
+      } catch (err: any) {
+        alert(`❌ Gagal: ${err.message || 'Coba lagi'}`);
       } finally {
         setLoading(false);
       }
       return;
     }
 
-    // ==========================================
-    // ALUR 2: Dibuka di Chrome/Safari (PiSign OAuth Redirect)
-    // ==========================================
+    // 🔑 ALUR B: Browser Lain → PiSign Redirect
     try {
-      // 1. Generate State Acak untuk Proteksi CSRF
+      // 1. Buat state anti-CSRF
       const array = new Uint8Array(16);
       window.crypto.getRandomValues(array);
-      const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-
-      // 2. Simpan State di sessionStorage untuk verifikasi di callback page
+      const state = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+      
+      // Simpan state untuk diverifikasi di halaman callback
       sessionStorage.setItem('pisign_state', state);
-      sessionStorage.setItem('pi_oauth_state', state);
 
-      // 3. Konfigurasi Client ID & Redirect URI Dinamis
-      const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
-      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`);
-      const scope = encodeURIComponent('username payments');
+      // 2. Bangun URL dengan parameter yang BENAR
+      const authUrl = new URL(CONFIG.PISIGN_SANDBOX_URL);
+      authUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
+      authUrl.searchParams.set('redirect_uri', CONFIG.REDIRECT_URI);
+      authUrl.searchParams.set('response_type', 'token');
+      authUrl.searchParams.set('scope', CONFIG.SCOPE);
+      authUrl.searchParams.set('state', state);
 
-      // 4. Endpoint Otorisasi PiSign (Mode Sandbox)
-      const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
-
-      // 5. Eksekusi Redirect Langsung
-      window.location.assign(piSignAuthUrl);
+      console.log('➡️ Mengalihkan ke:', authUrl.toString());
+      
+      // 3. Redirect ke halaman login PiSign
+      window.location.href = authUrl.toString();
+      
     } catch (err: any) {
-      alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
+      alert(`❌ Gagal memulai login: ${err.message}`);
       setLoading(false);
     }
   }, [setPiUser]);
@@ -106,7 +122,7 @@ export default function HomePage() {
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Native' : 'PiSign Multi-Browser Mode'}
+            {isPiBrowser ? '🌐 Pi Browser Native' : '🔑 PiSign Multi-Browser Mode'}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
@@ -114,23 +130,28 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg opacity-90 leading-relaxed">
-            Pusat belanja produk khas Nusa Tenggara Timur (Tenun Ikat, Kopi Flores, & Hasil Alam) menggunakan mata uang Pi Coin (π).
+            Pusat belanja produk khas NTT — Tenun Ikat, Kopi Flores, Hasil Alam — bayar pakai Pi Coin (π).
           </p>
 
           <div className="pt-4 flex flex-wrap gap-4 items-center">
             {piUser ? (
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-3 rounded-2xl font-medium">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-5 py-3 rounded-2xl font-medium">
                 <CheckCircle2 className="w-5 h-5 text-green-400" />
                 <span>Terhubung sebagai <strong>@{piUser.username}</strong></span>
               </div>
             ) : (
               <button
-                type="button"
                 onClick={handleAuthenticate}
-                disabled={loading}
+                disabled={loading || !initDone}
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
-                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : isPiBrowser ? (
+                  <Wallet className="w-5 h-5" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-yellow-300" />
+                )}
                 {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
               </button>
             )}
@@ -143,15 +164,16 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {!isPiBrowser && !piUser && (
-            <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Gunakan <strong>Login via Pi Sign</strong> di atas.
+          {!isPiBrowser && !piUser && initDone && (
+            <div className="mt-3 text-sm text-yellow-200/90 flex items-center gap-2 bg-black/10 p-3 rounded-xl">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>Di Chrome/Safari? Klik <strong>"Login via Pi Sign"</strong> — akan terbuka halaman Pi untuk masuk.</span>
             </div>
           )}
         </div>
       </section>
 
-      {/* Katalog Produk Unggulan */}
+      {/* Katalog Produk */}
       <section>
         <h2 className="text-2xl font-bold mb-6 text-gray-900">Produk Unggulan NTT</h2>
         <ProductGrid />
