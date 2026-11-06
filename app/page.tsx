@@ -17,40 +17,31 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Inisialisasi Pi Native SDK (Polling hingga objek window.Pi siap jika dibuka di Pi Browser)
+  // Deteksi akurat apakah pengguna benar-benar membuka dari aplikasi Pi Browser (User Agent / Native Window)
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    let attempts = 0;
+    if (typeof window !== 'undefined') {
+      const userAgent = navigator.userAgent || '';
+      const isPiUA = userAgent.includes('PiBrowser');
 
-    const checkAndInitPi = () => {
-      attempts++;
-      if (typeof window !== 'undefined' && window.Pi) {
+      if (window.Pi && isPiUA) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: true }); // Ubah sandbox: false untuk Mainnet
+          window.Pi.init({ version: '2.0', sandbox: true });
           setIsPiBrowser(true);
-          clearInterval(intervalId);
         } catch (err) {
           console.error('Pi SDK Init error:', err);
         }
-      } else if (attempts >= 10) {
-        clearInterval(intervalId);
       }
-    };
-
-    checkAndInitPi();
-    intervalId = setInterval(checkAndInitPi, 500);
-
-    return () => clearInterval(intervalId);
+    }
   }, []);
 
-  // Fungsi Autentikasi Dual-Mode (Native SDK & PiSign OAuth)
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // ==========================================
-    // ALUR 1: Dibuka di Pi Browser (Native SDK)
-    // ==========================================
-    if (typeof window !== 'undefined' && window.Pi) {
+    // 1. Jika BENAR-BENAR dibuka di dalam Pi Browser App
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isPiUA = userAgent.includes('PiBrowser');
+
+    if (typeof window !== 'undefined' && window.Pi && isPiUA) {
       try {
         const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
@@ -71,29 +62,26 @@ export default function HomePage() {
       return;
     }
 
-    // ==========================================
-    // ALUR 2: Dibuka di Chrome/Safari (PiSign OAuth Redirect)
-    // ==========================================
+    // 2. Jika dibuka di Chrome/Safari/Edge Biasa (PiSign OAuth Flow)
     try {
-      // 1. Generate State Acak untuk Proteksi CSRF
+      // Generate State acak
       const array = new Uint8Array(16);
       window.crypto.getRandomValues(array);
       const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
-      // 2. Simpan State di sessionStorage untuk verifikasi di callback page
+      // Simpan di sessionStorage
       sessionStorage.setItem('pisign_state', state);
       sessionStorage.setItem('pi_oauth_state', state);
 
-      // 3. Konfigurasi Client ID & Redirect URI Dinamis
       const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
       const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`);
       const scope = encodeURIComponent('username payments');
 
-      // 4. Endpoint Otorisasi PiSign (Mode Sandbox)
+      // Endpoint Otorisasi PiSign OAuth Sandbox
       const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
 
-      // 5. Eksekusi Redirect Langsung
-      window.location.assign(piSignAuthUrl);
+      // Force Redirect
+      window.location.href = piSignAuthUrl;
     } catch (err: any) {
       alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
       setLoading(false);
@@ -145,7 +133,7 @@ export default function HomePage() {
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Gunakan <strong>Login via Pi Sign</strong> di atas.
+              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Klik <strong>Login via Pi Sign</strong> di atas.
             </div>
           )}
         </div>
