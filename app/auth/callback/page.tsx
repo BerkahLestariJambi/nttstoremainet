@@ -1,122 +1,146 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useCart } from '@/context/CartContext';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Loader2, ArrowRight, Home } from 'lucide-react';
 
-export default function PiSignCallbackPage() {
-  const router = useRouter();
+export default function AuthCallbackPage() {
   const { setPiUser } = useCart();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [message, setMessage] = useState('Memproses login...');
+  const [errorDetail, setErrorDetail] = useState('');
+
+  // Ekstrak parameter dari URL hash
+  const parseHashParams = useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    
+    const hash = window.location.hash.substring(1); // Hapus # di depan
+    if (!hash) return null;
+
+    const params = new URLSearchParams(hash);
+    return {
+      accessToken: params.get('access_token'),
+      tokenType: params.get('token_type'),
+      expiresIn: params.get('expires_in'),
+      state: params.get('state'),
+      error: params.get('error'),
+      errorDescription: params.get('error_description'),
+    };
+  }, []);
 
   useEffect(() => {
-    const handleCallback = async () => {
+    const processCallback = async () => {
       try {
-        // 1. Ambil URL Fragment Hash (#access_token=...&state=...)
-        const hash = window.location.hash.substring(1);
-        if (!hash) {
-          throw new Error('Fragment otentikasi tidak ditemukan.');
+        const params = parseHashParams();
+        
+        if (!params) {
+          setStatus('error');
+          setMessage('Tidak ada data login yang diterima');
+          setErrorDetail('URL tidak berisi parameter autentikasi');
+          return;
         }
 
-        const params = new URLSearchParams(hash);
+        // ❌ Tangkap error dari PiSign
+        if (params.error) {
+          setStatus('error');
+          setMessage('Login ditolak atau gagal');
+          setErrorDetail(`${params.error}: ${params.errorDescription}`);
+          return;
+        }
 
-        // 2. Verifikasi State untuk Mencegah Serangan CSRF
-        const stateFromUrl = params.get('state');
+        // ✅ Verifikasi state (anti-CSRF)
         const savedState = sessionStorage.getItem('pisign_state');
-
-        if (!stateFromUrl || stateFromUrl !== savedState) {
-          throw new Error('State mismatch — kemungkinan serangan CSRF. Autentikasi dibatalkan.');
+        if (!savedState || params.state !== savedState) {
+          setStatus('error');
+          setMessage('Verifikasi keamanan gagal');
+          setErrorDetail('State tidak cocok — coba login ulang');
+          return;
         }
 
-        // Hapus state dari sessionStorage setelah diverifikasi
+        if (!params.accessToken) {
+          setStatus('error');
+          setMessage('Token akses tidak ditemukan');
+          return;
+        }
+
+        // ✅ Bersihkan state yang sudah dipakai
         sessionStorage.removeItem('pisign_state');
 
-        // 3. Cek Error dari Response OAuth
-        const error = params.get('error');
-        if (error) {
-          throw new Error(`Otorisasi Pi Sign ditolak/gagal: ${error}`);
-        }
-
-        const accessToken = params.get('access_token');
-        if (!accessToken) {
-          throw new Error('Access token tidak ditemukan di URL callback.');
-        }
-
-        // 4. Panggil API Pi Platform /v2/me Menggunakan Access Token
-        const meResponse = await fetch('https://api.minepi.com/v2/me', {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
+        // 🔍 Ambil info user dari API Pi
+        const userRes = await fetch('https://api.minepi.com/v2/me', {
+          headers: { Authorization: `Bearer ${params.accessToken}` },
         });
 
-        if (!meResponse.ok) {
-          throw new Error('Gagal mengambil data profil dari Server Pi Network.');
-        }
+        if (!userRes.ok) throw new Error('Gagal mengambil data pengguna');
+        const userData = await userRes.json();
 
-        const me = await meResponse.json();
-
-        // 5. Simpan Data User ke CartContext
+        // ✅ Simpan ke Context
         setPiUser({
-          username: me.username,
-          accessToken: accessToken,
-          uid: me.uid,
+          username: userData.username,
+          uid: userData.uid,
+          accessToken: params.accessToken,
         });
-
-        // 6. Hapus Token dari Address Bar Browser History demi Keamanan
-        window.history.replaceState(null, '', window.location.pathname);
 
         setStatus('success');
+        setMessage(`Selamat datang, @${userData.username}!`);
 
-        // Redirect Kembali ke Halaman Utam
-        setTimeout(() => {
-          router.push('/');
-        }, 1500);
+        // 🔄 Redirect ke beranda setelah 2 detik
+        setTimeout(() => window.location.href = '/', 2500);
+
       } catch (err: any) {
-        console.error('PiSign Callback Error:', err);
-        setErrorMessage(err.message || 'Terjadi kesalahan saat memverifikasi Pi Sign.');
         setStatus('error');
+        setMessage('Terjadi kesalahan saat memproses login');
+        setErrorDetail(err.message);
       }
     };
 
-    handleCallback();
-  }, [router, setPiUser]);
+    processCallback();
+  }, [parseHashParams, setPiUser]);
 
   return (
-    <div className="max-w-md mx-auto my-16 p-8 bg-white rounded-3xl border border-gray-100 shadow-sm text-center space-y-4">
-      {status === 'loading' && (
-        <>
-          <Loader2 className="w-12 h-12 text-purple-600 animate-spin mx-auto" />
-          <h2 className="text-xl font-bold text-gray-900">Memverifikasi Pi Sign...</h2>
-          <p className="text-xs text-gray-500">Mohon tunggu sebentar, sedang menghubungkan dompet Pi Anda.</p>
-        </>
-      )}
+    <div className="min-h-[70vh] flex items-center justify-center px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center space-y-6">
+        
+        {status === 'loading' && (
+          <>
+            <Loader2 className="w-16 h-16 text-purple-600 mx-auto animate-spin" />
+            <h2 className="text-xl font-bold text-gray-800">Memproses Login</h2>
+            <p className="text-gray-500">{message}</p>
+          </>
+        )}
 
-      {status === 'success' && (
-        <>
-          <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
-          <h2 className="text-xl font-bold text-gray-900">Login Pi Sign Berhasil!</h2>
-          <p className="text-xs text-gray-500">Mengalihkan kembali ke toko...</p>
-        </>
-      )}
+        {status === 'success' && (
+          <>
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="w-12 h-12 text-green-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">Berhasil Masuk!</h2>
+            <p className="text-green-600 font-medium">{message}</p>
+            <p className="text-sm text-gray-400">Mengalihkan ke beranda...</p>
+            <Link href="/" className="inline-flex items-center gap-2 text-purple-600 font-medium hover:underline">
+              Kembali sekarang <ArrowRight className="w-4 h-4" />
+            </Link>
+          </>
+        )}
 
-      {status === 'error' && (
-        <>
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
-          <h2 className="text-xl font-bold text-gray-900">Verifikasi Gagal</h2>
-          <p className="text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100">
-            {errorMessage}
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="mt-4 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition"
-          >
-            Kembali ke Beranda
-          </button>
-        </>
-      )}
+        {status === 'error' && (
+          <>
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-12 h-12 text-red-500" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">Login Gagal</h2>
+            <p className="text-red-600">{message}</p>
+            {errorDetail && (
+              <p className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">ℹ️ {errorDetail}</p>
+            )}
+            <Link href="/" className="inline-flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-purple-500">
+              <Home className="w-4 h-4" /> Kembali ke Beranda
+            </Link>
+          </>
+        )}
+        
+      </div>
     </div>
   );
 }
