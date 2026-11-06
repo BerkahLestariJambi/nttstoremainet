@@ -13,7 +13,7 @@ declare global {
 }
 
 // ==========================================
-// ⚙️ KONFIGURASI — CEK & SESUAIKAN!
+// ⚙️ KONFIGURASI
 // ==========================================
 const CONFIG = {
   CLIENT_ID: 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s',
@@ -23,8 +23,7 @@ const CONFIG = {
   },
   SCOPE: 'username payments',
   PISIGN_SANDBOX_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox',
-  PISIGN_MAINNET_URL: 'https://app-cdn.minepi.com/mobile-app-ui/app-auth',
-  IS_SANDBOX: true, // UBAH KE FALSE SAAT PRODUKSI
+  IS_SANDBOX: true,
 };
 
 export default function HomePage() {
@@ -44,12 +43,12 @@ export default function HomePage() {
       attempts++;
       if (typeof window !== 'undefined' && window.Pi) {
         try {
-          window.Pi.init({ 
-            version: '2.0', 
-            sandbox: CONFIG.IS_SANDBOX 
+          window.Pi.init({
+            version: '2.0',
+            sandbox: CONFIG.IS_SANDBOX,
           });
           setIsPiBrowser(true);
-          console.log('✅ Pi SDK Siap — Mode:', CONFIG.IS_SANDBOX ? 'Sandbox' : 'Mainnet');
+          console.log('✅ Pi SDK Siap');
         } catch (err) {
           console.warn('⚠️ Pi SDK Init Warning:', err);
         }
@@ -57,7 +56,7 @@ export default function HomePage() {
         return true;
       }
       if (attempts >= maxAttempts) {
-        console.log('ℹ️ Bukan di Pi Browser — Gunakan PiSign Mode');
+        console.log('ℹ️ Gunakan PiSign Mode');
         setInitDone(true);
         return true;
       }
@@ -73,46 +72,37 @@ export default function HomePage() {
   }, []);
 
   // ==========================================
-  // 🔐 FUNGSI AUTENTIKASI LENGKAP
+  // 🔐 FUNGSI AUTENTIKASI
   // ==========================================
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 🌐 ALUR 1: DI PI BROWSER → NATIVE SDK
+    // 🌐 ALUR 1: PI BROWSER — NATIVE SDK
     if (typeof window !== 'undefined' && window.Pi) {
       console.log('🔐 Mulai Autentikasi Pi Browser...');
       try {
         const scopes = ['username', 'payments'];
 
-        interface PiAuthResult {
-  user: {
-    username: string;
-    uid: string;
-  };
-  accessToken: string;
-}
+        const authResult: any = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Waktu habis — tutup & buka ulang Pi Browser'));
+          }, 20000);
 
-const authResult = await new Promise<PiAuthResult>((resolve, reject) => {
-  const timeout = setTimeout(() => {
-    reject(new Error('Waktu habis — coba tutup & buka ulang Pi Browser'));
-  }, 20000);
+          window.Pi.authenticate(
+            scopes,
+            (payment: any) => console.log('📌 Pembayaran belum selesai:', payment)
+          )
+          .then((result: any) => {
+            clearTimeout(timeout);
+            resolve(result);
+          })
+          .catch((err: any) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
 
-  window.Pi.authenticate(
-    scopes,
-    (payment: any) => console.log('📌 Pembayaran belum selesai:', payment)
-  )
-  .then((result: any) => {
-    clearTimeout(timeout);
-    resolve(result);
-  })
-  .catch((err: any) => {
-    clearTimeout(timeout);
-    reject(err);
-  });
-});
-
-console.log('✅ Login Berhasil — User:', authResult.user.username);
-
+        console.log('✅ Login Berhasil — User:', authResult.user.username);
         setPiUser({
           username: authResult.user.username,
           accessToken: authResult.accessToken,
@@ -124,22 +114,20 @@ console.log('✅ Login Berhasil — User:', authResult.user.username);
         const pesan = err?.message || 'Gagal terhubung — coba lagi nanti';
         alert(`⚠️ ${pesan}`);
       } finally {
-        setLoading(false); // ⚠️ PENTING: Selalu matikan loading
+        setLoading(false);
       }
       return;
     }
 
-    // 🔑 ALUR 2: DI BROWSER LAIN → PISIGN OAUTH
+    // 🔑 ALUR 2: BROWSER LAIN — PISIGN OAUTH
     try {
       console.log('🔑 Mulai PiSign OAuth...');
 
-      // 1. Generate State Anti-CSRF
       const array = new Uint8Array(16);
       window.crypto.getRandomValues(array);
       const state = Array.from(array, b => b.toString(16).padStart(2, '0')).join();
       sessionStorage.setItem('pisign_state', state);
 
-      // 2. Bangun URL
       const authUrl = new URL(CONFIG.PISIGN_SANDBOX_URL);
       authUrl.searchParams.set('client_id', CONFIG.CLIENT_ID);
       authUrl.searchParams.set('redirect_uri', CONFIG.REDIRECT_URI);
@@ -162,7 +150,6 @@ console.log('✅ Login Berhasil — User:', authResult.user.username);
   // ==========================================
   return (
     <div className="space-y-8">
-      {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -217,7 +204,6 @@ console.log('✅ Login Berhasil — User:', authResult.user.username);
         </div>
       </section>
 
-      {/* Katalog Produk */}
       <section>
         <h2 className="text-2xl font-bold mb-6 text-gray-900">Produk Unggulan NTT</h2>
         <ProductGrid />
