@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import ProductCard from '@/components/product/ProductCard';
-import { ShoppingCart, Star } from 'lucide-react';
+//import { ShoppingCart, Star } from 'lucide-react';
 import { Product, useCart } from '@/context/CartContext';
 
 export default function ProductCard({ product }: { product: Product }) {
