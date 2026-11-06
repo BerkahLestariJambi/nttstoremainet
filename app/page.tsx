@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
-import { Wallet, CheckCircle2, ShieldCheck, AlertCircle, ExternalLink } from 'lucide-react';
+import { Wallet, CheckCircle2, ExternalLink } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -17,45 +17,33 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Polling deteksi Pi SDK Native (Memastikan window.Pi terdeteksi jika dibuka di Pi Browser)
+  // Deteksi akurat Pi Browser via UserAgent
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    let attempts = 0;
+    if (typeof window !== 'undefined') {
+      const userAgent = navigator.userAgent || '';
+      // Pi Browser menyertakan string 'PiBrowser' di User-Agent HP
+      const isPiApp = userAgent.includes('PiBrowser');
 
-    const checkAndInitPi = () => {
-      attempts++;
-      if (typeof window !== 'undefined') {
-        const userAgent = navigator.userAgent || '';
-        const isPiUA = userAgent.includes('PiBrowser') || Boolean(window.Pi);
-
-        if (window.Pi && isPiUA) {
-          try {
-            window.Pi.init({ version: '2.0', sandbox: true });
-            setIsPiBrowser(true);
-            clearInterval(intervalId);
-          } catch (err) {
-            console.error('Pi SDK Init error:', err);
-          }
+      if (isPiApp && window.Pi) {
+        try {
+          window.Pi.init({ version: '2.0', sandbox: true });
+          setIsPiBrowser(true);
+        } catch (err) {
+          console.error('Pi SDK Init error:', err);
         }
       }
-
-      if (attempts >= 10) {
-        clearInterval(intervalId);
-      }
-    };
-
-    checkAndInitPi();
-    intervalId = setInterval(checkAndInitPi, 300);
-
-    return () => clearInterval(intervalId);
+    }
   }, []);
 
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 1. ALUR NATIVE SDK: Jika dibuka dari Pi Browser App
-    if (typeof window !== 'undefined' && window.Pi) {
-      try {
+    try {
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const isPiApp = userAgent.includes('PiBrowser');
+
+      // 1. Jika BENAR-BENAR dibuka di dalam aplikasi Pi Browser
+      if (typeof window !== 'undefined' && window.Pi && isPiApp) {
         const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
@@ -67,20 +55,18 @@ export default function HomePage() {
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
-      } catch (error: any) {
-        alert(`Autentikasi Pi Browser gagal: ${error.message}`);
-      } finally {
-        setLoading(false);
+      } else {
+        // 2. Jika dibuka dari Chrome / Safari biasa, buka aplikasi Pi Browser
+        const currentUrl = window.location.href.replace(/^https?:\/\//, '');
+        window.location.href = `https://${currentUrl}`;
       }
-      return;
+    } catch (error: any) {
+      console.error('Auth Error:', error);
+      alert(`Gagal menghubungkan: ${error?.message || 'Terjadi kesalahan.'}`);
+    } finally {
+      // Pastikan tombol SELALU kembali dari kondisi loading jika terjadi error
+      setLoading(false);
     }
-
-    // 2. ALUR DEEP LINK / FALLBACK: Jika dibuka dari Chrome/Safari biasa
-    setLoading(false);
-    
-    // Arahkan otomatis membuka domain ini di Pi Browser App
-    const targetUrl = window.location.href.replace(/^https?:\/\//, '');
-    window.location.href = `pi://${targetUrl}`;
   }, [setPiUser]);
 
   return (
@@ -89,7 +75,7 @@ export default function HomePage() {
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Native' : 'External Browser Mode'}
+            {isPiBrowser ? 'Pi Browser Ecosystem' : 'External Browser Mode'}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
@@ -114,7 +100,7 @@ export default function HomePage() {
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
                 {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ExternalLink className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Menyiapkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Buka di Pi Browser'}
+                {loading ? 'Memproses...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Buka di Pi Browser'}
               </button>
             )}
 
@@ -125,12 +111,6 @@ export default function HomePage() {
               Jelajahi Produk
             </Link>
           </div>
-
-          {!isPiBrowser && !piUser && (
-            <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Klik <strong>Buka di Pi Browser</strong> di atas untuk bertransaksi.
-            </div>
-          )}
         </div>
       </section>
 
