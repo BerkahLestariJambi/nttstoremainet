@@ -2,6 +2,7 @@ import '@/app/globals.css';
 import Navbar from '@/components/layout/Navbar';
 import { CartProvider } from '@/context/CartContext';
 
+
 export const metadata = {
   title: 'NTTStorePi - Toko Online Khas NTT',
   description: 'Belanja Tenun Ikat, Kopi Flores, dan Kerajinan NTT dengan Pi Network',
