@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
@@ -14,24 +14,41 @@ declare global {
 
 export default function HomePage() {
   const { piUser, setPiUser } = useCart();
-  const [isPiBrowser, setIsPiBrowser] = useState<boolean>(true);
+  const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
+  // Inisialisasi SDK Pi dengan pemeriksaan aman (Polling hingga script SDK siap)
   useEffect(() => {
-    // Inisialisasi Pi SDK saat halaman dimuat
-    if (typeof window !== 'undefined' && window.Pi) {
-      try {
-        window.Pi.init({ version: '2.0', sandbox: true }); // Set sandbox: false untuk Mainnet
-      } catch (err) {
-        console.error('Pi SDK Init error:', err);
+    let intervalId: NodeJS.Timeout;
+    let attempts = 0;
+
+    const checkAndInitPi = () => {
+      attempts++;
+      if (typeof window !== 'undefined' && window.Pi) {
+        try {
+          window.Pi.init({ version: '2.0', sandbox: true }); // Ubah ke sandbox: false untuk Mainnet
+          setIsPiBrowser(true);
+          clearInterval(intervalId);
+        } catch (err) {
+          console.error('Pi SDK Init error:', err);
+        }
+      } else if (attempts >= 10) {
+        // Hentikan pengecekan setelah 5 detik jika tidak dibuka dari Pi Browser
+        clearInterval(intervalId);
       }
-    } else {
-      setIsPiBrowser(false);
-    }
+    };
+
+    // Cek langsung saat mount
+    checkAndInitPi();
+
+    // Jika belum ada, cek ulang setiap 500ms
+    intervalId = setInterval(checkAndInitPi, 500);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   // Fungsi Autentikasi Pi User
-  const handleAuthenticate = async () => {
+  const handleAuthenticate = useCallback(async () => {
     if (typeof window === 'undefined' || !window.Pi) {
       alert('Harap buka situs ini di dalam aplikasi Pi Browser untuk melakukan autentikasi Pi Network!');
       return;
@@ -40,7 +57,7 @@ export default function HomePage() {
     setLoading(true);
     try {
       const scopes = ['username', 'payments'];
-      
+
       const onIncompletePaymentFound = (payment: any) => {
         console.log('Incomplete payment found:', payment);
       };
@@ -58,7 +75,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setPiUser]);
 
   return (
     <div className="space-y-8">
@@ -104,7 +121,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {!isPiBrowser && (
+          {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4" /> Buka situs ini melalui <strong>Pi Browser</strong> untuk mengaktifkan dompet Pi secara penuh.
             </div>
