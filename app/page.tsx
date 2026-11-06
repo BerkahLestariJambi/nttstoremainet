@@ -17,7 +17,6 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Deteksi akurat apakah pengguna benar-benar membuka dari aplikasi Pi Browser (User Agent / Native Window)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userAgent = navigator.userAgent || '';
@@ -37,7 +36,7 @@ export default function HomePage() {
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 1. Jika BENAR-BENAR dibuka di dalam Pi Browser App
+    // 1. ALUR NATIVE PI BROWSER
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const isPiUA = userAgent.includes('PiBrowser');
 
@@ -62,25 +61,33 @@ export default function HomePage() {
       return;
     }
 
-    // 2. Jika dibuka di Chrome/Safari/Edge Biasa (PiSign OAuth Flow)
+    // 2. ALUR EXTERNAL BROWSER (REDIRECT KE NTTSTOREPI.VERCEL.APP)
     try {
-      // Generate State acak
       const array = new Uint8Array(16);
       window.crypto.getRandomValues(array);
       const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
-      // Simpan di sessionStorage
       sessionStorage.setItem('pisign_state', state);
       sessionStorage.setItem('pi_oauth_state', state);
 
       const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
-      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`);
-      const scope = encodeURIComponent('username payments');
+      
+      // Target redirectDomain NTTStorePi
+      const redirectUri = `${window.location.origin}/auth/callback`; // https://nttstorepi.vercel.app/auth/callback
 
-      // Endpoint Otorisasi PiSign OAuth Sandbox
-      const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
+      // Menyusun parameter query dengan URLSearchParams secara aman
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: 'username payments',
+        state: state,
+      });
 
-      // Force Redirect
+      // Endpoint Otorisasi Resmi
+      const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?${params.toString()}`;
+
+      // Eksekusi Pengalihan
       window.location.href = piSignAuthUrl;
     } catch (err: any) {
       alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
