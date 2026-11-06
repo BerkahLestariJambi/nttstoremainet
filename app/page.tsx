@@ -12,6 +12,7 @@ declare global {
   }
 }
 
+
 const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
 
 export default function HomePage() {
