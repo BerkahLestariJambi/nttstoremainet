@@ -17,11 +17,10 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Deteksi akurat Pi Browser via UserAgent
+  // Deteksi akurat Pi Browser via UserAgent saat komponen dimuat
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userAgent = navigator.userAgent || '';
-      // Pi Browser menyertakan string 'PiBrowser' di User-Agent HP
       const isPiApp = userAgent.includes('PiBrowser');
 
       if (isPiApp && window.Pi) {
@@ -36,14 +35,22 @@ export default function HomePage() {
   }, []);
 
   const handleAuthenticate = useCallback(async () => {
+    // 1. Cek langsung User Agent saat tombol diklik
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isPiApp = userAgent.includes('PiBrowser');
+
+    // 2. Jika BUKAN di dalam aplikasi Pi Browser (Chrome / Safari biasa)
+    if (!isPiApp) {
+      const currentUrl = window.location.href.replace(/^https?:\/\//, '');
+      // Langsung buka aplikasi Pi Browser tanpa set State loading yang bikin stuck
+      window.location.href = `pi://${currentUrl}`;
+      return;
+    }
+
+    // 3. Jika BENAR-BENAR dibuka di dalam Pi Browser App
     setLoading(true);
-
     try {
-      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      const isPiApp = userAgent.includes('PiBrowser');
-
-      // 1. Jika BENAR-BENAR dibuka di dalam aplikasi Pi Browser
-      if (typeof window !== 'undefined' && window.Pi && isPiApp) {
+      if (typeof window !== 'undefined' && window.Pi) {
         const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
@@ -55,16 +62,12 @@ export default function HomePage() {
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
-      } else {
-        // 2. Jika dibuka dari Chrome / Safari biasa, buka aplikasi Pi Browser
-        const currentUrl = window.location.href.replace(/^https?:\/\//, '');
-        window.location.href = `https://${currentUrl}`;
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
       alert(`Gagal menghubungkan: ${error?.message || 'Terjadi kesalahan.'}`);
     } finally {
-      // Pastikan tombol SELALU kembali dari kondisi loading jika terjadi error
+      // Pastikan status loading SELALU mati, apapun yang terjadi
       setLoading(false);
     }
   }, [setPiUser]);
