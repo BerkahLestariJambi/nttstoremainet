@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+//import ProductCard from '@/components/product/ProductCard';
+import { ShoppingCart, Star } from 'lucide-react';
 import { Product, useCart } from '@/context/CartContext';
 
 export default function ProductCard({ product }: { product: Product }) {
@@ -22,9 +24,7 @@ export default function ProductCard({ product }: { product: Product }) {
 
         <div className="p-4">
           <div className="flex items-center gap-1 text-amber-500 text-sm mb-1">
-            <svg className="w-4 h-4 fill-amber-500 text-amber-500" viewBox="0 0 24 24">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-            </svg>
+            <Star className="w-4 h-4 fill-amber-500" />
             <span className="font-medium text-gray-700">{product.rating}</span>
           </div>
 
@@ -48,11 +48,9 @@ export default function ProductCard({ product }: { product: Product }) {
         <button
           type="button"
           onClick={() => addToCart(product)}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl transition flex items-center gap-1.5 text-sm font-medium"
+          className="bg-amber-600 hover:bg-amber-700 text-white p-2.5 rounded-xl transition flex items-center gap-2 text-sm font-medium"
         >
-          <svg className="w-4 h-4 stroke-current fill-none stroke-2" viewBox="0 0 24 24">
-            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0"/>
-          </svg>
+          <ShoppingCart className="w-4 h-4" />
           + Keranjang
         </button>
       </div>
