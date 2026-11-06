@@ -1,8 +1,8 @@
 'use client';
+
 import ProductCard from './ProductCard';
 import { Product } from '@/context/CartContext';
 
-// Data Sampel Produk Khas NTT & Pi Ecosystem
 const PRODUCTS: Product[] = [
   {
     id: '1',
@@ -11,7 +11,7 @@ const PRODUCTS: Product[] = [
     priceIdr: 1250000,
     pricePi: 2.5,
     image: 'https://images.unsplash.com/photo-1606760227091-3dd850d492a6?w=800',
-    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami serat kayu.',
+    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami.',
     stock: 5,
     rating: 4.9,
   },
@@ -33,26 +33,15 @@ const PRODUCTS: Product[] = [
     priceIdr: 185000,
     pricePi: 0.37,
     image: 'https://images.unsplash.com/photo-1587049352847-81a56d773cae?w=800',
-    description: 'Madu murni dari hutan belantara pulau Timor tanpa pengawet dan pemanis buatan.',
+    description: 'Madu murni dari hutan belantara pulau Timor tanpa pengawet.',
     stock: 12,
     rating: 4.9,
-  },
-  {
-    id: '4',
-    name: 'Kerajinan Topeng Kayu NTT',
-    category: 'Kerajinan',
-    priceIdr: 450000,
-    pricePi: 0.9,
-    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800',
-    description: 'Ukiran kerajinan tangan dari kayu jati lokal bermotifkan etnik warisan leluhur NTT.',
-    stock: 7,
-    rating: 4.7,
   },
 ];
 
 export default function ProductGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {PRODUCTS.map((product) => (
         <ProductCard key={product.id} product={product} />
       ))}
