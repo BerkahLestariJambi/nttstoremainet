@@ -1,11 +1,10 @@
 'use client';
 
-import { use, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, ArrowLeft, ShieldCheck, Truck, Star } from 'lucide-react';
 import { useCart, Product } from '@/context/CartContext';
 
-// Data produk sampel khas NTT
 const DUMMY_PRODUCTS: Record<string, Product> = {
   '1': {
     id: '1',
@@ -14,7 +13,7 @@ const DUMMY_PRODUCTS: Record<string, Product> = {
     priceIdr: 1250000,
     pricePi: 2.5,
     image: 'https://images.unsplash.com/photo-1606760227091-3dd850d492a6?w=800',
-    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami serat kayu dan akar mengkudu. Sangat cocok untuk busana adat maupun dekorasi premium.',
+    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami serat kayu dan akar mengkudu.',
     stock: 5,
     rating: 4.9,
   },
@@ -25,7 +24,7 @@ const DUMMY_PRODUCTS: Record<string, Product> = {
     priceIdr: 150000,
     pricePi: 0.3,
     image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800',
-    description: 'Biji kopi Arabika Bajawa Flores yang ditanam di dataran tinggi vulkanik. Memiliki aroma nutty, chocolatey dengan tingkat keasaman seimbang.',
+    description: 'Biji kopi Arabika Bajawa Flores yang ditanam di dataran tinggi vulkanik.',
     stock: 25,
     rating: 4.8,
   },
@@ -36,7 +35,7 @@ const DUMMY_PRODUCTS: Record<string, Product> = {
     priceIdr: 185000,
     pricePi: 0.37,
     image: 'https://images.unsplash.com/photo-1587049352847-81a56d773cae?w=800',
-    description: 'Madu murni alami yang dipanen langsung dari hutan belantara Pulau Timor tanpa pemanis buatan atau pengawet.',
+    description: 'Madu murni alami dari hutan belantara Pulau Timor tanpa pengawet.',
     stock: 12,
     rating: 4.9,
   },
@@ -47,13 +46,12 @@ export default function ProductDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // Unwrapping params Promise dengan use()
-  const { id } = use(params);
+  const resolvedParams = React.use(params);
+  const productId = resolvedParams.id;
   const { addToCart } = useCart();
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState<number>(1);
 
-  // Ambil data produk berdasarkan ID (fallback ke produk '1' jika tidak ditemukan)
-  const product = DUMMY_PRODUCTS[id] || DUMMY_PRODUCTS['1'];
+  const product = DUMMY_PRODUCTS[productId] || DUMMY_PRODUCTS['1'];
 
   return (
     <div className="max-w-5xl mx-auto py-8">
@@ -65,7 +63,6 @@ export default function ProductDetailPage({
       </Link>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
-        {/* Foto Produk */}
         <div className="h-96 rounded-2xl overflow-hidden bg-gray-50 border">
           <img
             src={product.image}
@@ -74,7 +71,6 @@ export default function ProductDetailPage({
           />
         </div>
 
-        {/* Detail & Harga */}
         <div className="flex flex-col justify-between">
           <div>
             <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1 rounded-full">
@@ -94,7 +90,6 @@ export default function ProductDetailPage({
               </span>
             </div>
 
-            {/* Kotak Harga Pi & IDR */}
             <div className="mt-4 p-4 bg-purple-50 rounded-2xl border border-purple-100">
               <p className="text-xs text-purple-600 font-semibold uppercase">
                 Harga Pi Ecosystem
@@ -114,12 +109,12 @@ export default function ProductDetailPage({
             </p>
           </div>
 
-          {/* Kontrol Jumlah & Tombol Beli */}
           <div className="mt-8 pt-6 border-t border-gray-100">
             <div className="flex items-center gap-4 mb-4">
               <span className="text-sm font-medium text-gray-700">Jumlah:</span>
               <div className="flex items-center border rounded-xl overflow-hidden">
                 <button
+                  type="button"
                   onClick={() => setQty(Math.max(1, qty - 1))}
                   className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition"
                 >
@@ -127,6 +122,7 @@ export default function ProductDetailPage({
                 </button>
                 <span className="px-4 py-1.5 font-bold text-gray-800">{qty}</span>
                 <button
+                  type="button"
                   onClick={() => setQty(Math.min(product.stock, qty + 1))}
                   className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition"
                 >
@@ -136,6 +132,7 @@ export default function ProductDetailPage({
             </div>
 
             <button
+              type="button"
               onClick={() => {
                 for (let i = 0; i < qty; i++) {
                   addToCart(product);
