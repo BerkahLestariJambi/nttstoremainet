@@ -9,7 +9,7 @@ export default function HomePage() {
           Selamat Datang di NTTStore<span className="text-yellow-400">Pi</span>
         </h1>
         <p className="text-lg opacity-90 max-w-2xl mb-6">
-          Dapatkan produk lokal khas Nusa Tenggara Timur seperti Kain Tenun Ikat, Kopi Flores, dan Kerajinan Tangan terbaik.
+          Dapatkan produk lokal khas Nusa Tenggara Timur seperti Kain Tenun Ikat, dan Kerajinan Tangan terbaik lainnya.
         </p>
         <Link 
           href="/products" 
