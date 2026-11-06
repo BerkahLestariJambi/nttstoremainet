@@ -26,7 +26,7 @@ export default function HomePage() {
       attempts++;
       if (typeof window !== 'undefined' && window.Pi) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: true }); // Ubah ke sandbox: false untuk Mainnet
+          window.Pi.init({ version: '2.0', sandbox: false }); // Ubah ke sandbox: false untuk Mainnet
           setIsPiBrowser(true);
           clearInterval(intervalId);
         } catch (err) {
