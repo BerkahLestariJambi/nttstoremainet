@@ -1,56 +1,61 @@
 'use client';
-import Link from 'next/link';
-import { ShoppingCart, Star } from 'lucide-react';
-import { Product, useCart } from '@/context/CartContext';
+import ProductCard from './ProductCard';
+import { Product } from '@/context/CartContext';
 
-export default function ProductCard({ product }: { product: Product }) {
-  const { addToCart } = useCart();
+// Data Sampel Produk Khas NTT & Pi Ecosystem
+const PRODUCTS: Product[] = [
+  {
+    id: '1',
+    name: 'Kain Tenun Ikat Sumba Original',
+    category: 'Tenun Ikat',
+    priceIdr: 1250000,
+    pricePi: 2.5,
+    image: 'https://images.unsplash.com/photo-1606760227091-3dd850d492a6?w=800',
+    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami serat kayu.',
+    stock: 5,
+    rating: 4.9,
+  },
+  {
+    id: '2',
+    name: 'Kopi Flores Bajawa Specialty 500g',
+    category: 'Kopi Flores',
+    priceIdr: 150000,
+    pricePi: 0.3,
+    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800',
+    description: 'Biji kopi Arabika Bajawa Flores pilihan dengan aroma nutty dan asam seimbang.',
+    stock: 25,
+    rating: 4.8,
+  },
+  {
+    id: '3',
+    name: 'Madu Hutan Liar Timor 500ml',
+    category: 'Hasil Alam',
+    priceIdr: 185000,
+    pricePi: 0.37,
+    image: 'https://images.unsplash.com/photo-1587049352847-81a56d773cae?w=800',
+    description: 'Madu murni dari hutan belantara pulau Timor tanpa pengawet dan pemanis buatan.',
+    stock: 12,
+    rating: 4.9,
+  },
+  {
+    id: '4',
+    name: 'Kerajinan Topeng Kayu NTT',
+    category: 'Kerajinan',
+    priceIdr: 450000,
+    pricePi: 0.9,
+    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800',
+    description: 'Ukiran kerajinan tangan dari kayu jati lokal bermotifkan etnik warisan leluhur NTT.',
+    stock: 7,
+    rating: 4.7,
+  },
+];
 
+export default function ProductGrid() {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition group flex flex-col justify-between">
-      <div>
-        <div className="relative h-48 bg-gray-100 overflow-hidden">
-          <img
-            src={product.image}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-          />
-          <span className="absolute top-3 left-3 bg-purple-700 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
-            {product.category}
-          </span>
-        </div>
-
-        <div className="p-4">
-          <div className="flex items-center gap-1 text-amber-500 text-sm mb-1">
-            <Star className="w-4 h-4 fill-amber-500" />
-            <span className="font-medium text-gray-700">{product.rating}</span>
-          </div>
-
-          <Link href={`/products/${product.id}`}>
-            <h3 className="font-bold text-gray-900 text-lg line-clamp-1 hover:text-amber-700 transition">
-              {product.name}
-            </h3>
-          </Link>
-          <p className="text-gray-500 text-sm line-clamp-2 mt-1">{product.description}</p>
-        </div>
-      </div>
-
-      <div className="p-4 pt-0 border-t border-gray-50 mt-3 flex items-center justify-between">
-        <div>
-          <p className="text-xl font-extrabold text-purple-700 flex items-center gap-1">
-            {product.pricePi} <span className="text-xs font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">π</span>
-          </p>
-          <p className="text-xs text-gray-400">Rp {product.priceIdr.toLocaleString('id-ID')}</p>
-        </div>
-
-        <button
-          onClick={() => addToCart(product)}
-          className="bg-amber-600 hover:bg-amber-700 text-white p-2.5 rounded-xl transition flex items-center gap-2 text-sm font-medium"
-        >
-          <ShoppingCart className="w-4 h-4" />
-          + Keranjang
-        </button>
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {PRODUCTS.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
     </div>
   );
 }
