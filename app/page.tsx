@@ -84,26 +84,35 @@ export default function HomePage() {
       try {
         const scopes = ['username', 'payments'];
 
-        const authResult = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Waktu habis — coba tutup & buka ulang Pi Browser'));
-          }, 20000);
+        interface PiAuthResult {
+  user: {
+    username: string;
+    uid: string;
+  };
+  accessToken: string;
+}
 
-          window.Pi.authenticate(
-            scopes,
-            (payment: any) => console.log('📌 Pembayaran belum selesai:', payment)
-          )
-          .then((result: any) => {
-            clearTimeout(timeout);
-            resolve(result);
-          })
-          .catch((err: any) => {
-            clearTimeout(timeout);
-            reject(err);
-          });
-        });
+const authResult = await new Promise<PiAuthResult>((resolve, reject) => {
+  const timeout = setTimeout(() => {
+    reject(new Error('Waktu habis — coba tutup & buka ulang Pi Browser'));
+  }, 20000);
 
-        console.log('✅ Login Berhasil — User:', authResult.user.username);
+  window.Pi.authenticate(
+    scopes,
+    (payment: any) => console.log('📌 Pembayaran belum selesai:', payment)
+  )
+  .then((result: any) => {
+    clearTimeout(timeout);
+    resolve(result);
+  })
+  .catch((err: any) => {
+    clearTimeout(timeout);
+    reject(err);
+  });
+});
+
+console.log('✅ Login Berhasil — User:', authResult.user.username);
+
         setPiUser({
           username: authResult.user.username,
           accessToken: authResult.accessToken,
