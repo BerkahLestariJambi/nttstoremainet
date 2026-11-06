@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
-import { Wallet, CheckCircle2, ShieldCheck, AlertCircle, ExternalLink } from 'lucide-react';
+import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -17,43 +17,39 @@ export default function HomePage() {
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Polling deteksi Pi SDK Native (Memastikan window.Pi terdeteksi jika dibuka di Pi Browser)
+  // Inisialisasi Pi Native SDK (Polling hingga objek window.Pi siap jika dibuka di Pi Browser)
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     let attempts = 0;
 
     const checkAndInitPi = () => {
       attempts++;
-      if (typeof window !== 'undefined') {
-        const userAgent = navigator.userAgent || '';
-        const isPiUA = userAgent.includes('PiBrowser') || Boolean(window.Pi);
-
-        if (window.Pi && isPiUA) {
-          try {
-            window.Pi.init({ version: '2.0', sandbox: true });
-            setIsPiBrowser(true);
-            clearInterval(intervalId);
-          } catch (err) {
-            console.error('Pi SDK Init error:', err);
-          }
+      if (typeof window !== 'undefined' && window.Pi) {
+        try {
+          window.Pi.init({ version: '2.0', sandbox: true }); // Ubah sandbox: false untuk Mainnet
+          setIsPiBrowser(true);
+          clearInterval(intervalId);
+        } catch (err) {
+          console.error('Pi SDK Init error:', err);
         }
-      }
-
-      if (attempts >= 10) {
+      } else if (attempts >= 10) {
         clearInterval(intervalId);
       }
     };
 
     checkAndInitPi();
-    intervalId = setInterval(checkAndInitPi, 300);
+    intervalId = setInterval(checkAndInitPi, 500);
 
     return () => clearInterval(intervalId);
   }, []);
 
+  // Fungsi Autentikasi Dual-Mode (Native SDK & PiSign OAuth)
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 1. ALUR NATIVE SDK: Jika dibuka dari Pi Browser App
+    // ==========================================
+    // ALUR 1: Dibuka di Pi Browser (Native SDK)
+    // ==========================================
     if (typeof window !== 'undefined' && window.Pi) {
       try {
         const scopes = ['username', 'payments'];
@@ -75,12 +71,33 @@ export default function HomePage() {
       return;
     }
 
-    // 2. ALUR DEEP LINK / FALLBACK: Jika dibuka dari Chrome/Safari biasa
-    setLoading(false);
-    
-    // Arahkan otomatis membuka domain ini di Pi Browser App
-    const targetUrl = window.location.href.replace(/^https?:\/\//, '');
-    window.location.href = `pi://${targetUrl}`;
+    // ==========================================
+    // ALUR 2: Dibuka di Chrome/Safari (PiSign OAuth Redirect)
+    // ==========================================
+    try {
+      // 1. Generate State Acak untuk Proteksi CSRF
+      const array = new Uint8Array(16);
+      window.crypto.getRandomValues(array);
+      const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+      // 2. Simpan State di sessionStorage untuk verifikasi di callback page
+      sessionStorage.setItem('pisign_state', state);
+      sessionStorage.setItem('pi_oauth_state', state);
+
+      // 3. Konfigurasi Client ID & Redirect URI Dinamis
+      const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`);
+      const scope = encodeURIComponent('username payments');
+
+      // 4. Endpoint Otorisasi PiSign (Mode Sandbox)
+      const piSignAuthUrl = `https://nttstorepi.vercel.app?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&state=${state}`;
+
+      // 5. Eksekusi Redirect Langsung
+      window.location.assign(piSignAuthUrl);
+    } catch (err: any) {
+      alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
+      setLoading(false);
+    }
   }, [setPiUser]);
 
   return (
@@ -89,7 +106,7 @@ export default function HomePage() {
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Native' : 'External Browser Mode'}
+            {isPiBrowser ? 'Pi Browser Native' : 'PiSign Multi-Browser Mode'}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
@@ -113,8 +130,8 @@ export default function HomePage() {
                 disabled={loading}
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
-                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ExternalLink className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Menyiapkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Buka di Pi Browser'}
+                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
+                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
               </button>
             )}
 
@@ -128,7 +145,7 @@ export default function HomePage() {
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Klik <strong>Buka di Pi Browser</strong> di atas untuk bertransaksi.
+              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Gunakan <strong>Login via Pi Sign</strong> di atas.
             </div>
           )}
         </div>
