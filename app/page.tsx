@@ -12,11 +12,14 @@ declare global {
   }
 }
 
+const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
+
 export default function HomePage() {
   const { piUser, setPiUser } = useCart();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
+  // Inisialisasi Native SDK jika dibuka di dalam aplikasi Pi Browser
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const userAgent = navigator.userAgent || '';
@@ -36,10 +39,10 @@ export default function HomePage() {
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // 1. ALUR NATIVE PI BROWSER
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const isPiUA = userAgent.includes('PiBrowser');
 
+    // ALUR 1: Jika dibuka MURNI di aplikasi Pi Browser (Native SDK Flow)
     if (typeof window !== 'undefined' && window.Pi && isPiUA) {
       try {
         const scopes = ['username', 'payments'];
@@ -61,36 +64,29 @@ export default function HomePage() {
       return;
     }
 
-    // 2. ALUR EXTERNAL BROWSER (REDIRECT KE NTTSTOREPI.VERCEL.APP)
+    // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow)
     try {
-      const array = new Uint8Array(16);
-      window.crypto.getRandomValues(array);
-      const state = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      // 1. Generate CSRF State acak & Simpan di sessionStorage
+      const state = typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-      sessionStorage.setItem('pisign_state', state);
       sessionStorage.setItem('pi_oauth_state', state);
 
-      const clientId = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
-      
-      // Target redirectDomain NTTStorePi
-      const redirectUri = `${window.location.origin}/auth/callback`; // https://nttstorepi.vercel.app/auth/callback
+      // 2. Susun URL Otorisasi Sesuai Bagian 4.2 Panduan Resmi
+      const redirectUri = `${window.location.origin}/auth/callback`;
 
-      // Menyusun parameter query dengan URLSearchParams secara aman
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'token',
-        scope: 'username payments',
-        state: state,
-      });
+      const authorizeUrl = new URL('https://accounts.pinet.com/oauth/authorize');
+      authorizeUrl.searchParams.set('response_type', 'token');
+      authorizeUrl.searchParams.set('client_id', CLIENT_ID);
+      authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+      authorizeUrl.searchParams.set('scope', 'username wallet_address'); // Valid Scope resmi
+      authorizeUrl.searchParams.set('state', state);
 
-      // Endpoint Otorisasi Resmi
-      const piSignAuthUrl = `https://app-cdn.minepi.com/mobile-app-ui/app-auth-sandbox?${params.toString()}`;
-
-      // Eksekusi Pengalihan
-      window.location.href = piSignAuthUrl;
+      // 3. Redirect pengguna ke server otorisasi Pi
+      window.location.assign(authorizeUrl.toString());
     } catch (err: any) {
-      alert(`Gagal menginisiasi Pi Sign: ${err.message}`);
+      alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
       setLoading(false);
     }
   }, [setPiUser]);
@@ -101,7 +97,7 @@ export default function HomePage() {
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Native' : 'PiSign Multi-Browser Mode'}
+            {isPiBrowser ? 'Pi Browser Native' : 'Pi Sign-in OAuth Mode'}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
@@ -109,7 +105,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg opacity-90 leading-relaxed">
-            Pusat belanja produk khas Nusa Tenggara Timur (Tenun Ikat, Kopi Flores, & Hasil Alam) menggunakan mata uang Pi Coin (π).
+            Pusat belanja produk khas NTT — Tenun Ikat, Kopi Flores, & Hasil Alam menggunakan Pi Coin (π).
           </p>
 
           <div className="pt-4 flex flex-wrap gap-4 items-center">
@@ -126,7 +122,7 @@ export default function HomePage() {
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
                 {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Login via Pi Sign'}
+                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Sign in with Pi'}
               </button>
             )}
 
@@ -140,7 +136,7 @@ export default function HomePage() {
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Buka via Chrome/Safari? Klik <strong>Login via Pi Sign</strong> di atas.
+              <AlertCircle className="w-4 h-4" /> Menggunakan Browser Luar? Klik <strong>Sign in with Pi</strong> untuk masuk.
             </div>
           )}
         </div>
