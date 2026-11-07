@@ -19,8 +19,8 @@ function AddressListContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [showForm, setShowForm] = useState<boolean>(false);
 
-  // Form State Alamat (Daftarkan area_id)
-  const [form, setForm] = useState({
+  // Form State Alamat (Tipe data any untuk kompatibilitas TypeScript build)
+  const [form, setForm] = useState<any>({
     label: 'Rumah',
     recipient_name: '',
     phone_number: '',
@@ -62,7 +62,7 @@ function AddressListContent() {
     fetchAddresses();
   }, []);
 
-  // Handler Search Biteship
+  // Handler Search Biteship dengan Debounce Sederhana
   useEffect(() => {
     if (searchQuery.trim().length < 3) {
       setAreaResults([]);
@@ -85,13 +85,28 @@ function AddressListContent() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleSelectArea = (area: BiteshipArea) => {
-    setForm({
-      ...form,
-      city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
-      postal_code: String(area.postal_code),
-      area_id: area.id,
-    });
+  // Handler Pemilihan Area dengan Penanganan Kode Pos Aman & Regex Fallback
+  const handleSelectArea = (area: any) => {
+    // 1. Ambil kode pos langsung dari properti Biteship
+    let extractedPostalCode = area.postal_code || area.postalCode || '';
+
+    // 2. Fallback: Ekstrak 5 digit angka di akhir nama area jika field postal_code kosong/undefined
+    if (!extractedPostalCode && area.name) {
+      const match = area.name.match(/\b\d{5}\b/);
+      if (match) {
+        extractedPostalCode = match[0];
+      }
+    }
+
+    const cleanPostalCode = extractedPostalCode ? String(extractedPostalCode) : '';
+
+    setForm((prev: any) => ({
+      ...prev,
+      city: `${area.administrative_division_level_3_name || ''}, ${area.administrative_division_level_2_name || ''}`,
+      postal_code: cleanPostalCode,
+      area_id: area.id || '',
+    }));
+
     setSelectedAreaName(area.name);
     setAreaResults([]);
     setSearchQuery('');
@@ -99,8 +114,10 @@ function AddressListContent() {
 
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.postal_code) {
-      alert('Silakan pilih lokasi dari hasil pencarian Biteship terlebih dahulu.');
+
+    // Validasi agar nilai postal_code tidak kosong atau bernilai "undefined"
+    if (!form.postal_code || form.postal_code === 'undefined') {
+      alert('Kode pos tidak terdeteksi. Silakan pilih lokasi dari hasil pencarian Biteship secara tepat.');
       return;
     }
 
@@ -113,7 +130,15 @@ function AddressListContent() {
       await fetchAddresses();
       if (created?.id) setSelectedAddressId(created.id);
       setShowForm(false);
-      setForm({ label: 'Rumah', recipient_name: '', phone_number: '', full_address: '', city: '', postal_code: '', area_id: '' });
+      setForm({
+        label: 'Rumah',
+        recipient_name: '',
+        phone_number: '',
+        full_address: '',
+        city: '',
+        postal_code: '',
+        area_id: '',
+      });
       setSelectedAreaName('');
     } catch (err) {
       console.error('Gagal menambah alamat:', err);
@@ -222,14 +247,16 @@ function AddressListContent() {
 
             {areaResults.length > 0 && (
               <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-gray-100">
-                {areaResults.map((area) => (
+                {areaResults.map((area: any) => (
                   <div
                     key={area.id}
                     onClick={() => handleSelectArea(area)}
                     className="p-3 text-xs text-gray-700 hover:bg-amber-50 cursor-pointer transition"
                   >
                     <p className="font-semibold text-gray-900">{area.name}</p>
-                    <span className="text-[10px] text-gray-500">Kode Pos: {area.postal_code}</span>
+                    <span className="text-[10px] text-gray-500">
+                      Kode Pos: {area.postal_code || area.postalCode || 'Tersedia'}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -237,7 +264,8 @@ function AddressListContent() {
 
             {selectedAreaName && (
               <div className="mt-2 p-2.5 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
-                <span className="font-bold">Lokasi Terpilih:</span> {selectedAreaName} (Kode Pos: {form.postal_code})
+                <span className="font-bold">Lokasi Terpilih:</span> {selectedAreaName}{' '}
+                {form.postal_code && form.postal_code !== 'undefined' ? `(Kode Pos: ${form.postal_code})` : ''}
               </div>
             )}
           </div>
