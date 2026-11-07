@@ -1,14 +1,13 @@
 'use client';
 
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import CheckoutButton from '@/components/CheckoutButton';
-import { productService } from '@/services/productService'; // pastikan service produk tersedia
+import { productService } from '@/services/productService';
 import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag } from 'lucide-react';
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id');
 
@@ -21,7 +20,6 @@ export default function CheckoutPage() {
     shipping_address: '',
   });
 
-  // Ambil detail produk berdasarkan URL ?product_id=X
   useEffect(() => {
     if (productId) {
       productService
@@ -35,7 +33,7 @@ export default function CheckoutPage() {
   }, [productId]);
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat data produk...</div>;
+    return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat data checkout...</div>;
   }
 
   const isFormValid =
@@ -55,7 +53,7 @@ export default function CheckoutPage() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat */}
+        {/* Form Alamat Penerima */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
@@ -63,39 +61,45 @@ export default function CheckoutPage() {
 
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nama Penerima *</label>
-            <input
-              type="text"
-              placeholder="Masukkan nama lengkap penerima"
-              value={form.recipient_name}
-              onChange={(e) => setForm({ ...form, recipient_name: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            />
+            <div className="relative">
+              <User className="w-4 h-4 text-gray-400 absolute left-4 top-3.5" />
+              <input
+                type="text"
+                placeholder="Masukkan nama lengkap penerima"
+                value={form.recipient_name}
+                onChange={(e) => setForm({ ...form, recipient_name: e.target.value })}
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none transition"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nomor Telepon / WA *</label>
-            <input
-              type="tel"
-              placeholder="081234567890"
-              value={form.phone_number}
-              onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
-            />
+            <div className="relative">
+              <Phone className="w-4 h-4 text-gray-400 absolute left-4 top-3.5" />
+              <input
+                type="tel"
+                placeholder="081234567890"
+                value={form.phone_number}
+                onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
+                className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none transition"
+              />
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Alamat Pengiriman *</label>
             <textarea
               rows={3}
-              placeholder="Alamat lengkap penerima..."
+              placeholder="Alamat lengkap tujuan pengiriman..."
               value={form.shipping_address}
               onChange={(e) => setForm({ ...form, shipping_address: e.target.value })}
-              className="w-full p-4 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              className="w-full p-4 border border-gray-200 rounded-2xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none transition"
             />
           </div>
         </div>
 
-        {/* Ringkasan & Tombol Bayar */}
+        {/* Ringkasan & Tombol Eksekusi Pi Payment */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
             <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan
@@ -131,5 +135,13 @@ export default function CheckoutPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat checkout...</div>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }
