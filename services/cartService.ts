@@ -1,4 +1,3 @@
-// services/cartService.ts
 import { apiClient } from '@/lib/apiClient';
 
 export interface CartItemData {
@@ -16,8 +15,8 @@ export interface CartItemData {
 }
 
 export const cartService = {
-  // Ambil daftar keranjang dari DB API
-  getCart: () => apiClient.get<{ success?: boolean; data?: CartItemData[] } | CartItemData[]>('/cart'),
+  // Ambil daftar keranjang dari DB
+  getCart: (): Promise<any> => apiClient.get('/cart'),
 
   // Tambah produk ke keranjang DB
   addToCart: (productId: number, quantity: number = 1) =>
