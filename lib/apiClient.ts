@@ -9,45 +9,48 @@ export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstor
 export async function apiClient<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   // Pastikan endpoint diawali dengan slash `/`
   const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
-  // Ambil Token Sanctum jika tersimpan di browser
-  const token = typeof window !== 'undefined' ? localStorage.getItem('nttstorepi_token') : null;
+
+  // Ambil Token Sanctum dengan fallback key nama token yang umum digunakan
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('nttstorepi_token') || localStorage.getItem('token') || localStorage.getItem('auth_token'))
+    : null;
 
   // Cek apakah body bertipe FormData
   const isFormData = options.body instanceof FormData;
 
-  // Susun headers dasar
-  const customHeaders: Record<string, string> = {
+  // Susun header dasar
+  const headersObj: Record<string, string> = {
     'Accept': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
 
-  // Hanya set Content-Type: application/json jika BUKAN FormData
-  if (!isFormData) {
-    customHeaders['Content-Type'] = 'application/json';
+  // Set Content-Type: application/json jika BUKAN FormData
+  if (!isFormData && !headersObj['Content-Type']) {
+    headersObj['Content-Type'] = 'application/json';
   }
 
-  // Gabungkan dengan custom headers dari options (jika ada)
-  const headers: HeadersInit = {
-    ...customHeaders,
-    ...(options.headers as Record<string, string>),
-  };
-
-  // Hapus Content-Type jika options.headers secara tidak sengaja membawa application/json saat FormData
-  if (isFormData && (headers as Record<string, string>)['Content-Type']) {
-    delete (headers as Record<string, string>)['Content-Type'];
+  // Jika FormData, pastikan Content-Type dibiarkan kosong agar browser otomatis mengatur boundary
+  if (isFormData && headersObj['Content-Type']) {
+    delete headersObj['Content-Type'];
   }
 
   const response = await fetch(`${BASE_URL}${formattedEndpoint}`, {
     ...options,
-    headers,
+    headers: headersObj,
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || 'Terjadi kesalahan pada server');
+  // Aman terhadap response error 500 HTML dari Laravel
+  let data: any = {};
+  try {
+    data = await response.json();
+  } catch (err) {
+    data = { message: `HTTP Error ${response.status}: ${response.statusText}` };
   }
 
-  return data;
+  if (!response.ok) {
+    throw new Error(data.message || data.error || 'Terjadi kesalahan pada server backend');
+  }
+
+  return data as T;
 }
