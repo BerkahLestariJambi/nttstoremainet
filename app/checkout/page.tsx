@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 function CheckoutFormContent() {
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id');
+  const productSlug = searchParams.get('slug');
 
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -23,38 +24,63 @@ function CheckoutFormContent() {
   });
 
   useEffect(() => {
-    if (productId) {
-      productService
-        .getProductById(productId)
-        .then((res: any) => {
-          // Safe unwrapping data response dari Laravel API
-          const item = res?.data?.data || res?.data || res;
-          if (item && (item.id || item.name)) {
-            setProduct(item);
-          } else {
-            setProduct(null);
+    async function loadProductData() {
+      setLoading(true);
+      try {
+        let foundProduct = null;
+
+        // 1. Coba ambil berdasarkan slug jika ada
+        if (productSlug) {
+          const res = await productService.getProductBySlug(productSlug);
+          foundProduct = res?.data?.data || res?.data || res;
+        }
+
+        // 2. Jika tidak ada slug atau gagal, coba pencarian berdasarkan ID
+        if ((!foundProduct || !foundProduct.id) && productId) {
+          try {
+            const resById = await productService.getProductById(productId);
+            foundProduct = resById?.data?.data || resById?.data || resById;
+          } catch (errById) {
+            console.warn('Gagal getProductById, mencoba fallback getProducts list...', errById);
           }
-        })
-        .catch((err) => {
-          console.error('Gagal mengambil data produk:', err);
+
+          // Fallback 3: Ambil semua produk dan cari yang ID-nya cocok
+          if (!foundProduct || !foundProduct.id) {
+            const allProductsRes = await productService.getProducts();
+            const list = allProductsRes?.data?.data || allProductsRes?.data || allProductsRes;
+
+            if (Array.isArray(list)) {
+              foundProduct = list.find((p: any) => String(p.id) === String(productId));
+            }
+          }
+        }
+
+        if (foundProduct && (foundProduct.id || foundProduct.name)) {
+          setProduct(foundProduct);
+        } else {
           setProduct(null);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error memuat detail produk checkout:', error);
+        setProduct(null);
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [productId]);
+
+    loadProductData();
+  }, [productId, productSlug]);
 
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">
-        Memuat data produk...
+        Memuat detail checkout produk...
       </div>
     );
   }
 
-  // Fallback jika tidak ada ID produk di URL atau produk tidak ditemukan
-  if (!productId || !product) {
+  // Tampilan jika produk tidak ada di server
+  if (!product) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
@@ -91,7 +117,7 @@ function CheckoutFormContent() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat Penerima */}
+        {/* Form Alamat */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
