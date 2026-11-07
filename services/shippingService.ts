@@ -10,6 +10,7 @@ export interface BiteshipArea {
   postal_code: number;
 }
 
+
 export interface BiteshipItemPayload {
   name: string;
   value: number;
