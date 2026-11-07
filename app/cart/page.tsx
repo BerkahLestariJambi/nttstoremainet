@@ -14,7 +14,7 @@ export default function CartPage() {
   const fetchCart = async () => {
     try {
       const res: any = await cartService.getCart();
-      const list = Array.isArray(res) ? res : res?.data || [];
+      const list = Array.isArray(res) ? res : (res?.data || []);
       setCartItems(list);
     } catch (err) {
       console.error('Gagal memuat keranjang:', err);
@@ -65,7 +65,6 @@ export default function CartPage() {
 
   const handleProceedToCheckout = () => {
     if (selectedItems.length === 0) return;
-    // Redirect ke halaman pilih alamat pengiriman terlebih dahulu
     router.push('/addresses?select=true');
   };
 
