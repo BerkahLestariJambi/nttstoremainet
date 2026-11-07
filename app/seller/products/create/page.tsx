@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
-import { ArrowLeft, PackagePlus, Image as ImageIcon, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, PackagePlus, Upload, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface Category {
   id: number;
@@ -18,16 +18,18 @@ export default function CreateProductPage() {
   const [fetchingCategories, setFetchingCategories] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // State untuk Preview & File Gambar
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: '',
     category_id: '',
     description: '',
     price_pi: '',
     stock: '',
-    image_url: '',
   });
 
-  // Fetch daftar kategori dari backend Laravel
   useEffect(() => {
     productService
       .getCategories()
@@ -50,28 +52,52 @@ export default function CreateProductPage() {
     if (errorMessage) setErrorMessage(null);
   };
 
+  // Handler Pilih File Gambar
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setErrorMessage('Ukuran file maksimal 2MB.');
+        return;
+      }
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setErrorMessage(null);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      const payload = {
-        ...formData,
-        category_id: Number(formData.category_id),
-        price_pi: parseFloat(formData.price_pi),
-        stock: parseInt(formData.stock, 10),
-      };
+      // Bungkus data ke FormData untuk pengiriman file binary
+      const bodyFormData = new FormData();
+      bodyFormData.append('name', formData.name);
+      bodyFormData.append('category_id', formData.category_id);
+      bodyFormData.append('description', formData.description);
+      bodyFormData.append('price_pi', formData.price_pi);
+      bodyFormData.append('stock', formData.stock);
 
-      const res = await productService.createProduct(payload);
+      if (imageFile) {
+        bodyFormData.append('image', imageFile);
+      }
 
-      if (res.success) {
+      const res = await productService.createProduct(bodyFormData);
+
+      if (res.success || res.data) {
         alert('Produk berhasil ditambahkan!');
         router.push('/');
       }
     } catch (err: any) {
       setErrorMessage(
-        err.message || 'Gagal menambahkan produk. Pastikan Anda sudah terdaftar sebagai Seller dan akun telah disetujui (Approved).'
+        err.message || 'Gagal menambahkan produk. Pastikan Anda sudah terdaftar sebagai Seller dan akun disetujui.'
       );
     } finally {
       setLoading(false);
@@ -80,7 +106,6 @@ export default function CreateProductPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
-      {/* Tombol Kembali */}
       <Link
         href="/"
         className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-purple-700 font-medium mb-6 transition"
@@ -89,7 +114,6 @@ export default function CreateProductPage() {
       </Link>
 
       <div className="bg-white border border-gray-100 rounded-3xl p-6 sm:p-10 shadow-sm">
-        {/* Header Form */}
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-purple-100 text-purple-700 rounded-2xl">
             <PackagePlus className="w-7 h-7" />
@@ -97,12 +121,11 @@ export default function CreateProductPage() {
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Tambah Produk Baru</h1>
             <p className="text-xs sm:text-sm text-gray-500">
-              Daftarkan produk lokal khas NTT Anda untuk dijual menggunakan Pi Coin (π).
+              Unggah produk lokal khas NTT Anda untuk dijual menggunakan Pi Coin (π).
             </p>
           </div>
         </div>
 
-        {/* Alert Error */}
         {errorMessage && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-red-700 text-sm">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
@@ -191,37 +214,46 @@ export default function CreateProductPage() {
             </div>
           </div>
 
-          {/* Input URL Gambar + Live Preview */}
+          {/* Area Upload File Gambar */}
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-              URL Gambar Produk
+              Foto Produk (Upload File)
             </label>
-            <input
-              type="url"
-              name="image_url"
-              placeholder="https://images.unsplash.com/photo-..."
-              value={formData.image_url}
-              onChange={handleChange}
-              className="w-full px-4 py-3.5 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-purple-600 focus:outline-none transition text-sm mb-3"
-            />
 
-            {/* Area Preview Gambar */}
-            {formData.image_url ? (
-              <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-gray-200 bg-gray-50">
+            {imagePreview ? (
+              <div className="relative w-full h-56 rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50">
                 <img
-                  src={formData.image_url}
+                  src={imagePreview}
                   alt="Preview Produk"
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
                 />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-md"
+                  title="Hapus Gambar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             ) : (
-              <div className="w-full h-32 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
-                <ImageIcon className="w-8 h-8 mb-1 opacity-60" />
-                <span className="text-xs">Masukkan URL gambar di atas untuk melihat pratinjau</span>
-              </div>
+              <label className="border-2 border-dashed border-gray-200 hover:border-purple-500 bg-gray-50/50 hover:bg-purple-50/30 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition">
+                <div className="p-3 bg-white rounded-full shadow-xs mb-2">
+                  <Upload className="w-6 h-6 text-purple-600" />
+                </div>
+                <span className="text-xs font-bold text-gray-700 mb-1">
+                  Klik untuk pilih atau tarik foto produk di sini
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  Format: PNG, JPG, WEBP (Maksimal 2MB)
+                </span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </label>
             )}
           </div>
 
@@ -248,7 +280,7 @@ export default function CreateProductPage() {
             className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-4 px-6 rounded-2xl transition shadow-lg shadow-purple-200 disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
           >
             {loading ? (
-              'Memproses Penambahan Produk...'
+              'Mengunggah & Menyimpan Produk...'
             ) : (
               <>
                 <CheckCircle2 className="w-5 h-5" /> Terbitkan Produk ke Marketplace
