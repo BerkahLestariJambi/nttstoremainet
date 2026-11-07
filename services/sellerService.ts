@@ -8,13 +8,11 @@ export interface SellerRegisterInput {
 }
 
 export const sellerService = {
-  // Pendaftaran Toko Seller
   register: (data: SellerRegisterInput) =>
     apiClient('/seller/register', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
-  // Cek Status Pendaftaran Seller
   getStatus: () => apiClient('/seller/status'),
 };
