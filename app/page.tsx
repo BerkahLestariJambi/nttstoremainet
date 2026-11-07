@@ -5,13 +5,13 @@ import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
 import { useCart } from '@/context/CartContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { authService } from '@/services/authService';
 
 declare global {
   interface Window {
     Pi: any;
   }
 }
-
 
 const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
 
@@ -52,11 +52,24 @@ export default function HomePage() {
         };
 
         const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+        
+        // 1. Simpan data Pi di Client State
         setPiUser({
           username: auth.user.username,
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
+
+        // 2. Hubungkan ke Backend Laravel Sanctum (POST /api/auth/pi-login)
+        try {
+          const apiRes = await authService.loginWithPi(auth.accessToken);
+          if (apiRes.access_token) {
+            localStorage.setItem('nttstorepi_token', apiRes.access_token);
+          }
+        } catch (backendErr: any) {
+          console.warn('Gagal sync token ke backend Laravel:', backendErr.message);
+        }
+
       } catch (error: any) {
         alert(`Autentikasi Pi Browser gagal: ${error.message}`);
       } finally {
@@ -128,7 +141,7 @@ export default function HomePage() {
             )}
 
             <Link
-              href="/products/1"
+              href="/products"
               className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
             >
               Jelajahi Produk
