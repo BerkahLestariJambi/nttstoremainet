@@ -11,18 +11,18 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItemData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
- const fetchCart = async () => {
-  try {
-    const res: any = await cartService.getCart();
-    const list = Array.isArray(res) ? res : res?.data || [];
-    setCartItems(list);
-  } catch (err) {
-    console.error('Gagal memuat keranjang:', err);
-    setCartItems([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  const fetchCart = async () => {
+    try {
+      const res: any = await cartService.getCart();
+      const list = Array.isArray(res) ? res : res?.data || [];
+      setCartItems(list);
+    } catch (err) {
+      console.error('Gagal memuat keranjang:', err);
+      setCartItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchCart();
@@ -65,8 +65,8 @@ export default function CartPage() {
 
   const handleProceedToCheckout = () => {
     if (selectedItems.length === 0) return;
-    // Pindah ke checkout mode keranjang
-    router.push('/checkout');
+    // Redirect ke halaman pilih alamat pengiriman terlebih dahulu
+    router.push('/addresses?select=true');
   };
 
   if (loading) {
@@ -79,7 +79,7 @@ export default function CartPage() {
         <ShoppingBag className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h2 className="text-lg font-bold text-gray-900 mb-2">Keranjang Kosong</h2>
         <p className="text-xs text-gray-500 mb-6">Belum ada produk yang Anda tambahkan ke keranjang.</p>
-        <Link href="/" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition">
+        <Link href="/" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200">
           Mulai Belanja
         </Link>
       </div>
@@ -142,7 +142,7 @@ export default function CartPage() {
             disabled={selectedItems.length === 0}
             className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50 text-xs"
           >
-            Lanjut ke Checkout ({selectedItems.length}) <ArrowRight className="w-4 h-4" />
+            Pilih Alamat Pengiriman ({selectedItems.length}) <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
