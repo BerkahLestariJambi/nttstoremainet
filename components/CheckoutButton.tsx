@@ -38,7 +38,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         throw new Error(res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.');
       }
 
-      // 2. Inisialisasi & Authenticate Pi Network SDK dengan Scope Payments
+     // 2. Inisialisasi & Authenticate Pi Network SDK dengan Scope Payments
       if (typeof window !== 'undefined' && (window as any).Pi) {
         const Pi = (window as any).Pi;
 
@@ -99,7 +99,6 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
             setLoading(false);
           },
         };
-
         // 3. Eksekusi Pembayaran via Pi SDK
         Pi.createPayment(paymentData, paymentCallbacks);
       } else {
