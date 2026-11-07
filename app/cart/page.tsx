@@ -11,18 +11,18 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItemData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchCart = async () => {
-    try {
-      const res = await cartService.getCart();
-      const list = res?.data || res || [];
-      setCartItems(list);
-    } catch (err) {
-      console.error('Gagal memuat keranjang:', err);
-      setCartItems([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+ const fetchCart = async () => {
+  try {
+    const res: any = await cartService.getCart();
+    const list = Array.isArray(res) ? res : res?.data || [];
+    setCartItems(list);
+  } catch (err) {
+    console.error('Gagal memuat keranjang:', err);
+    setCartItems([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchCart();
