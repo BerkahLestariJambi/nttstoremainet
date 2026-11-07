@@ -1,3 +1,4 @@
+// services/addressService.ts
 import { apiClient } from '@/lib/apiClient';
 
 export interface UserAddressData {
@@ -14,11 +15,11 @@ export interface UserAddressData {
 
 export const addressService = {
   // Ambil daftar alamat user
-  getAddresses: () => apiClient.get<UserAddressData[]>('/addresses'),
+  getAddresses: () => apiClient.get<{ success?: boolean; data?: UserAddressData[] } | UserAddressData[]>('/addresses'),
 
   // Tambah alamat baru
   createAddress: (data: Partial<UserAddressData>) =>
-    apiClient.post<UserAddressData>('/addresses', data),
+    apiClient.post<any>('/addresses', data),
 
   // Set alamat sebagai alamat utama
   setPrimaryAddress: (id: number) =>
