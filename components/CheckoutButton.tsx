@@ -18,43 +18,48 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     try {
       // 1. Kirim data checkout & buat Order di Laravel
       const res = await orderService.createOrder(checkoutData);
-      
-      if (!res.success) {
-        throw new Error(res.message || 'Gagal membuat pesanan.');
+
+      // Pastikan response berhasil
+      if (!res || !res.success) {
+        throw new Error(res?.message || 'Gagal membuat pesanan.');
       }
 
-      const { order, total_pi, memo } = res.data;
+      // Destructuring data response dari Laravel
+      const orderData = res.data;
+      const orderId = orderData.order?.id || orderData.order_id;
+      const totalPi = orderData.total_pi || orderData.total_amount_pi;
+      const memo = orderData.memo || `Pembayaran Order #${orderId}`;
 
       // 2. Cek keberadaan SDK Pi Network di Browser
       if (typeof window !== 'undefined' && (window as any).Pi) {
         const Pi = (window as any).Pi;
 
         const paymentData = {
-          amount: total_pi,
+          amount: Number(totalPi),
           memo: memo,
-          metadata: { orderId: order.id },
+          metadata: { orderId: orderId },
         };
 
         const paymentCallbacks = {
           onReadyForServerApproval: async (paymentId: string) => {
             console.log('Server approval untuk payment:', paymentId);
-            await orderService.approvePayment(paymentId, order.id);
+            await orderService.approvePayment(paymentId, orderId);
           },
           onReadyForServerCompletion: async (paymentId: string, txid: string) => {
             console.log('Server completion dengan TXID:', txid);
-            await orderService.completePayment(paymentId, txid, order.id);
-            
+            await orderService.completePayment(paymentId, txid, orderId);
+
             alert('Pembayaran Pi Coin Berhasil!');
             setLoading(false);
-            router.push('/orders'); // Arahkan ke Halaman Riwayat Pesanan
+            router.push('/orders');
           },
           onCancel: (paymentId: string) => {
             console.log('Pembayaran dibatalkan:', paymentId);
             alert('Transaksi dibatalkan.');
             setLoading(false);
           },
-          onError: (error: Error, payment: any) => {
-            console.error('Error transaksi Pi SDK:', error);
+          onError: (error: Error, payment?: unknown) => {
+            console.error('Error transaksi Pi SDK:', error, payment);
             alert('Terjadi kesalahan pada pembayaran Pi.');
             setLoading(false);
           },
@@ -66,9 +71,10 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         alert('Fitur ini hanya dapat digunakan di dalam Pi Browser!');
         setLoading(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert(err.message || 'Terjadi kesalahan sistem.');
+      const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan sistem.';
+      alert(errorMessage);
       setLoading(false);
     }
   };
