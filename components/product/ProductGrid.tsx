@@ -61,7 +61,7 @@ export default function ProductGrid() {
     // 3. Normalisasi path relatif dari cPanel / Laravel
     cleanUrl = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
 
-    if (!cleanUrl.startsWith('/storage') && !cleanUrl.startsWith('/public')) {
+    if (!cleanUrl.startsWith('/public') && !cleanUrl.startsWith('/public')) {
       cleanUrl = `/public${cleanUrl}`;
     }
 
