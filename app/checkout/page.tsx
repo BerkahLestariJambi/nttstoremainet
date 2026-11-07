@@ -7,7 +7,7 @@ import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
-import { shippingService, BiteshipRate } from '@/services/shippingService';
+import { shippingService, BiteshipRate, BiteshipItemPayload } from '@/services/shippingService';
 import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -20,76 +20,17 @@ function CheckoutFormContent() {
 
   const [checkoutItems, setCheckoutItems] = useState<any[]>([]);
   const [address, setAddress] = useState<UserAddressData | null>(null);
-  
+
   // State Jasa Pengiriman Biteship
   const [biteshipRates, setBiteshipRates] = useState<BiteshipRate[]>([]);
   const [selectedRate, setSelectedRate] = useState<BiteshipRate | null>(null);
   const [loadingRates, setLoadingRates] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    async function initCheckout() {
-      setLoading(true);
-
-      // 1. Memuat Data Alamat Pengiriman dari API DB
-      let selectedAddr: UserAddressData | null = null;
-      try {
-        const res: any = await addressService.getAddresses();
-        const list = Array.isArray(res) ? res : res?.data || [];
-        
-        selectedAddr = addressId 
-          ? list.find((a: UserAddressData) => String(a.id) === String(addressId))
-          : list.find((a: UserAddressData) => a.is_primary) || list[0];
-          
-        setAddress(selectedAddr || null);
-      } catch (err) {
-        console.error('Gagal mengambil alamat pengiriman:', err);
-      }
-
-      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart)
-      if (isDirectBuy && productId) {
-        try {
-          const res = await productService.getProductById(productId);
-          const item = res?.data?.data || res?.data || res;
-          if (item?.id) {
-            setCheckoutItems([{
-              product_id: Number(item.id),
-              name: item.name,
-              price_pi: Number(item.price_pi || item.price || 0),
-              quantity: 1,
-            }]);
-          }
-        } catch (err) {
-          console.error('Error mengambil produk beli langsung:', err);
-        }
-      } else {
-        try {
-          const res: any = await cartService.getCart();
-          const list = Array.isArray(res) ? res : res?.data || [];
-          const selected = list.filter((i: any) => i.selected);
-          setCheckoutItems(selected.map((i: any) => ({
-            product_id: i.product_id,
-            name: i.product?.name,
-            price_pi: Number(i.product?.price_pi || 0),
-            quantity: i.quantity,
-          })));
-        } catch (err) {
-          console.error('Error membaca keranjang DB:', err);
-        }
-      }
-
-      // 3. Cek Ongkir Real-time Biteship jika Kode Pos Alamat Tersedia
-      if (selectedAddr && selectedAddr.postal_code) {
-        fetchBiteshipRates(selectedAddr.postal_code);
-      }
-
-      setLoading(false);
-    }
-
-    initCheckout();
-  }, [productId, addressId, isDirectBuy]);
-
-const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) => {
+  // Fungsi Panggil API Rates Biteship
+  const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) => {
+    if (!selectedAddr || items.length === 0) return;
+    
     setLoadingRates(true);
     try {
       // Susun item payload sesuai spesifikasi Biteship
@@ -120,6 +61,72 @@ const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) =
       setLoadingRates(false);
     }
   };
+
+  useEffect(() => {
+    async function initCheckout() {
+      setLoading(true);
+
+      let selectedAddr: UserAddressData | null = null;
+      let loadedItems: any[] = [];
+
+      // 1. Memuat Data Alamat Pengiriman dari API DB
+      try {
+        const res: any = await addressService.getAddresses();
+        const list = Array.isArray(res) ? res : res?.data || [];
+        
+        selectedAddr = addressId 
+          ? list.find((a: UserAddressData) => String(a.id) === String(addressId))
+          : list.find((a: UserAddressData) => a.is_primary) || list[0];
+          
+        setAddress(selectedAddr || null);
+      } catch (err) {
+        console.error('Gagal mengambil alamat pengiriman:', err);
+      }
+
+      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart)
+      if (isDirectBuy && productId) {
+        try {
+          const res = await productService.getProductById(productId);
+          const item = res?.data?.data || res?.data || res;
+          if (item?.id) {
+            loadedItems = [{
+              product_id: Number(item.id),
+              name: item.name,
+              price_pi: Number(item.price_pi || item.price || 0),
+              quantity: 1,
+            }];
+            setCheckoutItems(loadedItems);
+          }
+        } catch (err) {
+          console.error('Error mengambil produk beli langsung:', err);
+        }
+      } else {
+        try {
+          const res: any = await cartService.getCart();
+          const list = Array.isArray(res) ? res : res?.data || [];
+          const selected = list.filter((i: any) => i.selected);
+          loadedItems = selected.map((i: any) => ({
+            product_id: i.product_id,
+            name: i.product?.name,
+            price_pi: Number(i.product?.price_pi || 0),
+            quantity: i.quantity,
+          }));
+          setCheckoutItems(loadedItems);
+        } catch (err) {
+          console.error('Error membaca keranjang DB:', err);
+        }
+      }
+
+      // 3. Hitung Ongkir Biteship setelah Alamat & Barang Siap
+      if (selectedAddr && loadedItems.length > 0) {
+        await fetchBiteshipRates(selectedAddr, loadedItems);
+      }
+
+      setLoading(false);
+    }
+
+    initCheckout();
+  }, [productId, addressId, isDirectBuy]);
 
   const subtotalPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
   const shippingFeePi = selectedRate ? Number(selectedRate.price_pi) : 0;
@@ -199,18 +206,18 @@ const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) =
               </div>
             ) : biteshipRates.length === 0 ? (
               <div className="text-center py-4 text-xs text-gray-500">
-                {!address?.postal_code ? (
+                {!address ? (
                   <p className="text-red-500 font-semibold">
-                    Kode pos alamat belum terisi. Harap perbarui alamat agar ongkir Biteship dapat dihitung.
+                    Harap pilih alamat pengiriman terlebih dahulu.
                   </p>
                 ) : (
-                  <p>Tidak ada opsi kurir yang tersedia untuk kode pos ini.</p>
+                  <p>Tidak ada opsi kurir yang tersedia untuk area ini.</p>
                 )}
               </div>
             ) : (
               <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                 {biteshipRates.map((rate, idx) => {
-                  const isSelected = selectedRate?.courier_code === rate.courier_code && selectedRate?.service_name === rate.service_name;
+                  const isSelected = selectedRate?.courier_code === rate.courier_code && selectedRate?.courier_service_code === rate.courier_service_code;
                   return (
                     <div
                       key={idx}
@@ -229,7 +236,7 @@ const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) =
                         )}
                         <div>
                           <h4 className="font-bold text-xs text-gray-900">
-                            {rate.name} - {rate.service_name}
+                            {rate.courier_name} - {rate.courier_service_name}
                           </h4>
                           <p className="text-[11px] text-gray-500">{rate.description}</p>
                           <span className="text-[10px] text-gray-400">Estimasi: {rate.duration}</span>
@@ -277,7 +284,7 @@ const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) =
               <span className="font-medium text-gray-800">π {subtotalPi.toFixed(4)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Ongkir ({selectedRate ? `${selectedRate.name} ${selectedRate.service_name}` : '-'})</span>
+              <span>Ongkir ({selectedRate ? `${selectedRate.courier_name} ${selectedRate.courier_service_name}` : '-'})</span>
               <span className="font-medium text-amber-600">π {shippingFeePi.toFixed(6)}</span>
             </div>
           </div>
@@ -294,7 +301,7 @@ const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) =
                 phone_number: address.phone_number,
                 shipping_address: `${address.full_address}, Kode Pos: ${address.postal_code}`,
                 courier_company: selectedRate.company,
-                courier_service: selectedRate.service_name,
+                courier_service: selectedRate.courier_service_name,
                 shipping_fee_pi: shippingFeePi,
                 shipping_fee_idr: selectedRate.price_idr,
                 items: checkoutItems.map((item) => ({
