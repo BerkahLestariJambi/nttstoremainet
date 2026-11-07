@@ -19,19 +19,19 @@ export const productService = {
     return apiClient(`/products${query}`);
   },
 
-  // 3. GET /api/products/id/{id} atau /api/products/{id} (Dipakai oleh CheckoutPage)
+  // 3. GET /api/products/{id} (Dipakai oleh CheckoutPage)
   getProductById: (id: string | number) => apiClient(`/products/${id}`),
 
   // 4. GET /api/products/{slug} (Dipakai oleh Detail Product Page)
   getProductBySlug: (slug: string) => apiClient(`/products/${slug}`),
 
   // 5. POST /api/seller/products (Tambah produk seller)
-  createProduct: (data: FormData | Record<string, any>) => {
+  createProduct: (data: FormData | Record<string, unknown>) => {
     const isFormData = data instanceof FormData;
 
     return apiClient('/seller/products', {
       method: 'POST',
-      body: isFormData ? data : JSON.stringify(data),
+      body: isFormData ? (data as unknown as BodyInit) : JSON.stringify(data),
     });
   },
 };
