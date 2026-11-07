@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { addressService, UserAddressData } from '@/services/addressService';
 import { shippingService, BiteshipArea } from '@/services/shippingService';
-import { ArrowLeft, MapPin, Plus, CheckCircle2, Trash2, ArrowRight, Search, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, CheckCircle2, Trash2, ArrowRight, Search, Loader2, Edit3, X } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,10 @@ function AddressListContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [showForm, setShowForm] = useState<boolean>(false);
 
-  // Form State Alamat (Tipe data any untuk kompatibilitas TypeScript build)
+  // State untuk Edit Alamat
+  const [editingAddress, setEditingAddress] = useState<UserAddressData | null>(null);
+
+  // Form State Alamat (Tambah / Edit)
   const [form, setForm] = useState<any>({
     label: 'Rumah',
     recipient_name: '',
@@ -85,17 +88,12 @@ function AddressListContent() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Handler Pemilihan Area dengan Penanganan Kode Pos Aman & Regex Fallback
+  // Handler Pemilihan Area dengan Penanganan Kode Pos Aman
   const handleSelectArea = (area: any) => {
-    // 1. Ambil kode pos langsung dari properti Biteship
     let extractedPostalCode = area.postal_code || area.postalCode || '';
-
-    // 2. Fallback: Ekstrak 5 digit angka di akhir nama area jika field postal_code kosong/undefined
     if (!extractedPostalCode && area.name) {
       const match = area.name.match(/\b\d{5}\b/);
-      if (match) {
-        extractedPostalCode = match[0];
-      }
+      if (match) extractedPostalCode = match[0];
     }
 
     const cleanPostalCode = extractedPostalCode ? String(extractedPostalCode) : '';
@@ -112,36 +110,68 @@ function AddressListContent() {
     setSearchQuery('');
   };
 
-  const handleCreateAddress = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setForm({
+      label: 'Rumah',
+      recipient_name: '',
+      phone_number: '',
+      full_address: '',
+      city: '',
+      postal_code: '',
+      area_id: '',
+    });
+    setSelectedAreaName('');
+    setEditingAddress(null);
+    setShowForm(false);
+  };
+
+  // Buka Mode Edit
+  const handleStartEdit = (addr: UserAddressData) => {
+    setEditingAddress(addr);
+    setForm({
+      label: addr.label || 'Rumah',
+      recipient_name: addr.recipient_name || '',
+      phone_number: addr.phone_number || '',
+      full_address: addr.full_address || '',
+      city: addr.city || '',
+      postal_code: addr.postal_code || '',
+      area_id: addr.area_id || '',
+    });
+    setSelectedAreaName(addr.city ? `${addr.city} (Kode Pos: ${addr.postal_code || '-'})` : '');
+    setShowForm(true);
+  };
+
+  // Submit Simpan (Tambah / Update)
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validasi agar nilai postal_code tidak kosong atau bernilai "undefined"
     if (!form.postal_code || form.postal_code === 'undefined') {
       alert('Kode pos tidak terdeteksi. Silakan pilih lokasi dari hasil pencarian Biteship secara tepat.');
       return;
     }
 
     try {
-      const res: any = await addressService.createAddress({
-        ...form,
-        is_primary: addresses.length === 0,
-      });
-      const created = res?.data || res;
+      if (editingAddress) {
+        // Update Alamat
+        await addressService.createAddress({
+          ...form,
+          id: editingAddress.id,
+          is_primary: editingAddress.is_primary,
+        });
+      } else {
+        // Tambah Alamat Baru
+        const res: any = await addressService.createAddress({
+          ...form,
+          is_primary: addresses.length === 0,
+        });
+        const created = res?.data || res;
+        if (created?.id) setSelectedAddressId(created.id);
+      }
+
       await fetchAddresses();
-      if (created?.id) setSelectedAddressId(created.id);
-      setShowForm(false);
-      setForm({
-        label: 'Rumah',
-        recipient_name: '',
-        phone_number: '',
-        full_address: '',
-        city: '',
-        postal_code: '',
-        area_id: '',
-      });
-      setSelectedAreaName('');
+      resetForm();
     } catch (err) {
-      console.error('Gagal menambah alamat:', err);
+      console.error('Gagal menyimpan alamat:', err);
     }
   };
 
@@ -183,16 +213,23 @@ function AddressListContent() {
           <MapPin className="w-7 h-7 text-amber-500" /> {isSelectMode ? 'Pilih Alamat Pengiriman' : 'Daftar Alamat Saya'}
         </h1>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (showForm) resetForm();
+            else setShowForm(true);
+          }}
           className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-200"
         >
-          <Plus className="w-4 h-4" /> Tambah Alamat
+          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showForm ? 'Batal' : 'Tambah Alamat'}
         </button>
       </div>
 
+      {/* FORM TAMBAH / EDIT ALAMAT */}
       {showForm && (
-        <form onSubmit={handleCreateAddress} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm mb-6 space-y-4">
-          <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Tambah Alamat (Biteship Location Verified)</h2>
+        <form onSubmit={handleSubmitForm} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm mb-6 space-y-4 relative">
+          <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
+            {editingAddress ? 'Edit Alamat Pengiriman' : 'Tambah Alamat (Biteship Location Verified)'}
+          </h2>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -283,22 +320,21 @@ function AddressListContent() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            {addresses.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700"
-              >
-                Batal
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={resetForm}
+              className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700"
+            >
+              Batal
+            </button>
             <button type="submit" className="px-5 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md hover:bg-amber-600 transition">
-              Simpan Alamat Terverifikasi
+              {editingAddress ? 'Perbarui Alamat' : 'Simpan Alamat Terverifikasi'}
             </button>
           </div>
         </form>
       )}
 
+      {/* DAFTAR ALAMAT */}
       {addresses.length === 0 && !showForm ? (
         <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 p-6">
           <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -327,6 +363,18 @@ function AddressListContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Tombol Edit */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartEdit(addr);
+                    }}
+                    title="Edit Alamat"
+                    className="text-gray-400 hover:text-amber-600 transition p-1"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+
                   {!addr.is_primary && (
                     <button
                       onClick={(e) => {
@@ -343,7 +391,8 @@ function AddressListContent() {
                       e.stopPropagation();
                       handleDelete(addr.id);
                     }}
-                    className="text-gray-400 hover:text-red-500 transition"
+                    title="Hapus Alamat"
+                    className="text-gray-400 hover:text-red-500 transition p-1"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
