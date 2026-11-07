@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
-import { Package } from 'lucide-react';
+import { Package, ShoppingBag } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -22,7 +22,8 @@ export default function ProductGrid() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
+  const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
   const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function ProductGrid() {
       .getProducts()
       .then((res) => {
         const productList = res.data || res;
-        setProducts(productList);
+        setProducts(Array.isArray(productList) ? productList : []);
       })
       .catch((err) => {
         console.error('Gagal mengambil data produk:', err);
@@ -61,7 +62,7 @@ export default function ProductGrid() {
     // 3. Normalisasi path relatif dari cPanel / Laravel
     cleanUrl = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
 
-    if (!cleanUrl.startsWith('/public') && !cleanUrl.startsWith('/public')) {
+    if (!cleanUrl.startsWith('/public')) {
       cleanUrl = `/public${cleanUrl}`;
     }
 
@@ -134,19 +135,33 @@ export default function ProductGrid() {
               </p>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
               <div>
-                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Harga</span>
+                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
+                  Harga
+                </span>
                 <span className="text-base font-extrabold text-amber-600">
                   π {product.price_pi}
                 </span>
               </div>
-              <Link
-                href={`/products/${product.slug}`}
-                className="bg-gray-900 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition"
-              >
-                Detail
-              </Link>
+
+              <div className="flex items-center gap-1.5">
+                {/* Tombol Detail Produk */}
+                <Link
+                  href={`/products/${product.slug}`}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition"
+                >
+                  Detail
+                </Link>
+
+                {/* Tombol Beli Langsung -> Ke Checkout */}
+                <Link
+                  href={`/checkout?product_id=${product.id}`}
+                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-sm"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" /> Beli
+                </Link>
+              </div>
             </div>
           </div>
         );
