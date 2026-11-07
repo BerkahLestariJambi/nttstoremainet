@@ -7,6 +7,7 @@ export interface SellerRegisterInput {
   address: string;
 }
 
+
 export const sellerService = {
   register: (data: SellerRegisterInput) =>
     apiClient('/seller/register', {
