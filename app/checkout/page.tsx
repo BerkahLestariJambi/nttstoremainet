@@ -26,8 +26,19 @@ function CheckoutFormContent() {
     if (productId) {
       productService
         .getProductById(productId)
-        .then((res) => setProduct(res.data || res))
-        .catch((err) => console.error(err))
+        .then((res: any) => {
+          // Safe unwrapping data response dari Laravel API
+          const item = res?.data?.data || res?.data || res;
+          if (item && (item.id || item.name)) {
+            setProduct(item);
+          } else {
+            setProduct(null);
+          }
+        })
+        .catch((err) => {
+          console.error('Gagal mengambil data produk:', err);
+          setProduct(null);
+        })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -42,20 +53,20 @@ function CheckoutFormContent() {
     );
   }
 
-  // Jika tidak ada produk yang dipilih
+  // Fallback jika tidak ada ID produk di URL atau produk tidak ditemukan
   if (!productId || !product) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Produk Dipilih</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Produk Tidak Ditemukan</h2>
         <p className="text-xs text-gray-500 mb-6">
-          Silakan pilih produk terlebih dahulu dari halaman beranda untuk melanjutkan checkout.
+          Silakan pilih produk dari halaman beranda untuk melanjutkan transaksi.
         </p>
         <Link
           href="/"
           className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200"
         >
-          Pilih Produk di Beranda
+          Kembali Pilih Produk
         </Link>
       </div>
     );
@@ -80,7 +91,7 @@ function CheckoutFormContent() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat */}
+        {/* Form Alamat Penerima */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
@@ -141,4 +152,41 @@ function CheckoutFormContent() {
           <div className="py-2">
             <p className="font-semibold text-gray-800 text-sm">{product.name}</p>
             <p className="text-xs text-gray-400">1 Barang</p>
-            <div className="border-t border-gray-100 mt-4 pt-
+            <div className="border-t border-gray-100 mt-4 pt-3 flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
+              <span className="text-base font-extrabold text-amber-600">
+                π {product.price_pi}
+              </span>
+            </div>
+          </div>
+
+          {isFormValid ? (
+            <CheckoutButton
+              checkoutData={{
+                recipient_name: form.recipient_name,
+                phone_number: form.phone_number,
+                shipping_address: form.shipping_address,
+                items: [{ product_id: Number(product.id), quantity: 1 }],
+              }}
+            />
+          ) : (
+            <button
+              disabled
+              className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs"
+            >
+              Lengkapi Form Alamat
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat checkout...</div>}>
+      <CheckoutFormContent />
+    </Suspense>
+  );
+}
