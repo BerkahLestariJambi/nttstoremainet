@@ -17,21 +17,21 @@ export const orderService = {
   createOrder: (data: CheckoutInput) =>
     apiClient('/orders', {
       method: 'POST',
-      body: data, // Langsung passing object, biarkan apiClient yang menangani JSON.stringify
+      body: JSON.stringify(data), // ✅ Menggunakan JSON.stringify agar sesuai tipe BodyInit
     }),
 
   // 2. Callback Server Approval Pi SDK
   approvePayment: (paymentId: string, orderId: number) =>
     apiClient('/orders/approve', {
       method: 'POST',
-      body: { payment_id: paymentId, order_id: orderId },
+      body: JSON.stringify({ payment_id: paymentId, order_id: orderId }), // ✅ Menggunakan JSON.stringify
     }),
 
   // 3. Callback Server Completion Pi SDK
   completePayment: (paymentId: string, txid: string, orderId: number) =>
     apiClient('/orders/complete', {
       method: 'POST',
-      body: { payment_id: paymentId, txid, order_id: orderId },
+      body: JSON.stringify({ payment_id: paymentId, txid, order_id: orderId }), // ✅ Menggunakan JSON.stringify
     }),
 
   // 4. Riwayat Order
