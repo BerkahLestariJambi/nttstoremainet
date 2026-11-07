@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { orderService, CheckoutInput } from '@/services/orderService';
@@ -21,7 +20,6 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       // 1. Kirim data checkout ke Laravel Backend (/api/orders)
       const rawRes: any = await orderService.createOrder(checkoutData);
 
-      // Unwrap response dari apiClient
       const res = rawRes?.data || rawRes;
       const orderData = res?.order || res?.data || res;
 
@@ -31,17 +29,25 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         orderData?.total_amount_pi ||
         res?.total_pi ||
         res?.total_amount_pi ||
-        checkoutData.shipping_fee_pi;
+        checkoutData.shipping_fee_pi ||
+        0;
 
       const memo = res?.memo || `Pembayaran Order #${orderId || 'NTTStore'}`;
 
       if (!orderId) {
-        throw new Error(res?.message || 'Gagal membuat order: ID Pesanan tidak dikembalikan dari server.');
+        throw new Error(res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.');
       }
 
-      // 2. Cek apakah berjalan di dalam Pi Browser (Pi SDK)
+      // 2. Inisialisasi dan Cek Pi Network SDK
       if (typeof window !== 'undefined' && (window as any).Pi) {
         const Pi = (window as any).Pi;
+
+        // Auto-Initialize Pi SDK jika belum dipanggil sebelumnya
+        try {
+          await Pi.init({ version: '2.0', sandbox: false }); // Ubah sandbox ke true jika masih mode testing
+        } catch (initErr) {
+          console.warn('Pi SDK sudah ter-initialized atau warn:', initErr);
+        }
 
         const paymentData = {
           amount: Number(totalPi),
@@ -83,11 +89,11 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           },
         };
 
-        // Eksekusi pembayaran Pi SDK
+        // 3. Eksekusi Pembayaran via Pi SDK
         Pi.createPayment(paymentData, paymentCallbacks);
       } else {
         alert(
-          `Order #${orderId} Berhasil Dibuat!\n\nUntuk menyelesaikan pembayaran dengan Pi Coin, harap buka aplikasi ini di dalam Pi Browser.`
+          `Order #${orderId} Berhasil Dibuat!\n\nUntuk menyelesaikan pembayaran dengan Pi Coin, silakan buka aplikasi ini di dalam Pi Browser.`
         );
         setLoading(false);
         router.push('/orders');
@@ -95,11 +101,10 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     } catch (err: any) {
       console.error('Checkout Detail Error:', err);
 
-      // Tangkap error message dari apiClient (422 validation / network / 500)
       const errorMessage =
         err?.message ||
         err?.data?.message ||
-        'Gagal terhubung ke server backend Laravel (CORS atau Endpoint Error).';
+        'Gagal terhubung ke server backend Laravel.';
 
       alert(`Gagal Checkout: ${errorMessage}`);
       setLoading(false);
