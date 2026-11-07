@@ -4,20 +4,22 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { addressService, UserAddressData } from '@/services/addressService';
-import { ArrowLeft, MapPin, Plus, CheckCircle2, Trash2, Home, Building, ArrowRight } from 'lucide-react';
+import { shippingService, BiteshipArea } from '@/services/shippingService';
+import { ArrowLeft, MapPin, Plus, CheckCircle2, Trash2, ArrowRight, Search, Loader2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function AddressListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isSelectMode = searchParams.get('select') === 'true'; // Mode dipanggil dari keranjang/checkout
+  const isSelectMode = searchParams.get('select') === 'true';
 
   const [addresses, setAddresses] = useState<UserAddressData[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [showForm, setShowForm] = useState<boolean>(false);
 
+  // Form State Alamat
   const [form, setForm] = useState({
     label: 'Rumah',
     recipient_name: '',
@@ -27,6 +29,12 @@ function AddressListContent() {
     postal_code: '',
   });
 
+  // Biteship Maps Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [areaResults, setAreaResults] = useState<BiteshipArea[]>([]);
+  const [searchingArea, setSearchingArea] = useState(false);
+  const [selectedAreaName, setSelectedAreaName] = useState('');
+
   const fetchAddresses = async () => {
     setLoading(true);
     try {
@@ -34,14 +42,13 @@ function AddressListContent() {
       const list = Array.isArray(res) ? res : res?.data || [];
       setAddresses(list);
 
-      // Auto pilih alamat primary jika belum ada yang dipilih
       const primary = list.find((a: UserAddressData) => a.is_primary);
       if (primary) {
         setSelectedAddressId(primary.id);
       } else if (list.length > 0) {
         setSelectedAddressId(list[0].id);
       } else {
-        setShowForm(true); // Jika belum punya alamat, otomatis tampilkan form
+        setShowForm(true);
       }
     } catch (err) {
       console.error('Gagal mengambil daftar alamat:', err);
@@ -54,8 +61,47 @@ function AddressListContent() {
     fetchAddresses();
   }, []);
 
+  // Handler Pencarian Lokasi Biteship dengan Debounce Sederhana
+  useEffect(() => {
+    if (searchQuery.trim().length < 3) {
+      setAreaResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingArea(true);
+      try {
+        const res: any = await shippingService.searchMaps(searchQuery);
+        const areas = Array.isArray(res) ? res : res?.data || [];
+        setAreaResults(areas);
+      } catch (err) {
+        console.error('Gagal cari lokasi Biteship:', err);
+      } finally {
+        setSearchingArea(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSelectArea = (area: BiteshipArea) => {
+    setForm({
+      ...form,
+      city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
+      postal_code: String(area.postal_code),
+    });
+    setSelectedAreaName(area.name);
+    setAreaResults([]);
+    setSearchQuery('');
+  };
+
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.postal_code) {
+      alert('Silakan pilih lokasi dari hasil pencarian Biteship terlebih dahulu.');
+      return;
+    }
+
     try {
       const res: any = await addressService.createAddress({
         ...form,
@@ -66,6 +112,7 @@ function AddressListContent() {
       if (created?.id) setSelectedAddressId(created.id);
       setShowForm(false);
       setForm({ label: 'Rumah', recipient_name: '', phone_number: '', full_address: '', city: '', postal_code: '' });
+      setSelectedAreaName('');
     } catch (err) {
       console.error('Gagal menambah alamat:', err);
     }
@@ -116,17 +163,17 @@ function AddressListContent() {
         </button>
       </div>
 
-      {/* Form Tambah Alamat Baru */}
+      {/* Form Tambah Alamat Integrasi Biteship */}
       {showForm && (
         <form onSubmit={handleCreateAddress} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm mb-6 space-y-4">
-          <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Tambah Alamat Pengiriman Baru</h2>
+          <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Tambah Alamat (Biteship Location Verified)</h2>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Label Alamat</label>
               <input
                 type="text"
-                placeholder="Contoh: Rumah, Kantor"
+                placeholder="Rumah / Kantor"
                 required
                 value={form.label}
                 onChange={(e) => setForm({ ...form, label: e.target.value })}
@@ -158,11 +205,49 @@ function AddressListContent() {
             />
           </div>
 
+          {/* AUTOCOMPLETE BITESHIP MAPS SEARCH */}
+          <div className="relative">
+            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Cari Kecamatan / Kota / Kode Pos (Biteship API) *</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Ketik min 3 karakter, misal: Kupang, Oebobo, 85111..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full p-3 pl-9 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
+              {searchingArea && <Loader2 className="w-4 h-4 text-amber-500 animate-spin absolute right-3 top-3.5" />}
+            </div>
+
+            {/* Dropdown Hasil Pencarian Biteship */}
+            {areaResults.length > 0 && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-gray-100">
+                {areaResults.map((area) => (
+                  <div
+                    key={area.id}
+                    onClick={() => handleSelectArea(area)}
+                    className="p-3 text-xs text-gray-700 hover:bg-amber-50 cursor-pointer transition"
+                  >
+                    <p className="font-semibold text-gray-900">{area.name}</p>
+                    <span className="text-[10px] text-gray-500">Kode Pos: {area.postal_code}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedAreaName && (
+              <div className="mt-2 p-2.5 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
+                <span className="font-bold">Lokasi Terpilih:</span> {selectedAreaName} (Kode Pos: {form.postal_code})
+              </div>
+            )}
+          </div>
+
           <div>
-            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Alamat Lengkap *</label>
+            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Alamat Detail (Jalan, No. Rumah, RT/RW) *</label>
             <textarea
-              rows={3}
-              placeholder="Jalan, Nomor Rumah, RT/RW, Kecamatan, Kab/Kota..."
+              rows={2}
+              placeholder="Jl. El Tari No. 12, RT 01 / RW 02..."
               required
               value={form.full_address}
               onChange={(e) => setForm({ ...form, full_address: e.target.value })}
@@ -181,13 +266,13 @@ function AddressListContent() {
               </button>
             )}
             <button type="submit" className="px-5 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md hover:bg-amber-600 transition">
-              Simpan Alamat
+              Simpan Alamat Terverifikasi
             </button>
           </div>
         </form>
       )}
 
-      {/* Daftar Cards Alamat */}
+      {/* Lista Cards Alamat */}
       {addresses.length === 0 && !showForm ? (
         <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 p-6">
           <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -240,7 +325,9 @@ function AddressListContent() {
               </div>
 
               <p className="text-xs font-semibold text-gray-700">{addr.phone_number}</p>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{addr.full_address}</p>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                {addr.full_address} {addr.city && `, ${addr.city}`} {addr.postal_code && `(Kode Pos: ${addr.postal_code})`}
+              </p>
 
               {isSelectMode && selectedAddressId === addr.id && (
                 <div className="absolute top-5 right-12">
@@ -252,7 +339,6 @@ function AddressListContent() {
         </div>
       )}
 
-      {/* Tombol Lanjut ke Checkout (Hanya Tampil Jika Di-trigger Dari Cart) */}
       {isSelectMode && (
         <div className="mt-8">
           <button
@@ -260,7 +346,7 @@ function AddressListContent() {
             disabled={!selectedAddressId}
             className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50 text-xs"
           >
-            Lanjut Pembayaran Checkout <ArrowRight className="w-4 h-4" />
+            Lanjut ke Checkout Pembayaran <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}
