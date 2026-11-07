@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
-import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag, AlertCircle, ShoppingCart } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,10 @@ function CheckoutFormContent() {
   const productId = searchParams.get('product_id');
   const productSlug = searchParams.get('slug');
 
-  const [product, setProduct] = useState<any>(null);
+  // Mode Checkout: 'direct' (beli langsung) atau 'cart' (dari keranjang)
+  const isDirectBuy = Boolean(productId || productSlug);
+
+  const [checkoutItems, setCheckoutItems] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   const [form, setForm] = useState({
@@ -24,75 +27,121 @@ function CheckoutFormContent() {
   });
 
   useEffect(() => {
-    async function loadProductData() {
+    async function initCheckoutData() {
       setLoading(true);
-      try {
-        let foundProduct = null;
 
-        // 1. Ambil berdasarkan slug jika ada
-        if (productSlug) {
-          const res = await productService.getProductBySlug(productSlug);
-          foundProduct = res?.data?.data || res?.data || res;
-        }
+      // ALUR 1: BELI LANGSUNG (1 Jenis Produk dari Query Param)
+      if (isDirectBuy) {
+        try {
+          let foundProduct = null;
 
-        // 2. Jika tidak ada slug atau gagal, cari berdasarkan ID
-        if ((!foundProduct || !foundProduct.id) && productId) {
-          try {
-            const resById = await productService.getProductById(productId);
-            foundProduct = resById?.data?.data || resById?.data || resById;
-          } catch (errById) {
-            console.warn('Gagal getProductById, mencoba fallback getProducts list...', errById);
+          if (productSlug) {
+            const res = await productService.getProductBySlug(productSlug);
+            foundProduct = res?.data?.data || res?.data || res;
           }
 
-          // Fallback 3: Cari dari seluruh daftar produk
-          if (!foundProduct || !foundProduct.id) {
-            const allProductsRes = await productService.getProducts();
-            const list = allProductsRes?.data?.data || allProductsRes?.data || allProductsRes;
+          if ((!foundProduct || !foundProduct.id) && productId) {
+            try {
+              const resById = await productService.getProductById(productId);
+              foundProduct = resById?.data?.data || resById?.data || resById;
+            } catch (errById) {
+              console.warn('Gagal getProductById, mencoba fallback getProducts list...', errById);
+            }
 
-            if (Array.isArray(list)) {
-              foundProduct = list.find((p: any) => String(p.id) === String(productId));
+            if (!foundProduct || !foundProduct.id) {
+              const allProductsRes = await productService.getProducts();
+              const list = allProductsRes?.data?.data || allProductsRes?.data || allProductsRes;
+              if (Array.isArray(list)) {
+                foundProduct = list.find((p: any) => String(p.id) === String(productId));
+              }
             }
           }
-        }
 
-        if (foundProduct && (foundProduct.id || foundProduct.name)) {
-          setProduct(foundProduct);
-        } else {
-          setProduct(null);
+          if (foundProduct && (foundProduct.id || foundProduct.name)) {
+            setCheckoutItems([
+              {
+                product_id: Number(foundProduct.id),
+                name: foundProduct.name,
+                price_pi: Number(foundProduct.price_pi),
+                quantity: 1,
+              },
+            ]);
+          } else {
+            setCheckoutItems([]);
+          }
+        } catch (error) {
+          console.error('Error memuat produk beli langsung:', error);
+          setCheckoutItems([]);
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error memuat detail produk checkout:', error);
-        setProduct(null);
+        return;
+      }
+
+      // ALUR 2: BELI DARI KERANJANG (Membaca Selected Items dari LocalStorage / Cart)
+      try {
+        const storedCart = localStorage.getItem('checkout_selected_items') || localStorage.getItem('cart_items');
+        if (storedCart) {
+          const parsedCart = JSON.parse(storedCart);
+          // Filter hanya item yang statusnya selected/checked (jika ada properti selected)
+          const itemsToBuy = Array.isArray(parsedCart)
+            ? parsedCart.filter((item: any) => item.selected !== false)
+            : [];
+
+          setCheckoutItems(
+            itemsToBuy.map((item: any) => ({
+              product_id: Number(item.id || item.product_id),
+              name: item.name || item.product?.name,
+              price_pi: Number(item.price_pi || item.product?.price_pi || 0),
+              quantity: Number(item.quantity || 1),
+            }))
+          );
+        } else {
+          setCheckoutItems([]);
+        }
+      } catch (err) {
+        console.error('Error membaca data keranjang:', err);
+        setCheckoutItems([]);
       } finally {
         setLoading(false);
       }
     }
 
-    loadProductData();
-  }, [productId, productSlug]);
+    initCheckoutData();
+  }, [productId, productSlug, isDirectBuy]);
+
+  // Hitung Total Pembayaran
+  const totalAmountPi = checkoutItems.reduce(
+    (sum, item) => sum + item.price_pi * item.quantity,
+    0
+  );
 
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">
-        Memuat detail checkout produk...
+        Memuat detail checkout...
       </div>
     );
   }
 
-  // Fallback jika produk tidak ditemukan
-  if (!product) {
+  // Fallback Jika Tidak Ada Produk Yang Dipilih
+  if (checkoutItems.length === 0) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Produk Tidak Ditemukan</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">
+          {isDirectBuy ? 'Produk Tidak Ditemukan' : 'Belum Ada Produk Dipilih'}
+        </h2>
         <p className="text-xs text-gray-500 mb-6">
-          Silakan pilih produk dari halaman beranda untuk melanjutkan transaksi.
+          {isDirectBuy
+            ? 'Produk yang Anda pilih tidak tersedia.'
+            : 'Silakan pilih produk yang ingin dibeli dari keranjang atau beranda terlebih dahulu.'}
         </p>
         <Link
           href="/"
           className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200"
         >
-          Kembali Pilih Produk
+          Kembali Belanja
         </Link>
       </div>
     );
@@ -113,11 +162,11 @@ function CheckoutFormContent() {
       </Link>
 
       <h1 className="text-2xl font-extrabold text-gray-900 mb-6 flex items-center gap-2">
-        <ShoppingBag className="w-7 h-7 text-amber-500" /> Checkout Produk
+        <ShoppingBag className="w-7 h-7 text-amber-500" /> Checkout Pembayaran
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat Penerima */}
+        {/* Form Alamat Pengiriman */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
@@ -169,38 +218,53 @@ function CheckoutFormContent() {
           </div>
         </div>
 
-        {/* Ringkasan & Pembayaran */}
+        {/* Ringkasan Belanja & Tombol Pi Payment */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-            <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan
+            <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan Pesanan
           </h2>
 
-          <div className="py-2">
-            <p className="font-semibold text-gray-800 text-sm">{product.name}</p>
-            <p className="text-xs text-gray-400">1 Barang</p>
-            <div className="border-t border-gray-100 mt-4 pt-3 flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
-              <span className="text-base font-extrabold text-amber-600">
-                π {product.price_pi}
-              </span>
-            </div>
+          {/* Daftar Produk Yang Akan Dibayar */}
+          <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto pr-1 space-y-2">
+            {checkoutItems.map((item, idx) => (
+              <div key={idx} className="pt-2 first:pt-0 flex justify-between items-start gap-2">
+                <div>
+                  <p className="font-semibold text-gray-800 text-xs line-clamp-1">{item.name}</p>
+                  <p className="text-[10px] text-gray-400">{item.quantity} x π {item.price_pi}</p>
+                </div>
+                <span className="text-xs font-bold text-amber-600 whitespace-nowrap">
+                  π {(item.price_pi * item.quantity).toFixed(4)}
+                </span>
+              </div>
+            ))}
           </div>
 
+          {/* Total Tagihan */}
+          <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
+            <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
+            <span className="text-base font-extrabold text-amber-600">
+              π {totalAmountPi.toFixed(4)}
+            </span>
+          </div>
+
+          {/* Eksekusi Bayar */}
           {isFormValid ? (
             <CheckoutButton
               checkoutData={{
-                // Field standar
                 recipient_name: form.recipient_name,
                 phone_number: form.phone_number,
                 shipping_address: form.shipping_address,
-                items: [{ product_id: Number(product.id), quantity: 1 }],
-                
-                // Fallback alias field yang sering digunakan pada Controller Laravel
+                items: checkoutItems.map((item) => ({
+                  product_id: item.product_id,
+                  quantity: item.quantity,
+                })),
+
+                // Alias penyesuaian backend Laravel
                 name: form.recipient_name,
                 phone: form.phone_number,
                 address: form.shipping_address,
-                product_id: Number(product.id),
-                quantity: 1,
+                product_id: checkoutItems[0]?.product_id,
+                quantity: checkoutItems[0]?.quantity,
               } as any}
             />
           ) : (
