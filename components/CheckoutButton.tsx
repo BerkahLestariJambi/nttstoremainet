@@ -8,7 +8,6 @@ interface CheckoutButtonProps {
   checkoutData: CheckoutInput;
 }
 
-
 export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -17,19 +16,27 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     setLoading(true);
 
     try {
-      // 1. Kirim data checkout & buat Order di Laravel
-      const res = await orderService.createOrder(checkoutData);
+      // 1. Kirim data checkout & buat Order di Laravel Backend
+      const rawRes: any = await orderService.createOrder(checkoutData);
 
-      // Pastikan response berhasil
-      if (!res || !res.success) {
-        throw new Error(res?.message || 'Gagal membuat pesanan.');
+      // Safe Unwrapping Data Response dari Backend Laravel
+      const res = rawRes?.data || rawRes;
+      const orderData = res?.order || res?.data || res;
+
+      // Ambil detail ID order & total Pi
+      const orderId = orderData?.id || orderData?.order_id || res?.order_id;
+      const totalPi =
+        orderData?.total_pi ||
+        orderData?.total_amount_pi ||
+        res?.total_pi ||
+        res?.total_amount_pi;
+      const memo = res?.memo || `Pembayaran Order #${orderId}`;
+
+      if (!orderId) {
+        throw new Error(
+          res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.'
+        );
       }
-
-      // Destructuring data response dari Laravel
-      const orderData = res.data;
-      const orderId = orderData.order?.id || orderData.order_id;
-      const totalPi = orderData.total_pi || orderData.total_amount_pi;
-      const memo = orderData.memo || `Pembayaran Order #${orderId}`;
 
       // 2. Cek keberadaan SDK Pi Network di Browser
       if (typeof window !== 'undefined' && (window as any).Pi) {
@@ -43,16 +50,28 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
 
         const paymentCallbacks = {
           onReadyForServerApproval: async (paymentId: string) => {
-            console.log('Server approval untuk payment:', paymentId);
-            await orderService.approvePayment(paymentId, orderId);
+            console.log('Server approval untuk payment ID:', paymentId);
+            try {
+              await orderService.approvePayment(paymentId, orderId);
+            } catch (approvalErr: any) {
+              console.error('Approval Error:', approvalErr);
+            }
           },
-          onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+          onReadyForServerCompletion: async (
+            paymentId: string,
+            txid: string
+          ) => {
             console.log('Server completion dengan TXID:', txid);
-            await orderService.completePayment(paymentId, txid, orderId);
-
-            alert('Pembayaran Pi Coin Berhasil!');
-            setLoading(false);
-            router.push('/orders');
+            try {
+              await orderService.completePayment(paymentId, txid, orderId);
+              alert('Pembayaran Pi Coin Berhasil!');
+              setLoading(false);
+              router.push('/orders');
+            } catch (completionErr: any) {
+              console.error('Completion Error:', completionErr);
+              alert('Gagal menyelesaikan verifikasi pembayaran ke server.');
+              setLoading(false);
+            }
           },
           onCancel: (paymentId: string) => {
             console.log('Pembayaran dibatalkan:', paymentId);
@@ -61,21 +80,29 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           },
           onError: (error: Error, payment?: unknown) => {
             console.error('Error transaksi Pi SDK:', error, payment);
-            alert('Terjadi kesalahan pada pembayaran Pi.');
+            alert(`Terjadi kesalahan Pi SDK: ${error.message || 'Gagal membayar'}`);
             setLoading(false);
           },
         };
 
-        // Eksekusi pembayaran Pi SDK
+        // Eksekusi pembayaran via Pi SDK
         Pi.createPayment(paymentData, paymentCallbacks);
       } else {
-        alert('Fitur ini hanya dapat digunakan di dalam Pi Browser!');
+        alert(
+          'Fitur pembayaran Pi Coin ini hanya dapat berjalan di dalam Pi Browser!'
+        );
         setLoading(false);
       }
-    } catch (err: unknown) {
-      console.error(err);
-      const errorMessage = err instanceof Error ? err.message : 'Terjadi kesalahan sistem.';
-      alert(errorMessage);
+    } catch (err: any) {
+      console.error('Error Checkout Detail:', err);
+
+      // Tangkap pesan error dari API Response / Network Fetch Error
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Gagal terhubung ke server backend Laravel. Periksa jaringan/CORS.';
+
+      alert(`Gagal Checkout: ${errorMessage}`);
       setLoading(false);
     }
   };
