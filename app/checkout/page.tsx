@@ -7,60 +7,41 @@ import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
-import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag, AlertCircle, Plus, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id');
+  const addressId = searchParams.get('address_id');
   const isDirectBuy = Boolean(productId);
 
   const [checkoutItems, setCheckoutItems] = useState<any[]>([]);
-  const [addresses, setAddresses] = useState<UserAddressData[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
-  const [showAddAddress, setShowAddAddress] = useState<boolean>(false);
+  const [address, setAddress] = useState<UserAddressData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // State Form Alamat Baru
-  const [newAddressForm, setNewAddressForm] = useState({
-    label: 'Rumah',
-    recipient_name: '',
-    phone_number: '',
-    full_address: '',
-    city: '',
-    postal_code: '',
-  });
-
-  // 1. Memuat Alamat Pembeli dari DB API
-  const fetchAddresses = async () => {
-    try {
-      const res = await addressService.getAddresses();
-      const list = res?.data || res || [];
-      setAddresses(list);
-
-      // Otomatis pilih alamat primary jika ada
-      const primary = list.find((a: UserAddressData) => a.is_primary);
-      if (primary) {
-        setSelectedAddressId(primary.id);
-      } else if (list.length > 0) {
-        setSelectedAddressId(list[0].id);
-      } else {
-        setShowAddAddress(true); // Jika belum punya alamat, buka form tambah
-      }
-    } catch (err) {
-      console.error('Gagal mengambil daftar alamat:', err);
-    }
-  };
-
-  // 2. Memuat Produk (Direct Buy vs Cart DB)
   useEffect(() => {
-    async function initData() {
+    async function initCheckout() {
       setLoading(true);
-      await fetchAddresses();
 
+      // 1. Memuat Data Alamat Pengiriman dari API DB
+      try {
+        const res: any = await addressService.getAddresses();
+        const list = Array.isArray(res) ? res : res?.data || [];
+        
+        // Cari berdasarkan query address_id, jika tidak ada cari primary address, atau fallback ke index pertama
+        const selected = addressId 
+          ? list.find((a: UserAddressData) => String(a.id) === String(addressId))
+          : list.find((a: UserAddressData) => a.is_primary) || list[0];
+          
+        setAddress(selected || null);
+      } catch (err) {
+        console.error('Gagal mengambil alamat pengiriman:', err);
+      }
+
+      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart)
       if (isDirectBuy && productId) {
-        // Mode 1: Beli Langsung
         try {
           const res = await productService.getProductById(productId);
           const item = res?.data?.data || res?.data || res;
@@ -73,13 +54,12 @@ function CheckoutFormContent() {
             }]);
           }
         } catch (err) {
-          console.error('Error produk beli langsung:', err);
+          console.error('Error mengambil produk beli langsung:', err);
         }
       } else {
-        // Mode 2: Dari Keranjang DB
         try {
-          const res = await cartService.getCart();
-          const list = res?.data || res || [];
+          const res: any = await cartService.getCart();
+          const list = Array.isArray(res) ? res : res?.data || [];
           const selected = list.filter((i: any) => i.selected);
           setCheckoutItems(selected.map((i: any) => ({
             product_id: i.product_id,
@@ -91,31 +71,13 @@ function CheckoutFormContent() {
           console.error('Error membaca keranjang DB:', err);
         }
       }
+
       setLoading(false);
     }
 
-    initData();
-  }, [productId, isDirectBuy]);
+    initCheckout();
+  }, [productId, addressId, isDirectBuy]);
 
-  // Tambah Alamat Baru
-  const handleSaveNewAddress = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await addressService.createAddress({
-        ...newAddressForm,
-        is_primary: addresses.length === 0,
-      });
-      const created = res?.data || res;
-      await fetchAddresses();
-      if (created?.id) setSelectedAddressId(created.id);
-      setShowAddAddress(false);
-      setNewAddressForm({ label: 'Rumah', recipient_name: '', phone_number: '', full_address: '', city: '', postal_code: '' });
-    } catch (err) {
-      console.error('Gagal menyimpan alamat baru:', err);
-    }
-  };
-
-  const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
   const totalAmountPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
 
   if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat detail checkout...</div>;
@@ -125,8 +87,8 @@ function CheckoutFormContent() {
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h2 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Produk Dipilih</h2>
-        <p className="text-xs text-gray-500 mb-6">Silakan pilih produk di keranjang belanja terlebih dahulu.</p>
-        <Link href="/cart" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition">
+        <p className="text-xs text-gray-500 mb-6">Silakan pilih produk terlebih dahulu.</p>
+        <Link href="/cart" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200">
           Buka Keranjang
         </Link>
       </div>
@@ -135,129 +97,54 @@ function CheckoutFormContent() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
-      <Link href={isDirectBuy ? '/' : '/cart'} className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> {isDirectBuy ? 'Batal' : 'Kembali ke Keranjang'}
+      <Link href="/addresses?select=true" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 mb-6 transition">
+        <ArrowLeft className="w-4 h-4" /> Ubah Alamat Pengiriman
       </Link>
 
       <h1 className="text-2xl font-extrabold text-gray-900 mb-6 flex items-center gap-2">
-        <ShoppingBag className="w-7 h-7 text-amber-500" /> Checkout Pembayaran
+        <ShoppingBag className="w-7 h-7 text-amber-500" /> Ringkasan & Pembayaran
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* BAGIAN ALAMAT PENGIRIMAN */}
+        {/* Ringkasan Alamat Terpilih */}
         <div className="md:col-span-2 space-y-4">
           <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-amber-500" /> Pilih Alamat Pengiriman
+            <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
+              <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-amber-500" /> Alamat Tujuan Pengiriman
               </h2>
-              <button
-                onClick={() => setShowAddAddress(!showAddAddress)}
-                className="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> Tambah Alamat
-              </button>
+              <Link href="/addresses?select=true" className="text-xs text-amber-600 font-bold hover:underline">
+                Ubah Alamat
+              </Link>
             </div>
 
-            {/* List Alamat yang Tersedia */}
-            {!showAddAddress && addresses.length > 0 && (
-              <div className="space-y-3">
-                {addresses.map((addr) => (
-                  <div
-                    key={addr.id}
-                    onClick={() => setSelectedAddressId(addr.id)}
-                    className={`p-4 rounded-2xl border cursor-pointer transition flex justify-between items-start ${
-                      selectedAddressId === addr.id
-                        ? 'border-amber-500 bg-amber-50/30'
-                        : 'border-gray-200 hover:border-amber-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-gray-900">{addr.recipient_name}</span>
-                        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold">{addr.label}</span>
-                        {addr.is_primary && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Utama</span>}
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">{addr.phone_number}</p>
-                      <p className="text-xs text-gray-500 mt-1">{addr.full_address} {addr.city && `, ${addr.city}`}</p>
-                    </div>
-                    {selectedAddressId === addr.id && <CheckCircle2 className="w-5 h-5 text-amber-500 shrink-0" />}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Form Tambah Alamat Baru */}
-            {showAddAddress && (
-              <form onSubmit={handleSaveNewAddress} className="space-y-3 pt-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-700 uppercase">Label (Rumah/Kantor)</label>
-                    <input
-                      type="text"
-                      required
-                      value={newAddressForm.label}
-                      onChange={(e) => setNewAddressForm({ ...newAddressForm, label: e.target.value })}
-                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-700 uppercase">Nama Penerima *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newAddressForm.recipient_name}
-                      onChange={(e) => setNewAddressForm({ ...newAddressForm, recipient_name: e.target.value })}
-                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase">Nomor Telepon / WA *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={newAddressForm.phone_number}
-                    onChange={(e) => setNewAddressForm({ ...newAddressForm, phone_number: e.target.value })}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase">Alamat Lengkap *</label>
-                  <textarea
-                    required
-                    rows={2}
-                    value={newAddressForm.full_address}
-                    onChange={(e) => setNewAddressForm({ ...newAddressForm, full_address: e.target.value })}
-                    className="w-full p-2.5 border border-gray-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500"
-                  />
-                </div>
-
-                <div className="flex gap-2 justify-end pt-2">
-                  {addresses.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAddAddress(false)}
-                      className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700"
-                    >
-                      Batal
-                    </button>
+            {address ? (
+              <div className="bg-amber-50/40 p-4 rounded-2xl border border-amber-200/60">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-xs text-gray-900">{address.recipient_name}</span>
+                  <span className="text-[10px] bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">{address.label}</span>
+                  {address.is_primary && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Utama</span>
                   )}
-                  <button type="submit" className="px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md">
-                    Simpan Alamat
-                  </button>
                 </div>
-              </form>
+                <p className="text-xs text-gray-600">{address.phone_number}</p>
+                <p className="text-xs text-gray-500 mt-1">{address.full_address} {address.city && `, ${address.city}`}</p>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-xs text-red-500 font-semibold mb-2">Belum ada alamat pengiriman yang dipilih.</p>
+                <Link href="/addresses?select=true" className="inline-block bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                  Pilih / Tambah Alamat
+                </Link>
+              </div>
             )}
           </div>
         </div>
 
-        {/* RINGKASAN PESANAN & BAYAR */}
+        {/* Ringkasan Tagihan & Tombol Pi Payment */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-            <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan Pembayaran
+            <PackageCheck className="w-5 h-5 text-amber-500" /> Total Tagihan
           </h2>
 
           <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto pr-1 space-y-2">
@@ -275,31 +162,34 @@ function CheckoutFormContent() {
           </div>
 
           <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
+            <span className="text-xs font-bold text-gray-700">Total Pembayaran</span>
             <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(4)}</span>
           </div>
 
-          {selectedAddress ? (
+          {address ? (
             <CheckoutButton
               checkoutData={{
-                recipient_name: selectedAddress.recipient_name,
-                phone_number: selectedAddress.phone_number,
-                shipping_address: selectedAddress.full_address,
+                recipient_name: address.recipient_name,
+                phone_number: address.phone_number,
+                shipping_address: address.full_address,
                 items: checkoutItems.map((item) => ({
                   product_id: item.product_id,
                   quantity: item.quantity,
                 })),
-                name: selectedAddress.recipient_name,
-                phone: selectedAddress.phone_number,
-                address: selectedAddress.full_address,
+                name: address.recipient_name,
+                phone: address.phone_number,
+                address: address.full_address,
                 product_id: checkoutItems[0]?.product_id,
                 quantity: checkoutItems[0]?.quantity,
               } as any}
             />
           ) : (
-            <button disabled className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs">
-              Pilih Alamat Pengiriman
-            </button>
+            <Link
+              href="/addresses?select=true"
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs"
+            >
+              Pilih Alamat Dulu
+            </Link>
           )}
         </div>
       </div>
