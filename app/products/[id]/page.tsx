@@ -1,60 +1,83 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ShoppingBag, ArrowLeft, ShieldCheck, Truck, Star } from 'lucide-react';
-import { useCart, Product } from '@/context/CartContext';
-
-const DUMMY_PRODUCTS: Record<string, Product> = {
-  '1': {
-    id: '1',
-    name: 'Kain Tenun Ikat Sumba Original',
-    category: 'Tenun Ikat',
-    priceIdr: 1250000,
-    pricePi: 2.5,
-    image: 'https://images.unsplash.com/photo-1606760227091-3dd850d492a6?w=800',
-    description: 'Kain tenun tradisional buatan tangan pengrajin Sumba Timur dengan pewarna alami serat kayu dan akar mengkudu.',
-    stock: 5,
-    rating: 4.9,
-  },
-  '2': {
-    id: '2',
-    name: 'Kopi Flores Bajawa Specialty 500g',
-    category: 'Kopi Flores',
-    priceIdr: 150000,
-    pricePi: 0.3,
-    image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=800',
-    description: 'Biji kopi Arabika Bajawa Flores yang ditanam di dataran tinggi vulkanik.',
-    stock: 25,
-    rating: 4.8,
-  },
-  '3': {
-    id: '3',
-    name: 'Madu Hutan Liar Timor 500ml',
-    category: 'Hasil Alam',
-    priceIdr: 185000,
-    pricePi: 0.37,
-    image: 'https://images.unsplash.com/photo-1587049352847-81a56d773cae?w=800',
-    description: 'Madu murni alami dari hutan belantara Pulau Timor tanpa pengawet.',
-    stock: 12,
-    rating: 4.9,
-  },
-};
+import { useRouter } from 'next/navigation';
+import { ShoppingBag, ArrowLeft, ShieldCheck, Truck, Star, Loader2 } from 'lucide-react';
+import { productService } from '@/services/productService';
+import { cartService } from '@/services/cartService';
 
 export default function ProductDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const router = useRouter();
   const resolvedParams = React.use(params);
   const productId = resolvedParams.id;
-  const { addToCart } = useCart();
+
+  const [product, setProduct] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [adding, setAdding] = useState<boolean>(false);
   const [qty, setQty] = useState<number>(1);
 
-  const product = DUMMY_PRODUCTS[productId] || DUMMY_PRODUCTS['1'];
+  // 1. Ambil Detail Produk dari API Database Laravel
+  useEffect(() => {
+    async function fetchProduct() {
+      setLoading(true);
+      try {
+        const res: any = await productService.getProductById(productId);
+        const item = res?.data?.data || res?.data || res;
+        setProduct(item);
+      } catch (err) {
+        console.error('Gagal mengambil detail produk:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchProduct();
+  }, [productId]);
+
+  // 2. Tambahkan Produk ke Keranjang DB via API Laravel
+  const handleAddToCart = async () => {
+    if (!product?.id) return;
+    setAdding(true);
+    try {
+      await cartService.addToCart(Number(product.id), qty);
+      
+      // Redirect ke halaman keranjang untuk melihat item yang baru tersimpan di DB
+      router.push('/cart');
+    } catch (err: any) {
+      console.error('Gagal menambahkan ke keranjang DB:', err);
+      alert(err.message || 'Gagal menambahkan produk ke keranjang. Silakan pastikan Anda sudah login.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto py-16 text-center text-gray-500 flex flex-col items-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <p className="text-xs">Memuat detail produk...</p>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Produk Tidak Ditemukan</h2>
+        <p className="text-xs text-gray-500 mb-6">Produk yang Anda cari tidak tersedia atau telah dihapus.</p>
+        <Link href="/" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition">
+          Kembali ke Katalog
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-5xl mx-auto py-8">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6">
       <Link
         href="/"
         className="inline-flex items-center gap-2 text-gray-600 hover:text-amber-700 mb-6 font-medium text-sm transition"
@@ -63,9 +86,9 @@ export default function ProductDetailPage({
       </Link>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
-        <div className="h-96 rounded-2xl overflow-hidden bg-gray-50 border">
+        <div className="h-96 rounded-2xl overflow-hidden bg-gray-50 border relative">
           <img
-            src={product.image}
+            src={product.image_url || product.image || 'https://images.unsplash.com/photo-1606760227091-3dd850d492a6?w=800'}
             alt={product.name}
             className="w-full h-full object-cover"
           />
@@ -74,7 +97,7 @@ export default function ProductDetailPage({
         <div className="flex flex-col justify-between">
           <div>
             <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1 rounded-full">
-              {product.category}
+              {product.category?.name || product.category || 'NTT Product'}
             </span>
             <h1 className="text-3xl font-extrabold text-gray-900 mt-2">
               {product.name}
@@ -83,29 +106,31 @@ export default function ProductDetailPage({
             <div className="flex items-center gap-2 mt-2">
               <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
               <span className="text-sm font-bold text-gray-800">
-                {product.rating}
+                {product.rating || '4.9'}
               </span>
               <span className="text-gray-400 text-sm">
-                • Stok: {product.stock} pcs
+                • Stok: {product.stock ?? 10} pcs
               </span>
             </div>
 
-            <div className="mt-4 p-4 bg-purple-50 rounded-2xl border border-purple-100">
-              <p className="text-xs text-purple-600 font-semibold uppercase">
+            <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
+              <p className="text-xs text-amber-700 font-semibold uppercase">
                 Harga Pi Ecosystem
               </p>
               <div className="flex items-baseline gap-3 mt-1">
-                <span className="text-3xl font-black text-purple-700">
-                  {(product.pricePi * qty).toFixed(2)} π
+                <span className="text-3xl font-black text-amber-600">
+                  {(Number(product.price_pi || product.pricePi || 0) * qty).toFixed(4)} π
                 </span>
-                <span className="text-sm text-gray-500 font-medium">
-                  (Rp {(product.priceIdr * qty).toLocaleString('id-ID')})
-                </span>
+                {product.priceIdr && (
+                  <span className="text-sm text-gray-500 font-medium">
+                    (Rp {(Number(product.priceIdr) * qty).toLocaleString('id-ID')})
+                  </span>
+                )}
               </div>
             </div>
 
             <p className="text-gray-600 mt-4 leading-relaxed text-sm">
-              {product.description}
+              {product.description || 'Produk khas unggulan Nusa Tenggara Timur dengan kualitas terjamin.'}
             </p>
           </div>
 
@@ -116,15 +141,15 @@ export default function ProductDetailPage({
                 <button
                   type="button"
                   onClick={() => setQty(Math.max(1, qty - 1))}
-                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition"
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition text-xs"
                 >
                   -
                 </button>
-                <span className="px-4 py-1.5 font-bold text-gray-800">{qty}</span>
+                <span className="px-4 py-1.5 font-bold text-gray-800 text-xs">{qty}</span>
                 <button
                   type="button"
-                  onClick={() => setQty(Math.min(product.stock, qty + 1))}
-                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition"
+                  onClick={() => setQty(Math.min(product.stock || 99, qty + 1))}
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 font-bold transition text-xs"
                 >
                   +
                 </button>
@@ -133,14 +158,19 @@ export default function ProductDetailPage({
 
             <button
               type="button"
-              onClick={() => {
-                for (let i = 0; i < qty; i++) {
-                  addToCart(product);
-                }
-              }}
-              className="w-full bg-purple-700 hover:bg-purple-800 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-sm"
+              disabled={adding}
+              onClick={handleAddToCart}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-amber-200 disabled:opacity-50 text-xs"
             >
-              <ShoppingBag className="w-5 h-5" /> + Masukkan Keranjang
+              {adding ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Menyimpan ke DB...
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="w-4 h-4" /> + Masukkan Keranjang
+                </>
+              )}
             </button>
 
             <div className="grid grid-cols-2 gap-4 mt-6 text-xs text-gray-500">
