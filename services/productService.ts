@@ -14,9 +14,14 @@ export const productService = {
   getProductBySlug: (slug: string) => apiClient(`/products/${slug}`),
 
   // POST /api/seller/products (Protected)
-  createProduct: (data: any) => 
-    apiClient('/seller/products', {
+  createProduct: (data: FormData | Record<string, any>) => {
+    const isFormData = data instanceof FormData;
+
+    return apiClient('/seller/products', {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      // Jika FormData, kirim langsung agar browser membuat header multipart/form-data sendiri
+      // Jika objek JSON biasa, stringify seperti semula
+      body: isFormData ? data : JSON.stringify(data),
+    });
+  },
 };
