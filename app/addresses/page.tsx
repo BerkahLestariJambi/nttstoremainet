@@ -19,7 +19,7 @@ function AddressListContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [showForm, setShowForm] = useState<boolean>(false);
 
-  // Form State Alamat
+  // Form State Alamat (Daftarkan area_id)
   const [form, setForm] = useState({
     label: 'Rumah',
     recipient_name: '',
@@ -27,6 +27,7 @@ function AddressListContent() {
     full_address: '',
     city: '',
     postal_code: '',
+    area_id: '',
   });
 
   // Biteship Maps Search State
@@ -61,7 +62,7 @@ function AddressListContent() {
     fetchAddresses();
   }, []);
 
-  // Handler Pencarian Lokasi Biteship dengan Debounce Sederhana
+  // Handler Search Biteship
   useEffect(() => {
     if (searchQuery.trim().length < 3) {
       setAreaResults([]);
@@ -84,19 +85,17 @@ function AddressListContent() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-// Di dalam app/addresses/page.tsx pada handler pilih area:
-const handleSelectArea = (area: BiteshipArea) => {
-  setForm({
-    ...form,
-    city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
-    postal_code: String(area.postal_code),
-    // Simpan area_id Biteship untuk presisi ongkir tertinggi
-    area_id: area.id, 
-  });
-  setSelectedAreaName(area.name);
-  setAreaResults([]);
-  setSearchQuery('');
-};
+  const handleSelectArea = (area: BiteshipArea) => {
+    setForm({
+      ...form,
+      city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
+      postal_code: String(area.postal_code),
+      area_id: area.id,
+    });
+    setSelectedAreaName(area.name);
+    setAreaResults([]);
+    setSearchQuery('');
+  };
 
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +113,7 @@ const handleSelectArea = (area: BiteshipArea) => {
       await fetchAddresses();
       if (created?.id) setSelectedAddressId(created.id);
       setShowForm(false);
-      setForm({ label: 'Rumah', recipient_name: '', phone_number: '', full_address: '', city: '', postal_code: '' });
+      setForm({ label: 'Rumah', recipient_name: '', phone_number: '', full_address: '', city: '', postal_code: '', area_id: '' });
       setSelectedAreaName('');
     } catch (err) {
       console.error('Gagal menambah alamat:', err);
@@ -166,7 +165,6 @@ const handleSelectArea = (area: BiteshipArea) => {
         </button>
       </div>
 
-      {/* Form Tambah Alamat Integrasi Biteship */}
       {showForm && (
         <form onSubmit={handleCreateAddress} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm mb-6 space-y-4">
           <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Tambah Alamat (Biteship Location Verified)</h2>
@@ -208,7 +206,6 @@ const handleSelectArea = (area: BiteshipArea) => {
             />
           </div>
 
-          {/* AUTOCOMPLETE BITESHIP MAPS SEARCH */}
           <div className="relative">
             <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Cari Kecamatan / Kota / Kode Pos (Biteship API) *</label>
             <div className="relative">
@@ -223,7 +220,6 @@ const handleSelectArea = (area: BiteshipArea) => {
               {searchingArea && <Loader2 className="w-4 h-4 text-amber-500 animate-spin absolute right-3 top-3.5" />}
             </div>
 
-            {/* Dropdown Hasil Pencarian Biteship */}
             {areaResults.length > 0 && (
               <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto divide-y divide-gray-100">
                 {areaResults.map((area) => (
@@ -275,7 +271,6 @@ const handleSelectArea = (area: BiteshipArea) => {
         </form>
       )}
 
-      {/* Lista Cards Alamat */}
       {addresses.length === 0 && !showForm ? (
         <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 p-6">
           <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
