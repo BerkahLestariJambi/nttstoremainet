@@ -5,9 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
-import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag, AlertCircle } from 'lucide-react';
 
-// Force Next.js untuk merender halaman ini secara Dynamic (bukan Static Pre-render)
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
@@ -38,7 +37,26 @@ function CheckoutFormContent() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">
-        Memuat data produk & checkout...
+        Memuat data produk...
+      </div>
+    );
+  }
+
+  // Jika tidak ada produk yang dipilih
+  if (!productId || !product) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
+        <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Produk Dipilih</h2>
+        <p className="text-xs text-gray-500 mb-6">
+          Silakan pilih produk terlebih dahulu dari halaman beranda untuk melanjutkan checkout.
+        </p>
+        <Link
+          href="/"
+          className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200"
+        >
+          Pilih Produk di Beranda
+        </Link>
       </div>
     );
   }
@@ -46,8 +64,7 @@ function CheckoutFormContent() {
   const isFormValid =
     form.recipient_name.trim() !== '' &&
     form.phone_number.trim() !== '' &&
-    form.shipping_address.trim() !== '' &&
-    product;
+    form.shipping_address.trim() !== '';
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
@@ -121,48 +138,7 @@ function CheckoutFormContent() {
             <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan
           </h2>
 
-          {product ? (
-            <div className="py-2">
-              <p className="font-semibold text-gray-800 text-sm">{product.name}</p>
-              <p className="text-xs text-gray-400">1 Barang</p>
-              <div className="border-t border-gray-100 mt-4 pt-3 flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
-                <span className="text-base font-extrabold text-amber-600">
-                  π {product.price_pi}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-red-500">Tidak ada produk yang dipilih.</p>
-          )}
-
-          {isFormValid ? (
-            <CheckoutButton
-              checkoutData={{
-                recipient_name: form.recipient_name,
-                phone_number: form.phone_number,
-                shipping_address: form.shipping_address,
-                items: [{ product_id: Number(product.id), quantity: 1 }],
-              }}
-            />
-          ) : (
-            <button
-              disabled
-              className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs"
-            >
-              Lengkapi Form Alamat
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function CheckoutPage() {
-  return (
-    <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat checkout...</div>}>
-      <CheckoutFormContent />
-    </Suspense>
-  );
-}
+          <div className="py-2">
+            <p className="font-semibold text-gray-800 text-sm">{product.name}</p>
+            <p className="text-xs text-gray-400">1 Barang</p>
+            <div className="border-t border-gray-100 mt-4 pt-
