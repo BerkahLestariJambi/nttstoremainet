@@ -89,17 +89,32 @@ function CheckoutFormContent() {
     initCheckout();
   }, [productId, addressId, isDirectBuy]);
 
-  const fetchBiteshipRates = async (postalCode: string) => {
+const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) => {
     setLoadingRates(true);
     try {
-      const res: any = await shippingService.checkRates(postalCode, 1000);
+      // Susun item payload sesuai spesifikasi Biteship
+      const biteshipItems: BiteshipItemPayload[] = items.map((item) => ({
+        name: item.name || 'Produk NTTStorePi',
+        value: Math.round(Number(item.price_pi || 1) * 1500000), // estimasi IDR item
+        quantity: Number(item.quantity || 1),
+        weight: 500, // 500 gram default per item
+        category: 'others',
+      }));
+
+      const res: any = await shippingService.checkRates({
+        destination_area_id: (selectedAddr as any).area_id,
+        destination_postal_code: selectedAddr.postal_code ? Number(selectedAddr.postal_code) : undefined,
+        items: biteshipItems,
+        couriers: 'jne,jnt,pos,sicepat,tiki,wahana',
+      });
+
       const rates = Array.isArray(res) ? res : res?.data || [];
       setBiteshipRates(rates);
       if (rates.length > 0) {
-        setSelectedRate(rates[0]); // Pilih kurir pertama secara default
+        setSelectedRate(rates[0]);
       }
     } catch (err) {
-      console.error('Gagal memuat tarif Biteship:', err);
+      console.error('Gagal mengambil tarif Biteship:', err);
       setBiteshipRates([]);
     } finally {
       setLoadingRates(false);
