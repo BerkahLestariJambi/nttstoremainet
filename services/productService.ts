@@ -9,6 +9,7 @@ export interface ProductInput {
   image?: File | string;
 }
 
+
 export const productService = {
   // 1. GET /api/categories
   getCategories: () => apiClient('/categories'),
