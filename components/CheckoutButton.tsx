@@ -8,6 +8,7 @@ interface CheckoutButtonProps {
   checkoutData: CheckoutInput;
 }
 
+
 export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
