@@ -18,10 +18,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
       </head>
-      <body className="bg-gray-50 text-gray-900 font-sans">
+      <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased">
         <CartProvider>
+          {/* Header & Menu Utama */}
           <Navbar />
-          <main className="min-h-screen max-w-7xl mx-auto px-4 py-6">{children}</main>
+          
+          {/* Main Content Area */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {children}
+          </main>
+
+          {/* Simple Clean Footer */}
+          <footer className="border-t border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p>© {new Date().getFullYear()} NTTStorePi. Powered by Pi Network.</p>
+              <div className="flex gap-4">
+                <span>Tenun Ikat</span>
+                <span>•</span>
+                <span>Kopi Flores</span>
+                <span>•</span>
+                <span>Hasil Alam NTT</span>
+              </div>
+            </div>
+          </footer>
         </CartProvider>
       </body>
     </html>
