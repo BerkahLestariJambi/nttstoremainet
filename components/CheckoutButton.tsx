@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { orderService, CheckoutInput } from '@/services/orderService';
+import { Loader2, CreditCard } from 'lucide-react';
 
 interface CheckoutButtonProps {
   checkoutData: CheckoutInput;
@@ -16,29 +17,28 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     setLoading(true);
 
     try {
-      // 1. Kirim data checkout & buat Order di Laravel Backend
+      // 1. Kirim data checkout ke Laravel Backend (/api/orders)
       const rawRes: any = await orderService.createOrder(checkoutData);
 
-      // Safe Unwrapping Data Response dari Backend Laravel
+      // Unwrap response dari apiClient
       const res = rawRes?.data || rawRes;
       const orderData = res?.order || res?.data || res;
 
-      // Ambil detail ID order & total Pi
       const orderId = orderData?.id || orderData?.order_id || res?.order_id;
       const totalPi =
         orderData?.total_pi ||
         orderData?.total_amount_pi ||
         res?.total_pi ||
-        res?.total_amount_pi;
-      const memo = res?.memo || `Pembayaran Order #${orderId}`;
+        res?.total_amount_pi ||
+        checkoutData.shipping_fee_pi;
+
+      const memo = res?.memo || `Pembayaran Order #${orderId || 'NTTStore'}`;
 
       if (!orderId) {
-        throw new Error(
-          res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.'
-        );
+        throw new Error(res?.message || 'Gagal membuat order: ID Pesanan tidak dikembalikan dari server.');
       }
 
-      // 2. Cek keberadaan SDK Pi Network di Browser
+      // 2. Cek apakah berjalan di dalam Pi Browser (Pi SDK)
       if (typeof window !== 'undefined' && (window as any).Pi) {
         const Pi = (window as any).Pi;
 
@@ -50,18 +50,15 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
 
         const paymentCallbacks = {
           onReadyForServerApproval: async (paymentId: string) => {
-            console.log('Server approval untuk payment ID:', paymentId);
+            console.log('Server Approval Payment ID:', paymentId);
             try {
               await orderService.approvePayment(paymentId, orderId);
             } catch (approvalErr: any) {
               console.error('Approval Error:', approvalErr);
             }
           },
-          onReadyForServerCompletion: async (
-            paymentId: string,
-            txid: string
-          ) => {
-            console.log('Server completion dengan TXID:', txid);
+          onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+            console.log('Server Completion TXID:', txid);
             try {
               await orderService.completePayment(paymentId, txid, orderId);
               alert('Pembayaran Pi Coin Berhasil!');
@@ -75,32 +72,33 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           },
           onCancel: (paymentId: string) => {
             console.log('Pembayaran dibatalkan:', paymentId);
-            alert('Transaksi dibatalkan.');
+            alert('Transaksi pembayaran dibatalkan.');
             setLoading(false);
           },
           onError: (error: Error, payment?: unknown) => {
             console.error('Error transaksi Pi SDK:', error, payment);
-            alert(`Terjadi kesalahan Pi SDK: ${error.message || 'Gagal membayar'}`);
+            alert(`Terjadi kesalahan pada Pi SDK: ${error.message || 'Gagal membayar'}`);
             setLoading(false);
           },
         };
 
-        // Eksekusi pembayaran via Pi SDK
+        // Eksekusi pembayaran Pi SDK
         Pi.createPayment(paymentData, paymentCallbacks);
       } else {
         alert(
-          'Fitur pembayaran Pi Coin ini hanya dapat berjalan di dalam Pi Browser!'
+          `Order #${orderId} Berhasil Dibuat!\n\nUntuk menyelesaikan pembayaran dengan Pi Coin, harap buka aplikasi ini di dalam Pi Browser.`
         );
         setLoading(false);
+        router.push('/orders');
       }
     } catch (err: any) {
-      console.error('Error Checkout Detail:', err);
+      console.error('Checkout Detail Error:', err);
 
-      // Tangkap pesan error dari API Response / Network Fetch Error
+      // Tangkap error message dari apiClient (422 validation / network / 500)
       const errorMessage =
-        err?.response?.data?.message ||
         err?.message ||
-        'Gagal terhubung ke server backend Laravel. Periksa jaringan/CORS.';
+        err?.data?.message ||
+        'Gagal terhubung ke server backend Laravel (CORS atau Endpoint Error).';
 
       alert(`Gagal Checkout: ${errorMessage}`);
       setLoading(false);
@@ -111,12 +109,18 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     <button
       onClick={handleCheckoutAndPay}
       disabled={loading}
-      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs disabled:opacity-50"
     >
       {loading ? (
-        <span className="animate-pulse">Menghubungkan ke Pi SDK...</span>
+        <>
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Menghubungkan ke Pi SDK...</span>
+        </>
       ) : (
-        <span>Bayar Sekarang via Pi Browser</span>
+        <>
+          <CreditCard className="w-4 h-4" />
+          <span>Bayar Sekarang via Pi Browser</span>
+        </>
       )}
     </button>
   );
