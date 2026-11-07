@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { sellerService } from '@/services/sellerService';
-//import { sellerService } from '@/services/orderService';
 import { ArrowLeft, Store, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function RegisterSellerPage() {
@@ -33,7 +32,8 @@ export default function RegisterSellerPage() {
     setErrorMessage(null);
 
     try {
-      const res = await sellerService.registerSeller(formData);
+      // ✅ Dipanggil menggunakan method register yang sesuai dengan services/sellerService.ts
+      const res = await sellerService.register(formData);
 
       if (res.success || res.message) {
         alert('Pendaftaran seller berhasil! Akun Anda siap digunakan.');
