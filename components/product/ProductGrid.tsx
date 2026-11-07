@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
-import { Package, ShoppingBag } from 'lucide-react';
-
+import { cartService } from '@/services/cartService';
+import { Package, ShoppingBag, ShoppingCart, Loader2 } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -22,6 +22,9 @@ export default function ProductGrid() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // State untuk melacak ID produk mana yang sedang diproses tambah ke keranjang
+  const [addingCartId, setAddingCartId] = useState<number | null>(null);
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
@@ -30,7 +33,7 @@ export default function ProductGrid() {
   useEffect(() => {
     productService
       .getProducts()
-      .then((res) => {
+      .then((res: any) => {
         const productList = res.data || res;
         setProducts(Array.isArray(productList) ? productList : []);
       })
@@ -70,6 +73,20 @@ export default function ProductGrid() {
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
+  // Handler Tambah Produk ke Keranjang DB
+  const handleAddToCart = async (productId: number) => {
+    setAddingCartId(productId);
+    try {
+      await cartService.addToCart(productId, 1);
+      alert('Produk berhasil ditambahkan ke keranjang!');
+    } catch (err: any) {
+      console.error('Gagal menambahkan ke keranjang:', err);
+      alert(err.message || 'Gagal menambahkan produk ke keranjang. Silakan login terlebih dahulu.');
+    } finally {
+      setAddingCartId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -100,6 +117,7 @@ export default function ProductGrid() {
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       {products.map((product) => {
         const imgUrl = getFullImageUrl(product.image_url);
+        const isAddingThis = addingCartId === product.id;
 
         return (
           <div
@@ -147,10 +165,25 @@ export default function ProductGrid() {
               </div>
 
               <div className="flex items-center gap-1.5">
+                {/* Tombol Tambah ke Keranjang DB */}
+                <button
+                  type="button"
+                  disabled={isAddingThis}
+                  onClick={() => handleAddToCart(product.id)}
+                  title="Tambah ke Keranjang"
+                  className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold p-2 rounded-xl transition flex items-center justify-center disabled:opacity-50"
+                >
+                  {isAddingThis ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
+                  ) : (
+                    <ShoppingCart className="w-4 h-4" />
+                  )}
+                </button>
+
                 {/* Tombol Detail Produk */}
                 <Link
                   href={`/products/${product.slug}`}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-xl transition"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-2 rounded-xl transition"
                 >
                   Detail
                 </Link>
