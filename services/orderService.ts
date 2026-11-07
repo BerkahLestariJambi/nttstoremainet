@@ -1,29 +1,40 @@
 import { apiClient } from '@/lib/apiClient';
 
+export interface OrderItemInput {
+  product_id: number;
+  quantity: number;
+}
+
+export interface CheckoutInput {
+  recipient_name: string;
+  phone_number: string;
+  shipping_address: string;
+  items: OrderItemInput[];
+}
+
 export const orderService = {
-  // POST /api/orders (Protected)
-  createOrder: (orderData: {
-    recipient_name: string;
-    phone_number: string;
-    shipping_address: string;
-    items: Array<{ product_id: number; quantity: number }>;
-  }) => 
+  // 1. Buat Draft Order di Laravel
+  createOrder: (data: CheckoutInput) =>
     apiClient('/orders', {
       method: 'POST',
-      body: JSON.stringify(orderData),
+      body: JSON.stringify(data),
     }),
-};
 
-export const sellerService = {
-  // POST /api/seller/register (Protected)
-  registerSeller: (sellerData: {
-    store_name: string;
-    store_description?: string;
-    phone_number: string;
-    address: string;
-  }) => 
-    apiClient('/seller/register', {
+  // 2. Callback Server Approval Pi SDK
+  approvePayment: (paymentId: string, orderId: number) =>
+    apiClient('/orders/approve', {
       method: 'POST',
-      body: JSON.stringify(sellerData),
+      body: JSON.stringify({ payment_id: paymentId, order_id: orderId }),
     }),
+
+  // 3. Callback Server Completion Pi SDK
+  completePayment: (paymentId: string, txid: string, orderId: number) =>
+    apiClient('/orders/complete', {
+      method: 'POST',
+      body: JSON.stringify({ payment_id: paymentId, txid, order_id: orderId }),
+    }),
+
+  // 4. Riwayat Order
+  getBuyerOrders: () => apiClient('/orders/buyer'),
+  getSellerOrders: () => apiClient('/orders/seller'),
 };
