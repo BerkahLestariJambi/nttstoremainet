@@ -112,13 +112,11 @@ export default function ProductGrid() {
                     alt={product.name}
                     className="w-full h-full object-cover relative z-10"
                     onError={(e) => {
-                      // Sembunyikan gambar broken agar icon fallback di layer bawah terlihat
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
                 ) : null}
 
-                {/* Fallback tampilan icon jika gambar 404 / gagal dimuat */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 z-0">
                   <Package className="w-10 h-10 mb-1 opacity-50" />
                   <span className="text-[10px] text-gray-400">Gambar Tidak Tersedia</span>
@@ -136,4 +134,23 @@ export default function ProductGrid() {
               </p>
             </div>
 
-            <div className="mt-4 pt-3
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Harga</span>
+                <span className="text-base font-extrabold text-amber-600">
+                  π {product.price_pi}
+                </span>
+              </div>
+              <Link
+                href={`/products/${product.slug}`}
+                className="bg-gray-900 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition"
+              >
+                Detail
+              </Link>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
