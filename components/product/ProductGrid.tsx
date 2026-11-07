@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { productService } from '@/services/productService';
 import { Package, ShoppingBag } from 'lucide-react';
 
+
 interface Product {
   id: number;
   name: string;
