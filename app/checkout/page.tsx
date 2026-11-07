@@ -7,7 +7,8 @@ import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
-import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle } from 'lucide-react';
+import { shippingService, BiteshipRate } from '@/services/shippingService';
+import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,11 @@ function CheckoutFormContent() {
 
   const [checkoutItems, setCheckoutItems] = useState<any[]>([]);
   const [address, setAddress] = useState<UserAddressData | null>(null);
+  
+  // State Jasa Pengiriman Biteship
+  const [biteshipRates, setBiteshipRates] = useState<BiteshipRate[]>([]);
+  const [selectedRate, setSelectedRate] = useState<BiteshipRate | null>(null);
+  const [loadingRates, setLoadingRates] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -26,16 +32,16 @@ function CheckoutFormContent() {
       setLoading(true);
 
       // 1. Memuat Data Alamat Pengiriman dari API DB
+      let selectedAddr: UserAddressData | null = null;
       try {
         const res: any = await addressService.getAddresses();
         const list = Array.isArray(res) ? res : res?.data || [];
         
-        // Cari berdasarkan query address_id, jika tidak ada cari primary address, atau fallback ke index pertama
-        const selected = addressId 
+        selectedAddr = addressId 
           ? list.find((a: UserAddressData) => String(a.id) === String(addressId))
           : list.find((a: UserAddressData) => a.is_primary) || list[0];
           
-        setAddress(selected || null);
+        setAddress(selectedAddr || null);
       } catch (err) {
         console.error('Gagal mengambil alamat pengiriman:', err);
       }
@@ -72,13 +78,37 @@ function CheckoutFormContent() {
         }
       }
 
+      // 3. Cek Ongkir Real-time Biteship jika Kode Pos Alamat Tersedia
+      if (selectedAddr && selectedAddr.postal_code) {
+        fetchBiteshipRates(selectedAddr.postal_code);
+      }
+
       setLoading(false);
     }
 
     initCheckout();
   }, [productId, addressId, isDirectBuy]);
 
-  const totalAmountPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
+  const fetchBiteshipRates = async (postalCode: string) => {
+    setLoadingRates(true);
+    try {
+      const res: any = await shippingService.checkRates(postalCode, 1000);
+      const rates = Array.isArray(res) ? res : res?.data || [];
+      setBiteshipRates(rates);
+      if (rates.length > 0) {
+        setSelectedRate(rates[0]); // Pilih kurir pertama secara default
+      }
+    } catch (err) {
+      console.error('Gagal memuat tarif Biteship:', err);
+      setBiteshipRates([]);
+    } finally {
+      setLoadingRates(false);
+    }
+  };
+
+  const subtotalPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
+  const shippingFeePi = selectedRate ? Number(selectedRate.price_pi) : 0;
+  const totalAmountPi = subtotalPi + shippingFeePi;
 
   if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat detail checkout...</div>;
 
@@ -106,8 +136,8 @@ function CheckoutFormContent() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Ringkasan Alamat Terpilih */}
         <div className="md:col-span-2 space-y-4">
+          {/* Ringkasan Alamat Terpilih */}
           <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -128,7 +158,9 @@ function CheckoutFormContent() {
                   )}
                 </div>
                 <p className="text-xs text-gray-600">{address.phone_number}</p>
-                <p className="text-xs text-gray-500 mt-1">{address.full_address} {address.city && `, ${address.city}`}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {address.full_address} {address.city && `, ${address.city}`} {address.postal_code && `(${address.postal_code})`}
+                </p>
               </div>
             ) : (
               <div className="text-center py-4">
@@ -139,12 +171,75 @@ function CheckoutFormContent() {
               </div>
             )}
           </div>
+
+          {/* Opsi Jasa Ekspedisi / Kurir Biteship */}
+          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-gray-900 mb-4 border-b border-gray-100 pb-3 flex items-center gap-2">
+              <Truck className="w-5 h-5 text-amber-500" /> Opsi Ekspedisi / Kurir Biteship
+            </h2>
+
+            {loadingRates ? (
+              <div className="py-6 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> Menghitung ongkir real-time Biteship...
+              </div>
+            ) : biteshipRates.length === 0 ? (
+              <div className="text-center py-4 text-xs text-gray-500">
+                {!address?.postal_code ? (
+                  <p className="text-red-500 font-semibold">
+                    Kode pos alamat belum terisi. Harap perbarui alamat agar ongkir Biteship dapat dihitung.
+                  </p>
+                ) : (
+                  <p>Tidak ada opsi kurir yang tersedia untuk kode pos ini.</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {biteshipRates.map((rate, idx) => {
+                  const isSelected = selectedRate?.courier_code === rate.courier_code && selectedRate?.service_name === rate.service_name;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedRate(rate)}
+                      className={`p-4 rounded-2xl border cursor-pointer transition flex justify-between items-center ${
+                        isSelected
+                          ? 'border-amber-500 bg-amber-50/30 ring-1 ring-amber-500'
+                          : 'border-gray-200 hover:border-amber-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {isSelected ? (
+                          <CheckCircle2 className="w-5 h-5 text-amber-500 shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 border border-gray-300 rounded-full shrink-0" />
+                        )}
+                        <div>
+                          <h4 className="font-bold text-xs text-gray-900">
+                            {rate.name} - {rate.service_name}
+                          </h4>
+                          <p className="text-[11px] text-gray-500">{rate.description}</p>
+                          <span className="text-[10px] text-gray-400">Estimasi: {rate.duration}</span>
+                        </div>
+                      </div>
+                      <div className="text-right whitespace-nowrap">
+                        <span className="text-xs font-bold text-amber-600 block">
+                          π {rate.price_pi.toFixed(6)}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          (Rp {rate.price_idr.toLocaleString('id-ID')})
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Ringkasan Tagihan & Tombol Pi Payment */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-            <PackageCheck className="w-5 h-5 text-amber-500" /> Total Tagihan
+            <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan Tagihan
           </h2>
 
           <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto pr-1 space-y-2">
@@ -161,17 +256,32 @@ function CheckoutFormContent() {
             ))}
           </div>
 
-          <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-700">Total Pembayaran</span>
-            <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(4)}</span>
+          <div className="space-y-1.5 pt-2 border-t border-gray-100 text-xs text-gray-600">
+            <div className="flex justify-between">
+              <span>Subtotal Produk</span>
+              <span className="font-medium text-gray-800">π {subtotalPi.toFixed(4)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Ongkir ({selectedRate ? `${selectedRate.name} ${selectedRate.service_name}` : '-'})</span>
+              <span className="font-medium text-amber-600">π {shippingFeePi.toFixed(6)}</span>
+            </div>
           </div>
 
-          {address ? (
+          <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
+            <span className="text-xs font-bold text-gray-700">Total Pembayaran</span>
+            <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(6)}</span>
+          </div>
+
+          {address && selectedRate ? (
             <CheckoutButton
               checkoutData={{
                 recipient_name: address.recipient_name,
                 phone_number: address.phone_number,
-                shipping_address: address.full_address,
+                shipping_address: `${address.full_address}, Kode Pos: ${address.postal_code}`,
+                courier_company: selectedRate.company,
+                courier_service: selectedRate.service_name,
+                shipping_fee_pi: shippingFeePi,
+                shipping_fee_idr: selectedRate.price_idr,
                 items: checkoutItems.map((item) => ({
                   product_id: item.product_id,
                   quantity: item.quantity,
@@ -184,12 +294,9 @@ function CheckoutFormContent() {
               } as any}
             />
           ) : (
-            <Link
-              href="/addresses?select=true"
-              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs"
-            >
-              Pilih Alamat Dulu
-            </Link>
+            <button disabled className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs">
+              {!address ? 'Pilih Alamat Dulu' : 'Pilih Kurir Pengiriman'}
+            </button>
           )}
         </div>
       </div>
