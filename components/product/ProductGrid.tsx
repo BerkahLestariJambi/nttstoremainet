@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
+import { ShoppingBag } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -21,12 +22,14 @@ export default function ProductGrid() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
+  // Ambil origin domain backend (menghapus path /api di ujungnya)
+  const STORAGE_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
   useEffect(() => {
-    // Ambil data produk dinamis dari API Laravel Backend
     productService
       .getProducts()
       .then((res) => {
-        // Mendukung format respon { data: [...] } atau array langsung
         const productList = res.data || res;
         setProducts(productList);
       })
@@ -38,6 +41,16 @@ export default function ProductGrid() {
         setLoading(false);
       });
   }, []);
+
+  // Format URL Gambar agar selalu absolute (memiliki prefix domain Laravel)
+  const getFullImageUrl = (url: string | null) => {
+    if (!url) return '/placeholder-product.jpg';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    // Jika path relatif (misal: /storage/products/xxx.jpg)
+    return `${STORAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
 
   if (loading) {
     return (
@@ -51,7 +64,7 @@ export default function ProductGrid() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 text-red-600 rounded-xl text-center text-sm">
+      <div className="p-4 bg-red-50 text-red-600 rounded-xl text-center text-sm font-medium">
         {error}
       </div>
     );
@@ -73,17 +86,23 @@ export default function ProductGrid() {
           className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
         >
           <div>
-            <div className="h-48 w-full bg-gray-50 rounded-xl overflow-hidden mb-3">
+            <div className="h-48 w-full bg-gray-100 rounded-xl overflow-hidden mb-3 relative flex items-center justify-center">
               <img
-                src={product.image_url || '/placeholder-product.jpg'}
+                src={getFullImageUrl(product.image_url)}
                 alt={product.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback jika gambar 404/broken
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400';
+                }}
               />
             </div>
-            <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-full">
+            <span className="text-[11px] text-purple-700 font-semibold bg-purple-50 px-2.5 py-0.5 rounded-full inline-block">
               {product.seller?.store_name || 'Penjual NTT'}
             </span>
-            <h3 className="font-bold text-gray-900 mt-2 line-clamp-1">
+            <h3 className="font-bold text-gray-900 mt-2 line-clamp-1 text-sm">
               {product.name}
             </h3>
             <p className="text-xs text-gray-500 mt-1 line-clamp-2">
@@ -93,14 +112,14 @@ export default function ProductGrid() {
 
           <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
             <div>
-              <span className="text-xs text-gray-400 block">Harga</span>
-              <span className="text-lg font-extrabold text-amber-600">
+              <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">Harga</span>
+              <span className="text-base font-extrabold text-amber-600">
                 π {product.price_pi}
               </span>
             </div>
             <Link
               href={`/products/${product.slug}`}
-              className="bg-gray-900 hover:bg-purple-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition"
+              className="bg-gray-900 hover:bg-purple-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition"
             >
               Detail
             </Link>
