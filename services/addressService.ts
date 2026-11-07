@@ -13,6 +13,7 @@ export interface UserAddressData {
   is_primary: boolean;
 }
 
+
 export const addressService = {
   getAddresses: (): Promise<any> => apiClient.get('/addresses'),
   createAddress: (data: Partial<UserAddressData>) => apiClient.post('/addresses', data),
