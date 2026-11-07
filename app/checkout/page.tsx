@@ -29,13 +29,13 @@ function CheckoutFormContent() {
       try {
         let foundProduct = null;
 
-        // 1. Coba ambil berdasarkan slug jika ada
+        // 1. Ambil berdasarkan slug jika ada
         if (productSlug) {
           const res = await productService.getProductBySlug(productSlug);
           foundProduct = res?.data?.data || res?.data || res;
         }
 
-        // 2. Jika tidak ada slug atau gagal, coba pencarian berdasarkan ID
+        // 2. Jika tidak ada slug atau gagal, cari berdasarkan ID
         if ((!foundProduct || !foundProduct.id) && productId) {
           try {
             const resById = await productService.getProductById(productId);
@@ -44,7 +44,7 @@ function CheckoutFormContent() {
             console.warn('Gagal getProductById, mencoba fallback getProducts list...', errById);
           }
 
-          // Fallback 3: Ambil semua produk dan cari yang ID-nya cocok
+          // Fallback 3: Cari dari seluruh daftar produk
           if (!foundProduct || !foundProduct.id) {
             const allProductsRes = await productService.getProducts();
             const list = allProductsRes?.data?.data || allProductsRes?.data || allProductsRes;
@@ -79,7 +79,7 @@ function CheckoutFormContent() {
     );
   }
 
-  // Tampilan jika produk tidak ada di server
+  // Fallback jika produk tidak ditemukan
   if (!product) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
@@ -117,7 +117,7 @@ function CheckoutFormContent() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat */}
+        {/* Form Alamat Penerima */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
@@ -189,11 +189,19 @@ function CheckoutFormContent() {
           {isFormValid ? (
             <CheckoutButton
               checkoutData={{
+                // Field standar
                 recipient_name: form.recipient_name,
                 phone_number: form.phone_number,
                 shipping_address: form.shipping_address,
                 items: [{ product_id: Number(product.id), quantity: 1 }],
-              }}
+                
+                // Fallback alias field yang sering digunakan pada Controller Laravel
+                name: form.recipient_name,
+                phone: form.phone_number,
+                address: form.shipping_address,
+                product_id: Number(product.id),
+                quantity: 1,
+              } as any}
             />
           ) : (
             <button
