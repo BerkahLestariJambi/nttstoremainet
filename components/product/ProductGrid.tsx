@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, ImageOff } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -24,7 +24,7 @@ export default function ProductGrid() {
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
   // Ambil origin domain backend (menghapus path /api di ujungnya)
-  const STORAGE_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+  const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
   useEffect(() => {
     productService
@@ -42,14 +42,24 @@ export default function ProductGrid() {
       });
   }, []);
 
-  // Format URL Gambar agar selalu absolute (memiliki prefix domain Laravel)
+  // Format URL Gambar fleksibel (Mendukung path /public/products/... & /storage/products/...)
   const getFullImageUrl = (url: string | null) => {
     if (!url) return '/placeholder-product.jpg';
+    
+    // Jika URL sudah berupa http:// atau https://
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
-    // Jika path relatif (misal: /storage/products/xxx.jpg)
-    return `${STORAGE_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+
+    // Normalisasi path relatif dari cPanel / Laravel
+    let cleanPath = url.startsWith('/') ? url : `/${url}`;
+
+    // Jika path belum diawali /storage atau /public, tambahkan /public
+    if (!cleanPath.startsWith('/storage') && !cleanPath.startsWith('/public')) {
+      cleanPath = `/public${cleanPath}`;
+    }
+
+    return `${DOMAIN_BASE_URL}${cleanPath}`;
   };
 
   if (loading) {
@@ -92,10 +102,10 @@ export default function ProductGrid() {
                 alt={product.name}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  // Fallback jika gambar 404/broken
+                  // Mencegah gambar tertimpa foto Unsplash acak jika URL error
                   const target = e.target as HTMLImageElement;
                   target.onerror = null;
-                  target.src = 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&q=80&w=400';
+                  target.src = '/placeholder-product.jpg';
                 }}
               />
             </div>
