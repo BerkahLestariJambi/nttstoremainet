@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Pastikan import useRouter ada
 import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, ArrowRight } from 'lucide-react';
 
 export default function CartPage() {
-  const router = Router();
+  const router = useRouter(); // Perbaikan: ubah Router() menjadi useRouter()
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -87,10 +87,10 @@ export default function CartPage() {
   const handleProceedToCheckout = () => {
     if (selectedItems.length === 0) return;
     
-    // Simpan KHUSUS item yang dipilih untuk dibeli ke key 'checkout_cart_items'
+    // Simpan item yang dipilih ke key 'checkout_cart_items'
     localStorage.setItem('checkout_cart_items', JSON.stringify(selectedItems));
     
-    // Redirect ke halaman checkout mode keranjang (tanpa query param product_id)
+    // Redirect ke halaman checkout
     router.push('/checkout');
   };
 
