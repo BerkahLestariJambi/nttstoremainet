@@ -84,16 +84,19 @@ function AddressListContent() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleSelectArea = (area: BiteshipArea) => {
-    setForm({
-      ...form,
-      city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
-      postal_code: String(area.postal_code),
-    });
-    setSelectedAreaName(area.name);
-    setAreaResults([]);
-    setSearchQuery('');
-  };
+// Di dalam app/addresses/page.tsx pada handler pilih area:
+const handleSelectArea = (area: BiteshipArea) => {
+  setForm({
+    ...form,
+    city: `${area.administrative_division_level_3_name}, ${area.administrative_division_level_2_name}`,
+    postal_code: String(area.postal_code),
+    // Simpan area_id Biteship untuk presisi ongkir tertinggi
+    area_id: area.id, 
+  });
+  setSelectedAreaName(area.name);
+  setAreaResults([]);
+  setSearchQuery('');
+};
 
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
