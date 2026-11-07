@@ -7,7 +7,10 @@ import CheckoutButton from '@/components/CheckoutButton';
 import { productService } from '@/services/productService';
 import { ArrowLeft, MapPin, Phone, User, PackageCheck, ShoppingBag } from 'lucide-react';
 
-function CheckoutContent() {
+// Force Next.js untuk merender halaman ini secara Dynamic (bukan Static Pre-render)
+export const dynamic = 'force-dynamic';
+
+function CheckoutFormContent() {
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id');
 
@@ -33,7 +36,11 @@ function CheckoutContent() {
   }, [productId]);
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat data checkout...</div>;
+    return (
+      <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">
+        Memuat data produk & checkout...
+      </div>
+    );
   }
 
   const isFormValid =
@@ -44,7 +51,10 @@ function CheckoutContent() {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
-      <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 font-medium mb-6 transition">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 font-medium mb-6 transition"
+      >
         <ArrowLeft className="w-4 h-4" /> Kembali ke Beranda
       </Link>
 
@@ -53,14 +63,16 @@ function CheckoutContent() {
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form Alamat Penerima */}
+        {/* Form Alamat */}
         <div className="md:col-span-2 space-y-4 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-2 flex items-center gap-2 border-b border-gray-100 pb-3">
             <MapPin className="w-5 h-5 text-amber-500" /> Informasi Alamat Penerima
           </h2>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nama Penerima *</label>
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+              Nama Penerima *
+            </label>
             <div className="relative">
               <User className="w-4 h-4 text-gray-400 absolute left-4 top-3.5" />
               <input
@@ -74,7 +86,9 @@ function CheckoutContent() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nomor Telepon / WA *</label>
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+              Nomor Telepon / WA *
+            </label>
             <div className="relative">
               <Phone className="w-4 h-4 text-gray-400 absolute left-4 top-3.5" />
               <input
@@ -88,7 +102,9 @@ function CheckoutContent() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Alamat Pengiriman *</label>
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+              Alamat Pengiriman *
+            </label>
             <textarea
               rows={3}
               placeholder="Alamat lengkap tujuan pengiriman..."
@@ -99,7 +115,7 @@ function CheckoutContent() {
           </div>
         </div>
 
-        {/* Ringkasan & Tombol Eksekusi Pi Payment */}
+        {/* Ringkasan & Pembayaran */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
             <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan
@@ -111,7 +127,9 @@ function CheckoutContent() {
               <p className="text-xs text-gray-400">1 Barang</p>
               <div className="border-t border-gray-100 mt-4 pt-3 flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
-                <span className="text-base font-extrabold text-amber-600">π {product.price_pi}</span>
+                <span className="text-base font-extrabold text-amber-600">
+                  π {product.price_pi}
+                </span>
               </div>
             </div>
           ) : (
@@ -128,7 +146,10 @@ function CheckoutContent() {
               }}
             />
           ) : (
-            <button disabled className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs">
+            <button
+              disabled
+              className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs"
+            >
               Lengkapi Form Alamat
             </button>
           )}
@@ -141,7 +162,7 @@ function CheckoutContent() {
 export default function CheckoutPage() {
   return (
     <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat checkout...</div>}>
-      <CheckoutContent />
+      <CheckoutFormContent />
     </Suspense>
   );
 }
