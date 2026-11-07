@@ -38,15 +38,26 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         throw new Error(res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.');
       }
 
-      // 2. Inisialisasi dan Cek Pi Network SDK
+      // 2. Inisialisasi & Authenticate Pi Network SDK dengan Scope Payments
       if (typeof window !== 'undefined' && (window as any).Pi) {
         const Pi = (window as any).Pi;
 
         // Auto-Initialize Pi SDK jika belum dipanggil sebelumnya
         try {
-          await Pi.init({ version: '2.0', sandbox: false }); // Ubah sandbox ke true jika masih mode testing
+          await Pi.init({ version: '2.0', sandbox: false });
         } catch (initErr) {
-          console.warn('Pi SDK sudah ter-initialized atau warn:', initErr);
+          console.warn('Pi SDK sudah ter-initialized:', initErr);
+        }
+
+        // Meminta Izin / Scope 'payments' dari Pengguna
+        try {
+          const scopes = ['username', 'payments'];
+          const onIncompletePaymentFound = (payment: any) => {
+            console.log('Incomplete payment found:', payment);
+          };
+          await Pi.authenticate(scopes, onIncompletePaymentFound);
+        } catch (authErr: any) {
+          console.error('Pi Authenticate Error:', authErr);
         }
 
         const paymentData = {
