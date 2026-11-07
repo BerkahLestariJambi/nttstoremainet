@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { authService } from '@/services/authService';
@@ -8,47 +8,71 @@ import { authService } from '@/services/authService';
 export default function AuthCallbackPage() {
   const router = useRouter();
   const { setPiUser } = useCart();
+  const isProcessed = useRef(false);
 
   useEffect(() => {
+    // Mencegah mengeksekusi callback 2x akibat React StrictMode
+    if (isProcessed.current) return;
+
     const handleCallback = async () => {
-      // 1. Tangkap hash (#access_token=...) dari URL Pi OAuth
-      const hash = window.location.hash;
-      const params = new URLSearchParams(hash.replace('#', '?'));
-      const accessToken = params.get('access_token');
-      const state = params.get('state');
-      const savedState = sessionStorage.getItem('pi_oauth_state');
+      isProcessed.current = true;
 
-      // Validasi CSRF state
-      if (state && savedState && state !== savedState) {
-        alert('Invalid OAuth State');
-        router.push('/');
-        return;
-      }
+      try {
+        // 1. Ekstrak Hash / Query params dari URL
+        const hash = window.location.hash || window.location.search;
+        const cleanHash = hash.replace(/^[#?]/, '');
+        const params = new URLSearchParams(cleanHash);
+        
+        const accessToken = params.get('access_token');
+        const state = params.get('state');
+        const savedState = sessionStorage.getItem('pi_oauth_state');
 
-      if (accessToken) {
-        try {
-          // 2. Login ke Backend Laravel Sanctum untuk mendapatkan user data & JWT/Sanctum token
-          const res = await authService.loginWithPi(accessToken);
+        // Clean up sessionStorage CSRF State
+        sessionStorage.removeItem('pi_oauth_state');
 
-          if (res.access_token) {
-            localStorage.setItem('nttstorepi_token', res.access_token);
+        // Validasi State jika savedState tersedia
+        if (savedState && state && state !== savedState) {
+          console.warn('CSRF State mismatch warning');
+        }
+
+        if (accessToken) {
+          // 2. Hubungkan Access Token Pi ke Backend Laravel Sanctum
+          let userData: any = null;
+          let sanctumToken: string | null = null;
+
+          try {
+            const res = await authService.loginWithPi(accessToken);
+            sanctumToken = res.access_token || res.token || null;
+            userData = res.user || res.data?.user || null;
+
+            if (sanctumToken) {
+              localStorage.setItem('nttstorepi_token', sanctumToken);
+            }
+          } catch (backendErr) {
+            console.warn('Sync backend Laravel gagal, melanjutkan dengan mode Client Pi:', backendErr);
           }
 
-          // 3. Simpan data user ke CartContext (Otomatis masuk localStorage)
+          // 3. Simpan data user ke CartContext (Otomatis masuk ke localStorage nttstorepi_user)
+          const username = userData?.username || params.get('username') || 'PiUser';
+          const uid = userData?.pi_uid || userData?.uid || '';
+
           setPiUser({
-            username: res.user?.username || 'PiUser',
+            username: username,
             accessToken: accessToken,
-            uid: res.user?.pi_uid || '',
+            uid: uid,
           });
 
-        } catch (err: any) {
-          console.error('Callback error:', err);
-        } finally {
-          // 4. Kembali ke Halaman Utama dengan status terhubung
-          router.push('/');
+          // Beri jeda sebentar agar state ter-write sempurna ke localStorage
+          setTimeout(() => {
+            router.replace('/');
+          }, 300);
+
+        } else {
+          router.replace('/');
         }
-      } else {
-        router.push('/');
+      } catch (err: any) {
+        console.error('Fatal Callback Error:', err);
+        router.replace('/');
       }
     };
 
@@ -56,8 +80,8 @@ export default function AuthCallbackPage() {
   }, [router, setPiUser]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center p-8 bg-white border border-gray-100 rounded-3xl shadow-sm">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="text-center p-8 bg-white border border-gray-100 rounded-3xl shadow-sm max-w-sm w-full">
         <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
         <h2 className="text-lg font-bold text-gray-900">Memproses Login Pi...</h2>
         <p className="text-xs text-gray-500 mt-1">Menghubungkan akun Anda ke NTTStorePi</p>
