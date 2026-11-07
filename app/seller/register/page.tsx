@@ -11,6 +11,7 @@ export default function RegisterSellerPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  
   const [formData, setFormData] = useState({
     store_name: '',
     store_description: '',
