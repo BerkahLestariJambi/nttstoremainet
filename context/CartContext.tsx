@@ -41,7 +41,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [piUser, setPiUserInternal] = useState<PiUser | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // 1. Fetch Cart Data langsung dari API Backend Laravel
+  // 1. Fetch Cart Data dari API Backend Laravel dengan Fallback LocalStorage
   const fetchCart = useCallback(async () => {
     try {
       setLoading(true);
@@ -54,33 +54,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             id: item.id || item.product_id,
             product_id: item.product_id || item.id,
             name: item.product?.name || item.name || 'Produk',
-            pricePi: parseFloat(item.product?.price_pi || item.price_pi || 0),
+            pricePi: parseFloat(item.product?.price_pi || item.price_pi || item.pricePi || 0),
             quantity: item.quantity || 1,
-            image: item.product?.image_url || item.image_url || '',
+            image: item.product?.image_url || item.image_url || item.image || '',
           }))
         );
       } else {
         setCart([]);
       }
     } catch (e) {
-      console.warn('Gagal memuat keranjang dari API backend:', e);
-      // Fallback ke localStorage jika user belum login API
-      const savedCart = localStorage.getItem('nttstorepi_cart');
-      if (savedCart) {
-        try {
-          setCart(JSON.parse(savedCart));
-        } catch (err) {
+      console.warn('Backend API Cart tidak merespon, menggunakan data localStorage:', e);
+      if (typeof window !== 'undefined') {
+        const savedCart = localStorage.getItem('nttstorepi_cart');
+        if (savedCart) {
+          try {
+            const parsed = JSON.parse(savedCart);
+            setCart(Array.isArray(parsed) ? parsed : []);
+          } catch (err) {
+            setCart([]);
+          }
+        } else {
           setCart([]);
         }
-      } else {
-        setCart([]);
       }
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Inisialisasi User & Keranjang saat pertama kali aplikasi dimuat
+  // Inisialisasi User & Keranjang saat pertama kali di-load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('nttstorepi_user');
@@ -95,7 +97,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     fetchCart();
   }, [fetchCart]);
 
-  // Sync state keranjang ke localStorage
+  // Sync state keranjang ke localStorage setiap kali cart berubah
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nttstorepi_cart', JSON.stringify(cart));
@@ -115,24 +117,48 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addToCart = async (product: any, qty = 1) => {
+    const targetId = product.product_id || product.id;
+    const pricePi = parseFloat(product.price_pi || product.pricePi || 0);
+
+    // 1. Simpan ke local state terlebih dahulu agar UI instan merespons
+    setCart((prevCart) => {
+      const existingIndex = prevCart.findIndex(
+        (item) => String(item.id) === String(targetId) || String(item.product_id) === String(targetId)
+      );
+      if (existingIndex > -1) {
+        const newCart = [...prevCart];
+        newCart[existingIndex].quantity += qty;
+        return newCart;
+      }
+      return [
+        ...prevCart,
+        {
+          id: targetId,
+          product_id: Number(targetId),
+          name: product.name || 'Produk',
+          pricePi: pricePi,
+          quantity: qty,
+          image: product.image_url || product.image || '',
+        },
+      ];
+    });
+
+    // 2. Cobalah kirim perubahan ke API Server
     try {
-      const productId = product.product_id || product.id;
-      await cartService.addToCart(productId, qty);
-    } catch (e) {
-      console.warn('Backend cart add fallback:', e);
-    } finally {
+      await cartService.addToCart(targetId, qty);
       await fetchCart();
+    } catch (e) {
+      console.warn('Simpan keranjang ke server gagal, menggunakan local cart state:', e);
     }
   };
 
   const removeFromCart = async (id: string | number) => {
+    setCart((prev) => prev.filter((item) => String(item.id) !== String(id) && String(item.product_id) !== String(id)));
     try {
       await cartService.removeFromCart(id);
-    } catch (e) {
-      console.warn('Backend cart remove fallback:', e);
-      setCart((prev) => prev.filter((item) => item.id !== id && item.product_id !== id));
-    } finally {
       await fetchCart();
+    } catch (e) {
+      console.warn('Hapus keranjang server gagal:', e);
     }
   };
 
@@ -141,30 +167,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await removeFromCart(id);
       return;
     }
+
+    setCart((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(id) || String(item.product_id) === String(id)
+          ? { ...item, quantity: qty }
+          : item
+      )
+    );
+
     try {
       await cartService.updateQuantity(id, qty);
-    } catch (e) {
-      console.warn('Backend cart update fallback:', e);
-    } finally {
       await fetchCart();
+    } catch (e) {
+      console.warn('Update quantity server gagal:', e);
     }
   };
 
   const clearCart = async () => {
+    setCart([]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('nttstorepi_cart');
+    }
+
     try {
       await cartService.clearCart();
     } catch (e) {
-      console.warn('Backend cart clear fallback:', e);
-    } finally {
-      setCart([]);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('nttstorepi_cart');
-      }
+      console.warn('Clear cart server gagal:', e);
     }
   };
 
-  const totalItems = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  const totalPi = cart.reduce((sum, item) => sum + (item.pricePi || 0) * item.quantity, 0);
+  const totalItems = Array.isArray(cart) ? cart.reduce((sum, item) => sum + (item.quantity || 0), 0) : 0;
+  const totalPi = Array.isArray(cart) ? cart.reduce((sum, item) => sum + (item.pricePi || 0) * (item.quantity || 0), 0) : 0;
 
   return (
     <CartContext.Provider
