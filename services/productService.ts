@@ -1,5 +1,11 @@
 import { apiClient } from '@/lib/apiClient';
 
+export interface Category {
+  id: number;
+  name: string;
+  slug?: string;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -25,32 +31,23 @@ export interface Product {
     name: string;
     store_name?: string;
   };
-  category?: {
-    id: number;
-    name: string;
-    slug?: string;
-  };
+  category?: Category;
 }
 
 export const productService = {
-  // 1. Mendapatkan daftar produk publik (Safe Array Extraction)
+  // 1. Mendapatkan daftar produk publik
   getProducts: async (params?: { category?: string; search?: string; page?: number }) => {
     try {
       const res: any = await apiClient.get('/products', { params });
-      
-      // Axios mengembalikan response.data -> Laravel mengembalikan { success: true, data: [...] }
       const payload = res?.data ?? res;
       const productsData = payload?.data ?? payload;
 
       if (Array.isArray(productsData)) {
         return productsData;
       }
-
-      // Jika backend melempar pagination bertingkat (payload.data.data)
       if (Array.isArray(productsData?.data)) {
         return productsData.data;
       }
-
       return [];
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -70,7 +67,19 @@ export const productService = {
     }
   },
 
-  // 3. Mendapatkan produk milik seller yang sedang login (/api/seller/products)
+  // 3. Mendapatkan daftar kategori produk (Memperbaiki error build Vercel)
+  getCategories: async () => {
+    try {
+      const res: any = await apiClient.get('/categories');
+      const payload = res?.data ?? res;
+      return payload?.data ?? payload ?? [];
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  },
+
+  // 4. Mendapatkan produk milik seller yang sedang login (/api/seller/products)
   getSellerProducts: async () => {
     try {
       const res: any = await apiClient.get('/seller/products');
@@ -83,21 +92,21 @@ export const productService = {
     }
   },
 
-  // 4. Tambah produk baru (Mendukung Form Data / Upload File)
+  // 5. Tambah produk baru (Upload Form / Multipart)
   createProduct: async (formData: FormData) => {
     return await apiClient.post('/products', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
 
-  // 5. Update produk
+  // 6. Update produk
   updateProduct: async (id: number | string, formData: FormData) => {
     return await apiClient.post(`/products/${id}?_method=PUT`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
 
-  // 6. Hapus produk
+  // 7. Hapus produk
   deleteProduct: async (id: number | string) => {
     return await apiClient.delete(`/products/${id}`);
   },
