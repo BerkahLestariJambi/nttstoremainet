@@ -50,12 +50,26 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           console.warn('Pi SDK sudah ter-initialized:', initErr);
         }
 
+        // Penanganan Transaksi Menggantung (Incomplete Payment)
+        const onIncompletePaymentFound = async (payment: any) => {
+          console.log('Incomplete payment found:', payment);
+          if (payment && payment.identifier && payment.transaction?.txid) {
+            const paymentId = payment.identifier;
+            const txid = payment.transaction.txid;
+            const pendingOrderId = payment.metadata?.orderId || orderId;
+
+            try {
+              await orderService.completePayment(paymentId, txid, pendingOrderId);
+              console.log('Incomplete payment successfully resolved!');
+            } catch (err) {
+              console.error('Failed to resolve incomplete payment:', err);
+            }
+          }
+        };
+
         // Meminta Izin / Scope 'payments' dari Pengguna
         try {
           const scopes = ['username', 'payments'];
-          const onIncompletePaymentFound = (payment: any) => {
-            console.log('Incomplete payment found:', payment);
-          };
           await Pi.authenticate(scopes, onIncompletePaymentFound);
         } catch (authErr: any) {
           console.error('Pi Authenticate Error:', authErr);
@@ -77,22 +91,27 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
             }
           },
           onReadyForServerCompletion: async (paymentId: string, txid: string) => {
-            console.log('Server Completion TXID:', txid);
+            console.log('Server Completion TXID:', txid, 'Payment ID:', paymentId);
             try {
-              await orderService.completePayment(paymentId, txid, orderId);
+              const completeRes: any = await orderService.completePayment(paymentId, txid, orderId);
               
-              Swal.fire({
-                title: 'Berhasil!',
-                text: 'Pembayaran Pi Coin Berhasil!',
-                icon: 'success',
-                confirmButtonColor: '#f59e0b',
-              }).then(() => {
-                setLoading(false);
-                router.push('/orders');
-              });
+              if (completeRes?.success || completeRes?.data?.success || completeRes?.status === 200) {
+                Swal.fire({
+                  title: 'Berhasil!',
+                  text: 'Pembayaran Pi Coin Berhasil & Diverifikasi Server!',
+                  icon: 'success',
+                  confirmButtonColor: '#f59e0b',
+                }).then(() => {
+                  setLoading(false);
+                  router.push('/orders');
+                });
+              } else {
+                throw new Error(completeRes?.message || 'Verifikasi pembayaran ditolak oleh server.');
+              }
             } catch (completionErr: any) {
               console.error('Completion Error:', completionErr);
-              Swal.fire('Gagal!', 'Gagal menyelesaikan verifikasi pembayaran ke server.', 'error');
+              const errMsg = completionErr?.response?.data?.message || completionErr?.message || 'Gagal menyelesaikan verifikasi pembayaran ke server.';
+              Swal.fire('Verifikasi Gagal', errMsg, 'error');
               setLoading(false);
             }
           },
