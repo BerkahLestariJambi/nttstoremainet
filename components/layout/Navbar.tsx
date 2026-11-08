@@ -11,7 +11,9 @@ import {
   Store, 
   LogOut, 
   ChevronDown, 
-  Sparkles 
+  Sparkles,
+  ClipboardList,
+  LayoutDashboard
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 
@@ -78,6 +80,24 @@ export default function Navbar() {
 
                   <div className="p-1 space-y-0.5">
                     <Link
+                      href="/orders"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                    >
+                      <ClipboardList className="w-4 h-4 text-purple-600" />
+                      Pesanan Saya
+                    </Link>
+
+                    <Link
+                      href="/seller/dashboard"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                    >
+                      <LayoutDashboard className="w-4 h-4 text-amber-600" />
+                      Dashboard Seller
+                    </Link>
+
+                    <Link
                       href="/seller/products/create"
                       onClick={() => setDropdownOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 rounded-xl transition"
@@ -116,8 +136,8 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* Keranjang Belanja */}
-          <Link href="/checkout" className="relative p-2 text-gray-700 hover:text-purple-700 transition">
+          {/* Keranjang Belanja -> Arahkan ke /cart */}
+          <Link href="/cart" className="relative p-2 text-gray-700 hover:text-purple-700 transition">
             <ShoppingBag className="w-6 h-6" />
             {totalItems > 0 && (
               <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
