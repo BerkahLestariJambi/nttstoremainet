@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
+import { useCart } from '@/context/CartContext';
 import { Package, ShoppingBag, ShoppingCart, Loader2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 
 interface Product {
   id: number;
@@ -19,12 +22,16 @@ interface Product {
 }
 
 export default function ProductGrid() {
+  const router = useRouter();
+  const { addToCart: addToLocalCart } = useCart();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // State untuk melacak ID produk mana yang sedang diproses tambah ke keranjang
+
+  // State melacak ID produk yang sedang diproses
   const [addingCartId, setAddingCartId] = useState<number | null>(null);
+  const [buyingId, setBuyingId] = useState<number | null>(null);
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
@@ -52,18 +59,15 @@ export default function ProductGrid() {
 
     let cleanUrl = url.trim();
 
-    // 1. Jika terlanjur tersimpan "http://localhost/..." atau "http://127.0.0.1/..." di database
     if (cleanUrl.includes('localhost') || cleanUrl.includes('127.0.0.1')) {
       const pathOnly = cleanUrl.replace(/^https?:\/\/[^\/]+/, '');
       return `${DOMAIN_BASE_URL}${pathOnly}`;
     }
 
-    // 2. Jika URL sudah berupa HTTPS/HTTP lengkap dari domain publik
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
       return cleanUrl;
     }
 
-    // 3. Normalisasi path relatif dari cPanel / Laravel
     cleanUrl = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
 
     if (!cleanUrl.startsWith('/public')) {
@@ -73,17 +77,74 @@ export default function ProductGrid() {
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  // Handler Tambah Produk ke Keranjang DB
-  const handleAddToCart = async (productId: number) => {
-    setAddingCartId(productId);
+  // Handler 1: Tambah ke Keranjang (Tetap di Halaman Produk)
+  const handleAddToCart = async (product: Product) => {
+    setAddingCartId(product.id);
     try {
-      await cartService.addToCart(productId, 1);
-      alert('Produk berhasil ditambahkan ke keranjang!');
+      // 1. Simpan ke Database via cartService jika backend siap
+      try {
+        await cartService.addToCart(product.id, 1);
+      } catch (err) {
+        console.warn('API Cart error, falling back to Context state:', err);
+      }
+
+      // 2. Simpan ke local CartContext state
+      addToLocalCart({
+        id: String(product.id),
+        name: product.name,
+        category: 'Umum',
+        priceIdr: 0,
+        pricePi: parseFloat(product.price_pi) || 0,
+        image: product.image_url,
+        description: product.description,
+        stock: 10,
+        rating: 5,
+      });
+
+      Swal.fire({
+        title: 'Berhasil!',
+        text: 'Produk berhasil ditambahkan ke keranjang.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } catch (err: any) {
       console.error('Gagal menambahkan ke keranjang:', err);
-      alert(err.message || 'Gagal menambahkan produk ke keranjang. Silakan login terlebih dahulu.');
+      Swal.fire('Gagal', err.message || 'Gagal menambahkan produk ke keranjang.', 'error');
     } finally {
       setAddingCartId(null);
+    }
+  };
+
+  // Handler 2: Beli Langsung (Tambah ke Keranjang Lalu Arahkan ke /cart)
+  const handleBuyNow = async (product: Product) => {
+    setBuyingId(product.id);
+    try {
+      try {
+        await cartService.addToCart(product.id, 1);
+      } catch (err) {
+        console.warn('API Cart error, falling back to Context state:', err);
+      }
+
+      addToLocalCart({
+        id: String(product.id),
+        name: product.name,
+        category: 'Umum',
+        priceIdr: 0,
+        pricePi: parseFloat(product.price_pi) || 0,
+        image: product.image_url,
+        description: product.description,
+        stock: 10,
+        rating: 5,
+      });
+
+      // Arahkan pengguna ke halaman Keranjang Belanja terpisah
+      router.push('/cart');
+    } catch (err: any) {
+      console.error('Gagal memproses Beli Langsung:', err);
+      Swal.fire('Gagal', 'Terjadi kesalahan saat memproses pembelian.', 'error');
+    } finally {
+      setBuyingId(null);
     }
   };
 
@@ -118,6 +179,7 @@ export default function ProductGrid() {
       {products.map((product) => {
         const imgUrl = getFullImageUrl(product.image_url);
         const isAddingThis = addingCartId === product.id;
+        const isBuyingThis = buyingId === product.id;
 
         return (
           <div
@@ -165,11 +227,11 @@ export default function ProductGrid() {
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Tombol Tambah ke Keranjang DB */}
+                {/* Tombol Tambah ke Keranjang */}
                 <button
                   type="button"
-                  disabled={isAddingThis}
-                  onClick={() => handleAddToCart(product.id)}
+                  disabled={isAddingThis || isBuyingThis}
+                  onClick={() => handleAddToCart(product)}
                   title="Tambah ke Keranjang"
                   className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold p-2 rounded-xl transition flex items-center justify-center disabled:opacity-50"
                 >
@@ -188,13 +250,20 @@ export default function ProductGrid() {
                   Detail
                 </Link>
 
-                {/* Tombol Beli Langsung -> Ke Checkout */}
-                <Link
-                  href={`/checkout?product_id=${product.id}`}
-                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-sm"
+                {/* Tombol Beli Langsung -> Masuk Keranjang & Pindah ke /cart */}
+                <button
+                  type="button"
+                  disabled={isBuyingThis || isAddingThis}
+                  onClick={() => handleBuyNow(product)}
+                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-sm disabled:opacity-50"
                 >
-                  <ShoppingBag className="w-3.5 h-3.5" /> Beli
-                </Link>
+                  {isBuyingThis ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                  )}
+                  <span>Beli</span>
+                </button>
               </div>
             </div>
           </div>
