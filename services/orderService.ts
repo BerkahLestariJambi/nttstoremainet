@@ -13,6 +13,7 @@ export interface CheckoutInput {
   courier_service: string;
   shipping_fee_pi: number;
   shipping_fee_idr: number;
+  area_id?: string;
   items: OrderItemInput[];
   // Fallback opsional untuk kompatibilitas data langsung
   name?: string;
@@ -23,21 +24,25 @@ export interface CheckoutInput {
 }
 
 export const orderService = {
-  // 1. Buat Draft Order di Laravel Backend
+  // 1. Buat Draft Order di Laravel Backend (/api/orders)
   createOrder: (data: CheckoutInput) => apiClient.post('/orders', data),
 
-  // 2. Callback Server Approval Pi SDK
+  // 2. Callback Server Approval Pi SDK (/api/orders/approve)
   approvePayment: (paymentId: string, orderId: number | string) =>
     apiClient.post('/orders/approve', {
+      paymentId: paymentId,
       payment_id: paymentId,
+      orderId: orderId,
       order_id: orderId,
     }),
 
-  // 3. Callback Server Completion Pi SDK
+  // 3. Callback Server Completion Pi SDK (/api/orders/complete)
   completePayment: (paymentId: string, txid: string, orderId: number | string) =>
     apiClient.post('/orders/complete', {
+      paymentId: paymentId,
       payment_id: paymentId,
       txid: txid,
+      orderId: orderId,
       order_id: orderId,
     }),
 
@@ -46,4 +51,8 @@ export const orderService = {
   getSellerOrders: () => apiClient.get('/orders/seller'),
   getOrders: () => apiClient.get('/orders'),
   getOrderById: (orderId: number | string) => apiClient.get(`/orders/${orderId}`),
+
+  // 5. Fitur Tambahan (Pelacakan Kurir Biteship & Selesaikan Pesanan)
+  getTracking: (orderId: number | string) => apiClient.get(`/orders/${orderId}/tracking`),
+  markAsDelivered: (orderId: number | string) => apiClient.post(`/orders/${orderId}/deliver`),
 };
