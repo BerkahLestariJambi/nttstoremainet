@@ -19,11 +19,17 @@ import { useCart } from '@/context/CartContext';
 
 export default function Navbar() {
   const router = useRouter();
-  const { cart, piUser, setPiUser } = useCart();
+  // 1. Ambil totalItems dan fetchCart langsung dari CartContext
+  const { cart, totalItems, piUser, setPiUser, fetchCart } = useCart();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+  // 2. Refresh data keranjang saat komponen Navbar dipasang
+  useEffect(() => {
+    if (fetchCart) {
+      fetchCart();
+    }
+  }, [fetchCart]);
 
   // Close dropdown saat klik di luar area menu
   useEffect(() => {
@@ -42,6 +48,11 @@ export default function Navbar() {
     setDropdownOpen(false);
     router.push('/');
   };
+
+  // Gunakan totalItems dari context (fallback hitung manual jika undefined)
+  const itemBadgeCount = typeof totalItems === 'number' 
+    ? totalItems 
+    : (Array.isArray(cart) ? cart.reduce((acc, item) => acc + (item.quantity || 0), 0) : 0);
 
   return (
     <nav className="bg-white border-b sticky top-0 z-50">
@@ -136,12 +147,12 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* Keranjang Belanja -> Arahkan ke /cart */}
+          {/* Keranjang Belanja -> Arahkan ke /cart dan Tampilkan Badge Sesuai Isi DB */}
           <Link href="/cart" className="relative p-2 text-gray-700 hover:text-purple-700 transition">
             <ShoppingBag className="w-6 h-6" />
-            {totalItems > 0 && (
+            {itemBadgeCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {totalItems}
+                {itemBadgeCount}
               </span>
             )}
           </Link>
