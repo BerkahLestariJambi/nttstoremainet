@@ -22,14 +22,15 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       const rawRes: any = await orderService.createOrder(checkoutData);
 
       const res = rawRes?.data || rawRes;
-      const orderData = res?.order || res?.data || res;
+      const orderData = res?.data || res?.order || res;
 
+      // Mendapatkan Order ID dan Total Pi dari response backend
       const orderId = orderData?.id || orderData?.order_id || res?.order_id;
       const totalPi =
-        orderData?.total_pi ||
         orderData?.total_amount_pi ||
-        res?.total_pi ||
+        orderData?.total_pi ||
         res?.total_amount_pi ||
+        res?.total_pi ||
         checkoutData.shipping_fee_pi ||
         0;
 
@@ -47,12 +48,12 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         try {
           await Pi.init({ version: '2.0', sandbox: false });
         } catch (initErr) {
-          console.warn('Pi SDK sudah ter-initialized:', initErr);
+          console.warn('Pi SDK telah terinisialisasi:', initErr);
         }
 
         // Penanganan Transaksi Menggantung (Incomplete Payment)
         const onIncompletePaymentFound = async (payment: any) => {
-          console.log('Incomplete payment found:', payment);
+          console.log('Incomplete payment ditemukan:', payment);
           if (payment && payment.identifier && payment.transaction?.txid) {
             const paymentId = payment.identifier;
             const txid = payment.transaction.txid;
@@ -60,9 +61,9 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
 
             try {
               await orderService.completePayment(paymentId, txid, pendingOrderId);
-              console.log('Incomplete payment successfully resolved!');
+              console.log('Incomplete payment berhasil diselesaikan ke server!');
             } catch (err) {
-              console.error('Failed to resolve incomplete payment:', err);
+              console.error('Gagal menyelesaikan incomplete payment:', err);
             }
           }
         };
@@ -110,7 +111,11 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
               }
             } catch (completionErr: any) {
               console.error('Completion Error:', completionErr);
-              const errMsg = completionErr?.response?.data?.message || completionErr?.message || 'Gagal menyelesaikan verifikasi pembayaran ke server.';
+              const errMsg =
+                completionErr?.response?.data?.message ||
+                completionErr?.message ||
+                'Gagal menyelesaikan verifikasi pembayaran ke server.';
+
               Swal.fire('Verifikasi Gagal', errMsg, 'error');
               setLoading(false);
             }
@@ -144,8 +149,8 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       console.error('Checkout Detail Error:', err);
 
       const errorMessage =
+        err?.response?.data?.message ||
         err?.message ||
-        err?.data?.message ||
         'Gagal terhubung ke server backend Laravel.';
 
       Swal.fire('Gagal Checkout', errorMessage, 'error');
@@ -154,7 +159,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   };
 
   const handleCheckoutAndPay = () => {
-    // Tampilkan Peringatan SSL Premium via SweetAlert2
+    // Dialog Peringatan SSL Premium via SweetAlert2
     Swal.fire({
       title: 'Peringatan Keamanan SSL',
       html: `
