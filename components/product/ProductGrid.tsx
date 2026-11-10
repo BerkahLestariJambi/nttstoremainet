@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -30,7 +29,6 @@ export default function ProductGrid() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State melacak ID produk yang sedang diproses
   const [addingCartId, setAddingCartId] = useState<number | null>(null);
   const [buyingId, setBuyingId] = useState<number | null>(null);
 
@@ -54,7 +52,6 @@ export default function ProductGrid() {
       });
   }, []);
 
-  // Format & Clean URL Gambar Fleksibel
   const getFullImageUrl = (url: string | null) => {
     if (!url || typeof url !== 'string' || url.trim() === '') return '';
 
@@ -78,18 +75,15 @@ export default function ProductGrid() {
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  // Handler 1: Tambah ke Keranjang (Tetap di Halaman Produk)
   const handleAddToCart = async (product: Product) => {
     setAddingCartId(product.id);
     try {
-      // 1. Simpan ke Database via cartService jika backend siap
       try {
         await cartService.addToCart(product.id, 1);
       } catch (err) {
         console.warn('API Cart error, falling back to Context state:', err);
       }
 
-      // 2. Simpan ke local CartContext state
       addToLocalCart({
         id: String(product.id),
         name: product.name,
@@ -101,7 +95,7 @@ export default function ProductGrid() {
         stock: 10,
         rating: 5,
       });
-      
+
       Swal.fire({
         title: 'Berhasil!',
         text: 'Produk berhasil ditambahkan ke keranjang.',
@@ -117,7 +111,6 @@ export default function ProductGrid() {
     }
   };
 
-  // Handler 2: Beli Langsung (Tambah ke Keranjang Lalu Arahkan ke /cart)
   const handleBuyNow = async (product: Product) => {
     setBuyingId(product.id);
     try {
@@ -139,7 +132,6 @@ export default function ProductGrid() {
         rating: 5,
       });
 
-      // Arahkan pengguna ke halaman Keranjang Belanja terpisah
       router.push('/cart');
     } catch (err: any) {
       console.error('Gagal memproses Beli Langsung:', err);
@@ -153,7 +145,7 @@ export default function ProductGrid() {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {[1, 2, 3, 4].map((n) => (
-          <div key={n} className="bg-gray-100 animate-pulse h-64 rounded-2xl"></div>
+          <div key={n} className="bg-gray-100 animate-pulse h-72 rounded-2xl"></div>
         ))}
       </div>
     );
@@ -176,7 +168,7 @@ export default function ProductGrid() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
       {products.map((product) => {
         const imgUrl = getFullImageUrl(product.image_url);
         const isAddingThis = addingCartId === product.id;
@@ -185,10 +177,10 @@ export default function ProductGrid() {
         return (
           <div
             key={product.id}
-            className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+            className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
           >
             <div>
-              <div className="h-48 w-full bg-gray-50 rounded-xl overflow-hidden mb-3 relative flex items-center justify-center border border-gray-100">
+              <div className="h-44 w-full bg-gray-50 rounded-xl overflow-hidden mb-3 relative flex items-center justify-center border border-gray-100">
                 {imgUrl ? (
                   <img
                     src={imgUrl}
@@ -201,15 +193,15 @@ export default function ProductGrid() {
                 ) : null}
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 z-0">
-                  <Package className="w-10 h-10 mb-1 opacity-50" />
-                  <span className="text-[10px] text-gray-400">Gambar Tidak Tersedia</span>
+                  <Package className="w-8 h-8 mb-1 opacity-50" />
+                  <span className="text-[10px] text-gray-400">Tidak Ada Gambar</span>
                 </div>
               </div>
 
-              <span className="text-[11px] text-purple-700 font-semibold bg-purple-50 px-2.5 py-0.5 rounded-full inline-block">
+              <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-full inline-block">
                 {product.seller?.store_name || 'Penjual NTT'}
               </span>
-              <h3 className="font-bold text-gray-900 mt-2 line-clamp-1 text-sm">
+              <h3 className="font-bold text-gray-900 mt-1.5 line-clamp-1 text-sm">
                 {product.name}
               </h3>
               <p className="text-xs text-gray-500 mt-1 line-clamp-2">
@@ -217,24 +209,21 @@ export default function ProductGrid() {
               </p>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-              <div>
-                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider block">
-                  Harga
-                </span>
-                <span className="text-base font-extrabold text-amber-600">
-                  π {product.price_pi}
+            <div className="mt-4 pt-3 border-t border-gray-100 flex flex-col gap-2">
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs font-bold text-amber-600">π</span>
+                <span className="text-sm font-extrabold text-amber-600 truncate">
+                  {product.price_pi}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                {/* Tombol Tambah ke Keranjang */}
+              <div className="flex items-center justify-between gap-1.5 pt-1">
                 <button
                   type="button"
                   disabled={isAddingThis || isBuyingThis}
                   onClick={() => handleAddToCart(product)}
                   title="Tambah ke Keranjang"
-                  className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold p-2 rounded-xl transition flex items-center justify-center disabled:opacity-50"
+                  className="bg-amber-100 hover:bg-amber-200 text-amber-800 p-2 rounded-xl transition flex items-center justify-center disabled:opacity-50"
                 >
                   {isAddingThis ? (
                     <Loader2 className="w-4 h-4 animate-spin text-amber-700" />
@@ -243,20 +232,18 @@ export default function ProductGrid() {
                   )}
                 </button>
 
-                {/* Tombol Detail Produk */}
                 <Link
                   href={`/products/${product.slug}`}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-2 rounded-xl transition"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-2 rounded-xl transition text-center flex-1"
                 >
                   Detail
                 </Link>
 
-                {/* Tombol Beli Langsung -> Masuk Keranjang & Pindah ke /cart */}
                 <button
                   type="button"
                   disabled={isBuyingThis || isAddingThis}
                   onClick={() => handleBuyNow(product)}
-                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1 shadow-sm disabled:opacity-50"
+                  className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-2 rounded-xl transition flex items-center justify-center gap-1 shadow-sm disabled:opacity-50 flex-1"
                 >
                   {isBuyingThis ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
