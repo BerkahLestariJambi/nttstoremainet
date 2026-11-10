@@ -30,7 +30,7 @@ export interface PiUser {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: any, qty?: number) => void;
+  addToCart: (product: Product, qty?: number) => void;
   removeFromCart: (id: string | number) => void;
   updateQuantity: (id: string | number, qty: number) => void;
   clearCart: () => void;
@@ -66,6 +66,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             priceIdr: item.product?.price_idr || 0,
             pricePi: parseFloat(item.product?.price_pi || item.price_pi || item.pricePi || 0),
             image: item.product?.image_url || item.image_url || item.image || '',
+            image_url: item.product?.image_url || item.image_url || item.image || '',
             description: item.product?.description || '',
             stock: item.product?.stock || 10,
             rating: 5,
@@ -75,7 +76,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     } catch (e) {
-      console.warn('Backend Cart API fallback to localStorage:', e);
+      console.warn('Backend API Cart fallback ke localStorage:', e);
     } finally {
       setLoading(false);
     }
@@ -125,9 +126,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addToCart = (product: any, qty = 1) => {
+  const addToCart = (product: Product, qty = 1) => {
     const targetId = String(product.id || product.product_id);
-    const pricePi = parseFloat(product.price_pi || product.pricePi || 0);
+    const pricePi = parseFloat(String(product.price_pi || product.pricePi || 0));
 
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => String(item.id) === targetId);
@@ -138,13 +139,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
 
       const newItem: CartItem = {
+        ...product,
         id: targetId,
         product_id: Number(product.id || product.product_id),
         name: product.name || 'Produk',
         category: product.category || 'Umum',
         priceIdr: product.priceIdr || 0,
         pricePi: pricePi,
-        image: product.image_url || product.image || '',
+        image: product.image || product.image_url || '',
+        image_url: product.image_url || product.image || '',
         description: product.description || '',
         stock: product.stock || 10,
         rating: product.rating || 5,
