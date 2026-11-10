@@ -9,6 +9,7 @@ export interface Product {
   category?: string;
   priceIdr?: number;
   pricePi: number;
+  price_pi?: string | number;
   image?: string;
   image_url?: string;
   description?: string;
@@ -49,7 +50,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [piUser, setPiUserInternal] = useState<PiUser | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // 1. Fetch Cart Data dari API Backend Laravel (dengan fallback ke localStorage)
   const fetchCart = useCallback(async () => {
     try {
       setLoading(true);
@@ -75,12 +75,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     } catch (e) {
-      console.warn('API Cart tidak merespons, membaca local storage:', e);
+      console.warn('Backend Cart API fallback to localStorage:', e);
     } finally {
       setLoading(false);
     }
 
-    // Fallback: Ambil data dari localStorage jika API gagal / belum login
     if (typeof window !== 'undefined') {
       const savedCart = localStorage.getItem('nttstorepi_cart');
       if (savedCart) {
@@ -94,7 +93,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 2. Inisialisasi awal saat halaman dibuka
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('nttstorepi_user');
@@ -102,14 +100,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         try {
           setPiUserInternal(JSON.parse(savedUser));
         } catch (e) {
-          console.error('Gagal membaca data user:', e);
+          console.error(e);
         }
       }
     }
     fetchCart();
   }, [fetchCart]);
 
-  // 3. Simpan perubahan cart ke localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nttstorepi_cart', JSON.stringify(cart));
@@ -156,14 +153,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return [...prev, newItem];
     });
 
-    // Kirim sinkronisasi ke server di background
     cartService.addToCart(Number(targetId), qty).catch(() => {});
   };
 
   const removeFromCart = (id: string | number) => {
     const targetId = String(id);
     setCart((prev) => prev.filter((item) => String(item.id) !== targetId));
-
     cartService.removeFromCart(Number(id)).catch(() => {});
   };
 
