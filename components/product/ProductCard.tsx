@@ -42,7 +42,9 @@ export default function ProductCard({ product }: { product: Product }) {
           <p className="text-xl font-extrabold text-purple-700 flex items-center gap-1">
             {product.pricePi} <span className="text-xs font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">π</span>
           </p>
-          <p className="text-xs text-gray-400">Rp {product.priceIdr.toLocaleString('id-ID')}</p>
+          <p className="text-xs text-gray-400">
+  Rp {(product.priceIdr || 0).toLocaleString('id-ID')}
+</p>
         </div>
 
         <button
