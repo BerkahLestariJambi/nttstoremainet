@@ -173,16 +173,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       prev.map((item) => (String(item.id) === targetId ? { ...item, quantity: qty } : item))
     );
 
-    // Diperbaiki: Menggunakan updateCartItem sesuai cartService
     cartService.updateCartItem(Number(id), { quantity: qty }).catch(() => {});
   };
 
+  // FIX: Kosongkan state lokal & localStorage tanpa memanggil cartService.clearCart()
   const clearCart = () => {
     setCart([]);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('nttstorepi_cart');
     }
-    cartService.clearCart().catch(() => {});
   };
 
   const totalPi = cart.reduce((sum, item) => sum + (item.pricePi || 0) * item.quantity, 0);
