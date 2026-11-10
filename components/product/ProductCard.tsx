@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-//import ProductCard from '@/components/product/ProductCard';
 import { ShoppingCart, Star } from 'lucide-react';
 import { Product, useCart } from '@/context/CartContext';
 
@@ -43,8 +42,8 @@ export default function ProductCard({ product }: { product: Product }) {
             {product.pricePi} <span className="text-xs font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">π</span>
           </p>
           <p className="text-xs text-gray-400">
-  Rp {(product.priceIdr || 0).toLocaleString('id-ID')}
-</p>
+            Rp {(product.priceIdr || 0).toLocaleString('id-ID')}
+          </p>
         </div>
 
         <button
