@@ -173,7 +173,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       prev.map((item) => (String(item.id) === targetId ? { ...item, quantity: qty } : item))
     );
 
-    cartService.updateQuantity(Number(id), qty).catch(() => {});
+    // Diperbaiki: Menggunakan updateCartItem sesuai cartService
+    cartService.updateCartItem(Number(id), { quantity: qty }).catch(() => {});
   };
 
   const clearCart = () => {
