@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import Script from 'next/script';
 import ProductGrid from '@/components/product/ProductGrid';
 import BottomNav from '@/components/BottomNav';
 import { useCart } from '@/context/CartContext';
@@ -21,88 +20,82 @@ export default function HomePage() {
   const { piUser, setPiUser } = useCart();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [debugMsg, setDebugMsg] = useState<string>('');
-  const piInitialized = useRef<boolean>(false);
 
-  // Fungsi inisialisasi Pi SDK (hanya dijalankan sekali saat window.Pi siap)
-  const initializePiSdk = useCallback(() => {
-    if (typeof window === 'undefined' || !window.Pi || piInitialized.current) return;
+  // Inisialisasi Native SDK setiap kali window.Pi tersedia (di dalam Pi Browser)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-    try {
-      // Otomatis deteksi jika URL mengandung 'sandbox' atau env NEXT_PUBLIC_PI_SANDBOX=true
-      const isSandbox =
-        window.location.href.includes('sandbox') ||
-        process.env.NEXT_PUBLIC_PI_SANDBOX === 'true';
+    const initPiSdk = () => {
+      if (window.Pi) {
+        try {
+          const isSandbox = window.location.hostname.includes('sandbox');
+          window.Pi.init({ version: '2.0', sandbox: isSandbox });
+          setIsPiBrowser(true);
+        } catch (err) {
+          console.error('Pi SDK Init error:', err);
+        }
+      }
+    };
 
-      window.Pi.init({ version: '2.0', sandbox: isSandbox });
-      piInitialized.current = true;
-      setIsPiBrowser(true);
-      setDebugMsg(`SDK Siap (sandbox: ${isSandbox})`);
-    } catch (err: any) {
-      setDebugMsg(`Gagal Init SDK: ${err?.message || String(err)}`);
+    if (window.Pi) {
+      initPiSdk();
+    } else {
+      const timer = setTimeout(initPiSdk, 800);
+      return () => clearTimeout(timer);
     }
   }, []);
 
-  useEffect(() => {
-    initializePiSdk();
-  }, [initializePiSdk]);
-
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
-    setDebugMsg('Memulai autentikasi...');
 
-    // Pastikan SDK terinisialisasi jika script baru saja selesai dimuat
-    if (typeof window !== 'undefined' && window.Pi && !piInitialized.current) {
-      initializePiSdk();
-    }
-
-    // ALUR 1: Native SDK di dalam Pi Browser
+    // ALUR 1: Jika dibuka di dalam aplikasi Pi Browser (Native SDK Flow)
     if (typeof window !== 'undefined' && window.Pi) {
       try {
-        setDebugMsg('Memanggil window.Pi.authenticate...');
-        const scopes = ['username', 'payments'];
+        const isSandbox = window.location.hostname.includes('sandbox');
+        window.Pi.init({ version: '2.0', sandbox: isSandbox });
 
+        const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
         };
 
         const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
-        setDebugMsg(`Auth Pi sukses (@${auth.user.username}), menyinkronkan ke server...`);
-
+        
+        // 1. Simpan data Pi di Client State
         setPiUser({
           username: auth.user.username,
           accessToken: auth.accessToken,
           uid: auth.user.uid,
         });
 
+        // 2. Hubungkan ke Backend Laravel Sanctum (POST /api/auth/pi-login)
         try {
           const apiRes = await authService.loginWithPi(auth.accessToken);
           if (apiRes.access_token) {
             localStorage.setItem('nttstorepi_token', apiRes.access_token);
-            setDebugMsg('Login berhasil & tersinkron ke backend!');
           }
         } catch (backendErr: any) {
-          setDebugMsg(`Pi sukses, tapi backend gagal: ${backendErr?.response?.data?.message || backendErr.message}`);
+          console.warn('Gagal sync token ke backend Laravel:', backendErr.message);
         }
+
       } catch (error: any) {
-        const errText = error?.message || JSON.stringify(error);
-        setDebugMsg(`Gagal Authenticate: ${errText}`);
-        alert(`Gagal Authenticate: ${errText}`);
+        alert(`Autentikasi Pi Browser gagal: ${error?.message || JSON.stringify(error)}`);
       } finally {
         setLoading(false);
       }
       return;
     }
 
-    // ALUR 2: Browser Luar (Chrome/Safari) -> OAuth Redirect
+    // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow)
     try {
-      setDebugMsg('window.Pi tidak ditemukan, mengalihkan ke OAuth...');
-      const state =
-        typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      // 1. Generate CSRF State acak & Simpan di sessionStorage
+      const state = typeof crypto !== 'undefined' && crypto.randomUUID 
+        ? crypto.randomUUID() 
+        : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
       sessionStorage.setItem('pi_oauth_state', state);
+
+      // 2. Susun URL Otorisasi Sesuai Bagian 4.2 Panduan Resmi
       const redirectUri = `${window.location.origin}/auth/callback`;
 
       const authorizeUrl = new URL('https://accounts.pinet.com/oauth/authorize');
@@ -112,22 +105,16 @@ export default function HomePage() {
       authorizeUrl.searchParams.set('scope', 'username wallet_address');
       authorizeUrl.searchParams.set('state', state);
 
+      // 3. Redirect pengguna ke server otorisasi Pi
       window.location.assign(authorizeUrl.toString());
     } catch (err: any) {
-      setDebugMsg(`OAuth Error: ${err.message}`);
+      alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
       setLoading(false);
     }
-  }, [initializePiSdk, setPiUser]);
+  }, [setPiUser]);
 
   return (
     <div className="space-y-8 pb-24">
-      {/* Muat Pi SDK resmi secara otomatis jika belum dimuat di layout */}
-      <Script
-        src="https://sdk.minepi.com/pi-sdk.js"
-        strategy="afterInteractive"
-        onLoad={initializePiSdk}
-      />
-
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
@@ -157,7 +144,7 @@ export default function HomePage() {
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
                 {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Memproses...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Sign in with Pi'}
+                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Sign in with Pi'}
               </button>
             )}
 
@@ -168,13 +155,6 @@ export default function HomePage() {
               Jelajahi Produk
             </Link>
           </div>
-
-          {/* Tampilkan pesan status / error agar langsung terlihat penyebabnya */}
-          {debugMsg && (
-            <div className="mt-3 text-xs bg-black/30 text-yellow-200 px-3 py-2 rounded-xl font-mono break-all">
-              Status: {debugMsg}
-            </div>
-          )}
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
@@ -190,6 +170,7 @@ export default function HomePage() {
         <ProductGrid />
       </section>
 
+      {/* Bottom Navigation (Home, Order, Store, Chat, Account) */}
       <BottomNav />
     </div>
   );
