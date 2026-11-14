@@ -49,18 +49,19 @@ export default function SellerDashboard() {
     image: null as File | null,
   });
 
-  const loadSellerProducts = async () => {
-    try {
-      setLoading(true);
-      const res: any = await productService.getProducts();
-      const productList = res.data || res || [];
-      setProducts(Array.isArray(productList) ? productList : []);
-    } catch (err) {
-      console.error('Gagal memuat produk seller:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+const loadSellerProducts = async () => {
+  try {
+    setLoading(true);
+    const res: any = await productService.getSellerProducts();
+    const productList = res?.data?.data || res?.data || res || [];
+    setProducts(Array.isArray(productList) ? productList : []);
+  } catch (err) {
+    console.error('Gagal memuat produk seller:', err);
+    setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     loadSellerProducts();
