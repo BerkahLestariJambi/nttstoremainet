@@ -80,7 +80,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
             console.log('Server Completion TXID:', txid);
             try {
               await orderService.completePayment(paymentId, txid, orderId);
-              
+
               Swal.fire({
                 title: 'Berhasil!',
                 text: 'Pembayaran Pi Coin Berhasil!',
@@ -92,7 +92,6 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
               });
             } catch (completionErr: any) {
               console.error('Completion Error:', completionErr);
-             // Swal.fire('Gagal!', 'Gagal menyelesaikan verifikasi pembayaran ke server.', 'error');
               setLoading(false);
             }
           },
@@ -134,44 +133,9 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     }
   };
 
-  const handleCheckoutAndPay = () => {
-    // Tampilkan Peringatan SSL Premium via SweetAlert2
-    Swal.fire({
-      title: 'Peringatan Keamanan SSL',
-      html: `
-        <div style="text-align: left; font-size: 14px; line-height: 1.5; color: #4b5563;">
-          <p style="margin-bottom: 10px; font-weight: 600; color: #dc2626;">
-            ⚠️ Fitur SSL Premium Anda belum aktif!
-          </p>
-          <p style="margin-bottom: 10px;">
-            Apakah Anda tetap ingin melanjutkan transaksi dengan segala risiko yang dapat terjadi?
-          </p>
-          <p style="font-size: 12px; color: #6b7280; background-color: #f3f4f6; padding: 8px; border-radius: 8px;">
-            💡 <strong>Saran:</strong> Silakan aktifkan fitur SSL Premium agar transaksi Anda lebih aman dan performa aplikasi optimal.
-          </p>
-        </div>
-      `,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#f59e0b',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Ya, Tetap Lanjutkan',
-      cancelButtonText: 'Batal',
-      customClass: {
-        popup: 'rounded-3xl',
-        confirmButton: 'rounded-xl font-bold',
-        cancelButton: 'rounded-xl font-bold',
-      },
-    }).then((result) => {
-      if (result.isConfirmed) {
-        processCheckout();
-      }
-    });
-  };
-
   return (
     <button
-      onClick={handleCheckoutAndPay}
+      onClick={processCheckout}
       disabled={loading}
       className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs disabled:opacity-50"
     >
