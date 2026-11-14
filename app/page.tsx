@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import Script from 'next/script';
 import ProductGrid from '@/components/product/ProductGrid';
 import BottomNav from '@/components/BottomNav';
 import { useCart } from '@/context/CartContext';
@@ -20,59 +21,53 @@ export default function HomePage() {
   const { piUser, setPiUser } = useCart();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [debugMsg, setDebugMsg] = useState<string>('');
   const piInitialized = useRef<boolean>(false);
 
-  // Inisialisasi Pi SDK HANYA SEKALI saat halaman dimuat
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  // Fungsi inisialisasi Pi SDK (hanya dijalankan sekali saat window.Pi siap)
+  const initializePiSdk = useCallback(() => {
+    if (typeof window === 'undefined' || !window.Pi || piInitialized.current) return;
 
-    const initPi = () => {
-      if (window.Pi && !piInitialized.current) {
-        try {
-          // Gunakan true jika sedang test di Sandbox Pi Developer, false untuk Mainnet
-          const isSandbox = process.env.NEXT_PUBLIC_PI_SANDBOX === 'true';
-          window.Pi.init({ version: '2.0', sandbox: isSandbox });
-          piInitialized.current = true;
-          setIsPiBrowser(true);
-        } catch (err) {
-          console.error('Pi SDK Init error:', err);
-        }
-      }
-    };
+    try {
+      // Otomatis deteksi jika URL mengandung 'sandbox' atau env NEXT_PUBLIC_PI_SANDBOX=true
+      const isSandbox =
+        window.location.href.includes('sandbox') ||
+        process.env.NEXT_PUBLIC_PI_SANDBOX === 'true';
 
-    initPi();
-    const timer = setInterval(() => {
-      if (window.Pi) {
-        initPi();
-        clearInterval(timer);
-      }
-    }, 300);
-
-    const timeout = setTimeout(() => clearInterval(timer), 3000);
-    return () => {
-      clearInterval(timer);
-      clearTimeout(timeout);
-    };
+      window.Pi.init({ version: '2.0', sandbox: isSandbox });
+      piInitialized.current = true;
+      setIsPiBrowser(true);
+      setDebugMsg(`SDK Siap (sandbox: ${isSandbox})`);
+    } catch (err: any) {
+      setDebugMsg(`Gagal Init SDK: ${err?.message || String(err)}`);
+    }
   }, []);
+
+  useEffect(() => {
+    initializePiSdk();
+  }, [initializePiSdk]);
 
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
+    setDebugMsg('Memulai autentikasi...');
 
-    // ALUR 1: Jika dibuka di dalam aplikasi Pi Browser (window.Pi ada)
+    // Pastikan SDK terinisialisasi jika script baru saja selesai dimuat
+    if (typeof window !== 'undefined' && window.Pi && !piInitialized.current) {
+      initializePiSdk();
+    }
+
+    // ALUR 1: Native SDK di dalam Pi Browser
     if (typeof window !== 'undefined' && window.Pi) {
       try {
-        if (!piInitialized.current) {
-          const isSandbox = process.env.NEXT_PUBLIC_PI_SANDBOX === 'true';
-          window.Pi.init({ version: '2.0', sandbox: isSandbox });
-          piInitialized.current = true;
-        }
-
+        setDebugMsg('Memanggil window.Pi.authenticate...');
         const scopes = ['username', 'payments'];
+
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
         };
 
         const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
+        setDebugMsg(`Auth Pi sukses (@${auth.user.username}), menyinkronkan ke server...`);
 
         setPiUser({
           username: auth.user.username,
@@ -84,12 +79,15 @@ export default function HomePage() {
           const apiRes = await authService.loginWithPi(auth.accessToken);
           if (apiRes.access_token) {
             localStorage.setItem('nttstorepi_token', apiRes.access_token);
+            setDebugMsg('Login berhasil & tersinkron ke backend!');
           }
         } catch (backendErr: any) {
-          console.warn('Gagal sync token ke backend Laravel:', backendErr.message);
+          setDebugMsg(`Pi sukses, tapi backend gagal: ${backendErr?.response?.data?.message || backendErr.message}`);
         }
       } catch (error: any) {
-        alert(`Error Pi SDK: ${error?.message || JSON.stringify(error)}`);
+        const errText = error?.message || JSON.stringify(error);
+        setDebugMsg(`Gagal Authenticate: ${errText}`);
+        alert(`Gagal Authenticate: ${errText}`);
       } finally {
         setLoading(false);
       }
@@ -98,6 +96,7 @@ export default function HomePage() {
 
     // ALUR 2: Browser Luar (Chrome/Safari) -> OAuth Redirect
     try {
+      setDebugMsg('window.Pi tidak ditemukan, mengalihkan ke OAuth...');
       const state =
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
@@ -115,13 +114,20 @@ export default function HomePage() {
 
       window.location.assign(authorizeUrl.toString());
     } catch (err: any) {
-      alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
+      setDebugMsg(`OAuth Error: ${err.message}`);
       setLoading(false);
     }
-  }, [setPiUser]);
+  }, [initializePiSdk, setPiUser]);
 
   return (
     <div className="space-y-8 pb-24">
+      {/* Muat Pi SDK resmi secara otomatis jika belum dimuat di layout */}
+      <Script
+        src="https://sdk.minepi.com/pi-sdk.js"
+        strategy="afterInteractive"
+        onLoad={initializePiSdk}
+      />
+
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
@@ -162,6 +168,13 @@ export default function HomePage() {
               Jelajahi Produk
             </Link>
           </div>
+
+          {/* Tampilkan pesan status / error agar langsung terlihat penyebabnya */}
+          {debugMsg && (
+            <div className="mt-3 text-xs bg-black/30 text-yellow-200 px-3 py-2 rounded-xl font-mono break-all">
+              Status: {debugMsg}
+            </div>
+          )}
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
