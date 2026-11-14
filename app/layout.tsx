@@ -1,6 +1,7 @@
 import '@/app/globals.css';
 import Script from 'next/script';
 import Navbar from '@/components/layout/Navbar';
+import BottomNav from '@/components/BottomNav';
 import { CartProvider } from '@/context/CartContext';
 
 export const metadata = {
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
       </head>
-      <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased">
+      <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased pb-24 md:pb-0">
         <CartProvider>
           {/* Header & Menu Utama */}
           <Navbar />
@@ -41,6 +42,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
           </footer>
+
+          {/* Mobile Bottom Navigation */}
+          <BottomNav />
         </CartProvider>
       </body>
     </html>
