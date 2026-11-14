@@ -3,13 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Store, ClipboardList, User } from 'lucide-react';
+import { Home, ClipboardList, Store, MessageCircle, User } from 'lucide-react';
 
 export default function BottomNav() {
   const pathname = usePathname();
-
-  // Sembunyikan bottom nav saat berada di halaman checkout atau detail tertentu jika perlu
-  // if (pathname.startsWith('/checkout')) return null;
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
@@ -17,13 +14,13 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] md:hidden">
-      <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-around relative">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
+      <div className="max-w-lg mx-auto px-2 h-16 flex items-center justify-around relative">
         
         {/* 1. Menu Home */}
         <Link
           href="/"
-          className={`flex flex-col items-center justify-center w-16 h-full transition ${
+          className={`flex flex-col items-center justify-center w-14 h-full transition ${
             isActive('/') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
@@ -31,7 +28,20 @@ export default function BottomNav() {
           <span className="text-[10px] font-bold mt-1">Home</span>
         </Link>
 
-        {/* 2. Menu Store (Tengah - Bulat & Lebih Tinggi) */}
+        {/* 2. Menu Order */}
+        <Link
+          href="/orders"
+          className={`flex flex-col items-center justify-center w-14 h-full transition ${
+            isActive('/orders') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <ClipboardList
+            className={`w-5 h-5 ${isActive('/orders') ? 'stroke-[2.5px]' : 'stroke-2'}`}
+          />
+          <span className="text-[10px] font-bold mt-1">Order</span>
+        </Link>
+
+        {/* 3. Menu Store (Tengah - Bulat & Lebih Tinggi) */}
         <div className="relative -top-5 flex flex-col items-center">
           <Link
             href="/seller/dashboard"
@@ -53,23 +63,23 @@ export default function BottomNav() {
           </span>
         </div>
 
-        {/* 3. Menu Pesanan */}
+        {/* 4. Menu Chat */}
         <Link
-          href="/orders"
-          className={`flex flex-col items-center justify-center w-16 h-full transition ${
-            isActive('/orders') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          href="/chat"
+          className={`flex flex-col items-center justify-center w-14 h-full transition ${
+            isActive('/chat') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          <ClipboardList
-            className={`w-5 h-5 ${isActive('/orders') ? 'stroke-[2.5px]' : 'stroke-2'}`}
+          <MessageCircle
+            className={`w-5 h-5 ${isActive('/chat') ? 'stroke-[2.5px]' : 'stroke-2'}`}
           />
-          <span className="text-[10px] font-bold mt-1">Pesanan</span>
+          <span className="text-[10px] font-bold mt-1">Chat</span>
         </Link>
 
-        {/* 4. Menu Account */}
+        {/* 5. Menu Account */}
         <Link
           href="/account"
-          className={`flex flex-col items-center justify-center w-16 h-full transition ${
+          className={`flex flex-col items-center justify-center w-14 h-full transition ${
             isActive('/account') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
