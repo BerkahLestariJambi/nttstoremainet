@@ -28,7 +28,7 @@ export default function HomePage() {
 
       if (window.Pi && isPiUA) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: true });
+          window.Pi.init({ version: '2.0', sandbox: false });
           setIsPiBrowser(true);
         } catch (err) {
           console.error('Pi SDK Init error:', err);
