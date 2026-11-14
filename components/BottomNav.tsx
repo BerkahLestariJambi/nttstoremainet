@@ -1,0 +1,83 @@
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Home, Store, ClipboardList, User } from 'lucide-react';
+
+export default function BottomNav() {
+  const pathname = usePathname();
+
+  // Sembunyikan bottom nav saat berada di halaman checkout atau detail tertentu jika perlu
+  // if (pathname.startsWith('/checkout')) return null;
+
+  const isActive = (path: string) => {
+    if (path === '/') return pathname === '/';
+    return pathname.startsWith(path);
+  };
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] md:hidden">
+      <div className="max-w-md mx-auto px-4 h-16 flex items-center justify-around relative">
+        
+        {/* 1. Menu Home */}
+        <Link
+          href="/"
+          className={`flex flex-col items-center justify-center w-16 h-full transition ${
+            isActive('/') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <Home className={`w-5 h-5 ${isActive('/') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[10px] font-bold mt-1">Home</span>
+        </Link>
+
+        {/* 2. Menu Store (Tengah - Bulat & Lebih Tinggi) */}
+        <div className="relative -top-5 flex flex-col items-center">
+          <Link
+            href="/seller/dashboard"
+            aria-label="Store Dashboard"
+            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-white transition transform active:scale-95 ${
+              isActive('/seller')
+                ? 'bg-purple-700 text-white shadow-purple-200'
+                : 'bg-gradient-to-tr from-amber-500 to-amber-400 text-white shadow-amber-200 hover:from-amber-600 hover:to-amber-500'
+            }`}
+          >
+            <Store className="w-6 h-6 stroke-[2.2px]" />
+          </Link>
+          <span
+            className={`text-[10px] font-extrabold mt-1 ${
+              isActive('/seller') ? 'text-purple-700' : 'text-amber-600'
+            }`}
+          >
+            Store
+          </span>
+        </div>
+
+        {/* 3. Menu Pesanan */}
+        <Link
+          href="/orders"
+          className={`flex flex-col items-center justify-center w-16 h-full transition ${
+            isActive('/orders') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <ClipboardList
+            className={`w-5 h-5 ${isActive('/orders') ? 'stroke-[2.5px]' : 'stroke-2'}`}
+          />
+          <span className="text-[10px] font-bold mt-1">Pesanan</span>
+        </Link>
+
+        {/* 4. Menu Account */}
+        <Link
+          href="/account"
+          className={`flex flex-col items-center justify-center w-16 h-full transition ${
+            isActive('/account') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          <User className={`w-5 h-5 ${isActive('/account') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <span className="text-[10px] font-bold mt-1">Account</span>
+        </Link>
+
+      </div>
+    </nav>
+  );
+}
