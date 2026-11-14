@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
-import BottomNav from '@/components/BottomNav';
 import { useCart } from '@/context/CartContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
@@ -24,29 +23,28 @@ export default function HomePage() {
   // Inisialisasi Native SDK jika dibuka di dalam aplikasi Pi Browser
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const checkPi = () => {
-        if (window.Pi) {
-          try {
-            window.Pi.init({ version: '2.0', sandbox: false });
-            setIsPiBrowser(true);
-          } catch (err) {
-            console.error('Pi SDK Init error:', err);
-          }
-        }
-      };
+      const userAgent = navigator.userAgent || '';
+      const isPiUA = userAgent.includes('PiBrowser');
 
-      checkPi();
-      // Cek ulang 500ms kemudian jika script Pi SDK terlambat dimuat
-      const timer = setTimeout(checkPi, 500);
-      return () => clearTimeout(timer);
+      if (window.Pi && isPiUA) {
+        try {
+          window.Pi.init({ version: '2.0', sandbox: false });
+          setIsPiBrowser(true);
+        } catch (err) {
+          console.error('Pi SDK Init error:', err);
+        }
+      }
     }
   }, []);
 
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
 
-    // ALUR 1: Jika dibuka di aplikasi Pi Browser (Native SDK Flow)
-    if (typeof window !== 'undefined' && window.Pi) {
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isPiUA = userAgent.includes('PiBrowser');
+
+    // ALUR 1: Jika dibuka MURNI di aplikasi Pi Browser (Native SDK Flow)
+    if (typeof window !== 'undefined' && window.Pi && isPiUA) {
       try {
         const scopes = ['username', 'payments'];
         const onIncompletePaymentFound = (payment: any) => {
@@ -82,21 +80,24 @@ export default function HomePage() {
 
     // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow)
     try {
+      // 1. Generate CSRF State acak & Simpan di sessionStorage
       const state = typeof crypto !== 'undefined' && crypto.randomUUID 
         ? crypto.randomUUID() 
         : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
       sessionStorage.setItem('pi_oauth_state', state);
 
+      // 2. Susun URL Otorisasi Sesuai Bagian 4.2 Panduan Resmi
       const redirectUri = `${window.location.origin}/auth/callback`;
 
       const authorizeUrl = new URL('https://accounts.pinet.com/oauth/authorize');
       authorizeUrl.searchParams.set('response_type', 'token');
       authorizeUrl.searchParams.set('client_id', CLIENT_ID);
       authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-      authorizeUrl.searchParams.set('scope', 'username wallet_address');
+      authorizeUrl.searchParams.set('scope', 'username wallet_address'); // Valid Scope resmi
       authorizeUrl.searchParams.set('state', state);
 
+      // 3. Redirect pengguna ke server otorisasi Pi
       window.location.assign(authorizeUrl.toString());
     } catch (err: any) {
       alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
@@ -105,7 +106,7 @@ export default function HomePage() {
   }, [setPiUser]);
 
   return (
-    <div className="space-y-8 pb-24">
+    <div className="space-y-8">
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
@@ -160,8 +161,6 @@ export default function HomePage() {
         <h2 className="text-2xl font-bold mb-6 text-gray-900">Produk Unggulan NTT</h2>
         <ProductGrid />
       </section>
-
-      <BottomNav />
     </div>
   );
 }
