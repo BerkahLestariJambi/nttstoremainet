@@ -41,13 +41,13 @@ export default function BottomNav() {
           <span className="text-[10px] font-bold mt-1">Order</span>
         </Link>
 
-        {/* 3. Menu Store (Tengah - Bulat & Lebih Tinggi) */}
+        {/* 3. Menu Store (Tengah - Daftar Toko Terdaftar) */}
         <div className="relative -top-5 flex flex-col items-center">
           <Link
-            href="/seller/dashboard"
-            aria-label="Store Dashboard"
+            href="/stores"
+            aria-label="Daftar Toko Terdaftar"
             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-white transition transform active:scale-95 ${
-              isActive('/seller')
+              isActive('/stores')
                 ? 'bg-purple-700 text-white shadow-purple-200'
                 : 'bg-gradient-to-tr from-amber-500 to-amber-400 text-white shadow-amber-200 hover:from-amber-600 hover:to-amber-500'
             }`}
@@ -56,7 +56,7 @@ export default function BottomNav() {
           </Link>
           <span
             className={`text-[10px] font-extrabold mt-1 ${
-              isActive('/seller') ? 'text-purple-700' : 'text-amber-600'
+              isActive('/stores') ? 'text-purple-700' : 'text-amber-600'
             }`}
           >
             Store
