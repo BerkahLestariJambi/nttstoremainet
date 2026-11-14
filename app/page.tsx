@@ -26,10 +26,12 @@ export default function HomePage() {
       const userAgent = navigator.userAgent || '';
       const isPiUA = userAgent.includes('PiBrowser');
 
-      if (window.Pi && isPiUA) {
+      if (window.Pi || isPiUA) {
         try {
-          window.Pi.init({ version: '2.0', sandbox: false });
-          setIsPiBrowser(true);
+          if (window.Pi) {
+            window.Pi.init({ version: '2.0', sandbox: false });
+            setIsPiBrowser(true);
+          }
         } catch (err) {
           console.error('Pi SDK Init error:', err);
         }
@@ -44,9 +46,9 @@ export default function HomePage() {
     const isPiUA = userAgent.includes('PiBrowser');
 
     // ALUR 1: Jika dibuka MURNI di aplikasi Pi Browser (Native SDK Flow)
-    if (typeof window !== 'undefined' && window.Pi && isPiUA) {
+    if (typeof window !== 'undefined' && window.Pi && (isPiUA || window.Pi)) {
       try {
-        const scopes = ['username', 'payments'];
+        const scopes = ['username', 'payments', 'wallet_address'];
         const onIncompletePaymentFound = (payment: any) => {
           console.log('Incomplete payment found:', payment);
         };
@@ -78,7 +80,7 @@ export default function HomePage() {
       return;
     }
 
-    // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow)
+    // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow + Android Intent)
     try {
       // 1. Generate CSRF State acak & Simpan di sessionStorage
       const state = typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -97,8 +99,24 @@ export default function HomePage() {
       authorizeUrl.searchParams.set('scope', 'username wallet_address'); // Valid Scope resmi
       authorizeUrl.searchParams.set('state', state);
 
-      // 3. Redirect pengguna ke server otorisasi Pi
-      window.location.assign(authorizeUrl.toString());
+      const rawOauthUrl = authorizeUrl.toString();
+      const isAndroid = /Android/i.test(userAgent);
+
+      if (isAndroid) {
+        // Intent khusus OS Android untuk langsung membuka halaman OAuth Pi Sign-In di app org.pinetwork.pi
+        const directPiOAuthIntent = `intent://accounts.pinet.com/oauth/authorize?response_type=token&client_id=${encodeURIComponent(
+          CLIENT_ID
+        )}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=username%20wallet_address&state=${encodeURIComponent(
+          state
+        )}#Intent;scheme=https;package=org.pinetwork.pi;S.browser_fallback_url=${encodeURIComponent(
+          rawOauthUrl
+        )};end;`;
+
+        window.location.href = directPiOAuthIntent;
+      } else {
+        // Desktop / iOS Fallback
+        window.location.assign(rawOauthUrl);
+      }
     } catch (err: any) {
       alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
       setLoading(false);
