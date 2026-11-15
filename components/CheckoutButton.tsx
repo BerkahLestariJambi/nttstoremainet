@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { orderService, CheckoutInput } from '@/services/orderService';
+import { useLanguage } from '@/context/LanguageContext';
 import { Loader2, CreditCard } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -13,6 +14,7 @@ interface CheckoutButtonProps {
 export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { t } = useLanguage();
 
   const processCheckout = async () => {
     setLoading(true);
@@ -33,10 +35,10 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         checkoutData.shipping_fee_pi ||
         0;
 
-      const memo = res?.memo || `Pembayaran Order #${orderId || 'NTTStore'}`;
+      const memo = res?.memo || `${t('paymentOrderMemo')} #${orderId || 'NTTStore'}`;
 
       if (!orderId) {
-        throw new Error(res?.message || 'Gagal membuat order. ID Pesanan tidak ditemukan.');
+        throw new Error(res?.message || t('createOrderFailedError'));
       }
 
       // 2. Inisialisasi & Authenticate Pi Network SDK dengan Scope Payments
@@ -82,8 +84,8 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
               await orderService.completePayment(paymentId, txid, orderId);
 
               Swal.fire({
-                title: 'Berhasil!',
-                text: 'Pembayaran Pi Coin Berhasil!',
+                title: t('successTitle'),
+                text: t('piPaymentSuccessText'),
                 icon: 'success',
                 confirmButtonColor: '#f59e0b',
               }).then(() => {
@@ -97,12 +99,12 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           },
           onCancel: (paymentId: string) => {
             console.log('Pembayaran dibatalkan:', paymentId);
-            Swal.fire('Dibatalkan', 'Transaksi pembayaran dibatalkan.', 'info');
+            Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
             setLoading(false);
           },
           onError: (error: Error, payment?: unknown) => {
             console.error('Error transaksi Pi SDK:', error, payment);
-            Swal.fire('Error Pi SDK', error.message || 'Gagal membayar', 'error');
+            Swal.fire(t('piSdkErrorTitle'), error.message || t('piPaymentFailedFallback'), 'error');
             setLoading(false);
           },
         };
@@ -111,8 +113,8 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         Pi.createPayment(paymentData, paymentCallbacks);
       } else {
         Swal.fire({
-          title: `Order #${orderId} Berhasil Dibuat!`,
-          text: 'Untuk menyelesaikan pembayaran dengan Pi Coin, silakan buka aplikasi ini di dalam Pi Browser.',
+          title: `${t('orderNumberLabel')} #${orderId} ${t('orderCreatedSuffix')}`,
+          text: t('openInPiBrowserToPayText'),
           icon: 'info',
           confirmButtonColor: '#f59e0b',
         }).then(() => {
@@ -126,9 +128,9 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       const errorMessage =
         err?.message ||
         err?.data?.message ||
-        'Gagal terhubung ke server backend Laravel.';
+        t('backendConnectionFailedError');
 
-      Swal.fire('Gagal Checkout', errorMessage, 'error');
+      Swal.fire(t('checkoutFailedTitle'), errorMessage, 'error');
       setLoading(false);
     }
   };
@@ -142,12 +144,12 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       {loading ? (
         <>
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Menghubungkan ke Pi SDK...</span>
+          <span>{t('connectingToPiSdk')}</span>
         </>
       ) : (
         <>
           <CreditCard className="w-4 h-4" />
-          <span>Bayar Sekarang via Pi Browser</span>
+          <span>{t('payNowViaPiBrowser')}</span>
         </>
       )}
     </button>
