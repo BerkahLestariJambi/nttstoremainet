@@ -10,6 +10,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Package, ShoppingBag, ShoppingCart, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
+
 interface Product {
   id: number;
   name: string;
