@@ -171,9 +171,10 @@ export default function HomePage() {
 
       {/* Katalog Produk Unggulan */}
       <section>
+        <FlashSaleBanner />
         <h2 className="text-2xl font-bold mb-6 text-gray-900">{t('featuredProducts')}</h2>
         <ProductGrid />
-        <FlashSaleBanner />
+        
       </section>
     </div>
   );
