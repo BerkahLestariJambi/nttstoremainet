@@ -88,8 +88,8 @@ function CheckoutFormContent() {
       // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart)
       if (isDirectBuy && productId) {
         try {
-          const res = await productService.getProductById(productId);
-          const item = res?.data?.data || res?.data || res;
+          const res: any = await productService.getProductById(productId);
+const item = res?.data?.data || res?.data || res;
           if (item?.id) {
             loadedItems = [{
               product_id: Number(item.id),
