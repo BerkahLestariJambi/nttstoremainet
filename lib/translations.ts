@@ -61,6 +61,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     successTitle: 'Success!',
     failedTitle: 'Failed',
 
+    // Flash Sale & Promo
+    flashSaleTitle: 'NTTStorePi Flash Sale',
+    flashSaleSubtitle: 'Limited-time deals! Grab yours before time or quota runs out.',
+    endsInLabel: 'Ends in',
+    flashSaleEnded: 'Flash Sale Ended',
+    grabDealBtn: 'Grab Deal',
+    remainingQuota: 'Quota Left',
+    promoTag: 'PROMO',
+    flashSaleTag: 'FLASH SALE',
+    promoSavings: 'Promo Savings',
+    viewAllFlashSales: 'View All Deals',
+    limitedStockWarning: 'Limited promo stock!',
+
     // Product Detail Page
     backToProducts: 'Back to Products',
     backToCatalog: 'Back to Catalog',
@@ -286,6 +299,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     price: 'Harga',
     successTitle: 'Berhasil!',
     failedTitle: 'Gagal',
+
+    // Flash Sale & Promo
+    flashSaleTitle: 'Flash Sale NTTStorePi',
+    flashSaleSubtitle: 'Promo terbatas! Segera amankan sebelum waktu & kuota habis.',
+    endsInLabel: 'Berakhir dalam',
+    flashSaleEnded: 'Flash Sale Berakhir',
+    grabDealBtn: 'Ambil Promo',
+    remainingQuota: 'Sisa Kuota',
+    promoTag: 'PROMO',
+    flashSaleTag: 'FLASH SALE',
+    promoSavings: 'Hemat Promo',
+    viewAllFlashSales: 'Lihat Semua Promo',
+    limitedStockWarning: 'Stok promo terbatas!',
 
     // Product Detail Page
     backToProducts: 'Kembali ke Produk',
@@ -513,6 +539,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     successTitle: '成功！',
     failedTitle: '失败',
 
+    // Flash Sale & Promo
+    flashSaleTitle: 'NTTStorePi 限时闪购',
+    flashSaleSubtitle: '限时特惠！趁时间或名额结束前立即抢购。',
+    endsInLabel: '距离结束',
+    flashSaleEnded: '闪购已结束',
+    grabDealBtn: '立即抢购',
+    remainingQuota: '剩余名额',
+    promoTag: '特惠',
+    flashSaleTag: '限时闪购',
+    promoSavings: '优惠立省',
+    viewAllFlashSales: '查看全部特惠',
+    limitedStockWarning: '特惠库存有限！',
+
     // Product Detail Page
     backToProducts: '返回商品列表',
     backToCatalog: '返回商品目录',
@@ -739,6 +778,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     successTitle: '成功！',
     failedTitle: '失敗',
 
+    // Flash Sale & Promo
+    flashSaleTitle: 'NTTStorePi タイムセール',
+    flashSaleSubtitle: '期間限定セール！時間や限定数が終了する前にお急ぎください。',
+    endsInLabel: '終了まで',
+    flashSaleEnded: 'タイムセール終了',
+    grabDealBtn: 'セールを入手',
+    remainingQuota: '残り枠',
+    promoTag: 'セール',
+    flashSaleTag: 'タイムセール',
+    promoSavings: 'セール割引額',
+    viewAllFlashSales: 'すべてのセールを見る',
+    limitedStockWarning: 'セール在庫わずか！',
+
     // Product Detail Page
     backToProducts: '商品一覧に戻る',
     backToCatalog: 'カタログに戻る',
@@ -964,6 +1016,19 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     price: 'السعر',
     successTitle: 'تم بنجاح!',
     failedTitle: 'فشل',
+
+    // Flash Sale & Promo
+    flashSaleTitle: 'عروض فلاش NTTStorePi',
+    flashSaleSubtitle: 'عروض لفترة محدودة! اغتنم الفرصة قبل انتهاء الوقت أو الكمية.',
+    endsInLabel: 'ينتهي خلال',
+    flashSaleEnded: 'انتهى عرض الفلاش',
+    grabDealBtn: 'احصل على العرض',
+    remainingQuota: 'الكمية المتبقية',
+    promoTag: 'عرض',
+    flashSaleTag: 'تخفيض سريع',
+    promoSavings: 'توفير العرض',
+    viewAllFlashSales: 'عرض جميع العروض',
+    limitedStockWarning: 'كمية العرض محدودة!',
 
     // Product Detail Page
     backToProducts: 'العودة إلى المنتجات',
