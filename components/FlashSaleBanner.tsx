@@ -42,7 +42,7 @@ interface FlashSaleBannerProps {
 
 export default function FlashSaleBanner({
   initialProducts,
-  logoUrl = '/logo.png', // Sesuaikan dengan path logo NTTStorePi di folder public/ (misal: /logo.png atau /images/logo.png)
+  logoUrl = 'https://nttstorepi.mejatika.com/public/products/7ldSzGcQPdUz4HXTKpXuIZ1XwnQ4BwcQiKMZ8acV.jpg', // Sesuaikan dengan path logo NTTStorePi di folder public/ (misal: /logo.png atau /images/logo.png)
 }: FlashSaleBannerProps) {
   const { t } = useLanguage();
 
