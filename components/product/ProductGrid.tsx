@@ -95,6 +95,7 @@ export default function ProductGrid() {
         image: product.image_url,
         description: product.description,
         stock: 10,
+        sisa_stock: 10,
         rating: 5,
       });
 
@@ -131,6 +132,7 @@ export default function ProductGrid() {
         image: product.image_url,
         description: product.description,
         stock: 10,
+        sisa_stock: 10,
         rating: 5,
       });
 
