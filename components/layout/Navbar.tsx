@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Navbar() {
   const router = useRouter();
@@ -57,15 +58,15 @@ export default function Navbar() {
 
   return (
     <nav className="bg-white border-b sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
         
         {/* Brand Logo */}
-        <Link href="/" className="text-2xl font-extrabold text-amber-700">
+        <Link href="/" className="text-xl sm:text-2xl font-extrabold text-amber-700 shrink-0">
           NTTStore<span className="text-purple-600">Pi</span>
         </Link>
 
-        {/* Action Area */}
-        <div className="flex items-center gap-4">
+        {/* Action Area (Kanan Atas) */}
+        <div className="flex items-center gap-2 sm:gap-3">
           
           {/* Indikator Status User Pi + Dropdown Menu */}
           {piUser ? (
@@ -73,10 +74,10 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-full text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer"
+                className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold text-purple-700 hover:bg-purple-100 transition cursor-pointer"
               >
-                <UserCheck className="w-4 h-4 text-purple-600" />
-                <span>@{piUser.username}</span>
+                <UserCheck className="w-4 h-4 text-purple-600 shrink-0" />
+                <span className="max-w-[80px] sm:max-w-none truncate">@{piUser.username}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-purple-500 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
@@ -142,7 +143,7 @@ export default function Navbar() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+            <div className="hidden sm:flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
               <Wallet className="w-3.5 h-3.5 text-gray-400" />
               <span>Pi Browser</span>
             </div>
@@ -150,13 +151,16 @@ export default function Navbar() {
 
           {/* Keranjang Belanja -> Arahkan ke /cart dan Tampilkan Badge Sesuai Isi DB */}
           <Link href="/cart" className="relative p-2 text-gray-700 hover:text-purple-700 transition">
-            <ShoppingBag className="w-6 h-6" />
+            <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
             {itemBadgeCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 bg-amber-600 text-white text-[10px] font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center">
                 {itemBadgeCount}
               </span>
             )}
           </Link>
+
+          {/* Pemilih 5 Bahasa di Header Paling Atas Kanan */}
+          <LanguageSwitcher />
           
         </div>
       </div>
