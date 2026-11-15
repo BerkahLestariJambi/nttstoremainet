@@ -4,19 +4,19 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import CheckoutButton from '@/components/CheckoutButton';
-import { productService } from '@/services/productService';
+import { productService, getEffectivePricePi } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
 import { shippingService, BiteshipRate, BiteshipItemPayload } from '@/services/shippingService';
 import { useLanguage } from '@/context/LanguageContext';
-import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2, Zap } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
-  const productId = searchParams.get('product_id');
+  const productId = searchParams.get('product_id') || searchParams.get('productId');
   const addressId = searchParams.get('address_id');
   const isDirectBuy = Boolean(productId);
 
@@ -32,15 +32,15 @@ function CheckoutFormContent() {
   // Fungsi Panggil API Rates Biteship
   const fetchBiteshipRates = async (selectedAddr: UserAddressData, items: any[]) => {
     if (!selectedAddr || items.length === 0) return;
-    
+
     setLoadingRates(true);
     try {
-      // Susun item payload sesuai spesifikasi Biteship
+      // Susun item payload sesuai spesifikasi Biteship menggunakan harga efektif
       const biteshipItems: BiteshipItemPayload[] = items.map((item) => ({
         name: item.name || 'Produk NTTStorePi',
         value: Math.round(Number(item.price_pi || 1) * 1500000), // estimasi IDR item
         quantity: Number(item.quantity || 1),
-        weight: 500, // 500 gram default per item
+        weight: Number(item.weight_gram || item.weight || 500),
         category: 'others',
       }));
 
@@ -75,27 +75,34 @@ function CheckoutFormContent() {
       try {
         const res: any = await addressService.getAddresses();
         const list = Array.isArray(res) ? res : res?.data || [];
-        
-        selectedAddr = addressId 
+
+        selectedAddr = addressId
           ? list.find((a: UserAddressData) => String(a.id) === String(addressId))
           : list.find((a: UserAddressData) => a.is_primary) || list[0];
-          
+
         setAddress(selectedAddr || null);
       } catch (err) {
         console.error('Gagal mengambil alamat pengiriman:', err);
       }
 
-      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart)
+      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart) dengan Harga Efektif (Diskon/Flash Sale)
       if (isDirectBuy && productId) {
         try {
           const res: any = await productService.getProductById(productId);
-const item = res?.data?.data || res?.data || res;
+          const item = res?.data?.data || res?.data || res;
           if (item?.id) {
+            const basePrice = Number(item.price_pi || item.price || 0);
+            const finalPrice = getEffectivePricePi(item);
+
             loadedItems = [{
               product_id: Number(item.id),
               name: item.name,
-              price_pi: Number(item.price_pi || item.price || 0),
-              quantity: 1,
+              price_pi: finalPrice,
+              original_price_pi: basePrice,
+              is_promo: finalPrice < basePrice,
+              is_flash_sale: Boolean(item.is_flash_sale),
+              weight_gram: item.weight_gram || 500,
+              quantity: Math.max(1, Number(searchParams.get('qty') || 1)),
             }];
             setCheckoutItems(loadedItems);
           }
@@ -107,12 +114,26 @@ const item = res?.data?.data || res?.data || res;
           const res: any = await cartService.getCart();
           const list = Array.isArray(res) ? res : res?.data || [];
           const selected = list.filter((i: any) => i.selected);
-          loadedItems = selected.map((i: any) => ({
-            product_id: i.product_id,
-            name: i.product?.name,
-            price_pi: Number(i.product?.price_pi || 0),
-            quantity: i.quantity,
-          }));
+
+          loadedItems = selected.map((i: any) => {
+            const prod = i.product || i;
+            const basePrice = Number(prod.price_pi || i.original_price_pi || 0);
+            const finalPrice =
+              Number(i.effective_price_pi) > 0
+                ? Number(i.effective_price_pi)
+                : getEffectivePricePi(prod);
+
+            return {
+              product_id: i.product_id,
+              name: prod.name,
+              price_pi: finalPrice,
+              original_price_pi: basePrice,
+              is_promo: finalPrice < basePrice,
+              is_flash_sale: Boolean(prod.is_flash_sale),
+              weight_gram: prod.weight_gram || 500,
+              quantity: Number(i.quantity || 1),
+            };
+          });
           setCheckoutItems(loadedItems);
         } catch (err) {
           console.error('Error membaca keranjang DB:', err);
@@ -128,9 +149,14 @@ const item = res?.data?.data || res?.data || res;
     }
 
     initCheckout();
-  }, [productId, addressId, isDirectBuy]);
+  }, [productId, addressId, isDirectBuy, searchParams]);
 
   const subtotalPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
+  const totalSavingsPi = checkoutItems.reduce(
+    (sum, item) =>
+      item.is_promo ? sum + (item.original_price_pi - item.price_pi) * item.quantity : sum,
+    0
+  );
   const shippingFeePi = selectedRate ? Number(selectedRate.price_pi) : 0;
   const totalAmountPi = subtotalPi + shippingFeePi;
 
@@ -266,12 +292,24 @@ const item = res?.data?.data || res?.data || res;
             <PackageCheck className="w-5 h-5 text-amber-500" /> {t('billingSummary')}
           </h2>
 
-          <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto pr-1 space-y-2">
+          <div className="divide-y divide-gray-100 max-h-56 overflow-y-auto pr-1 space-y-2">
             {checkoutItems.map((item, idx) => (
               <div key={idx} className="pt-2 first:pt-0 flex justify-between items-start gap-2">
-                <div>
-                  <p className="font-semibold text-gray-800 text-xs line-clamp-1">{item.name}</p>
-                  <p className="text-[10px] text-gray-400">{item.quantity} x π {item.price_pi}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <p className="font-semibold text-gray-800 text-xs line-clamp-1">{item.name}</p>
+                    {item.is_promo && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.2 rounded-full shrink-0">
+                        <Zap className="w-2.5 h-2.5 fill-red-600" /> PROMO
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <span>{item.quantity} x π {item.price_pi}</span>
+                    {item.is_promo && (
+                      <span className="line-through text-gray-300">π {item.original_price_pi}</span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-xs font-bold text-amber-600 whitespace-nowrap">
                   π {(item.price_pi * item.quantity).toFixed(4)}
@@ -285,6 +323,12 @@ const item = res?.data?.data || res?.data || res;
               <span>{t('productSubtotal')}</span>
               <span className="font-medium text-gray-800">π {subtotalPi.toFixed(4)}</span>
             </div>
+            {totalSavingsPi > 0 && (
+              <div className="flex justify-between text-emerald-600 font-semibold">
+                <span>Hemat Promo</span>
+                <span>- π {totalSavingsPi.toFixed(4)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span>{t('shippingFeeLabel')} ({selectedRate ? `${selectedRate.courier_name} ${selectedRate.courier_service_name}` : '-'})</span>
               <span className="font-medium text-amber-600">π {shippingFeePi.toFixed(6)}</span>
