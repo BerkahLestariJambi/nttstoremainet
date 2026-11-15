@@ -27,7 +27,7 @@ export default function AccountPage() {
   const router = useRouter();
   const { piUser, setPiUser } = useCart();
   const { t } = useLanguage();
-  const [isPiBrowser, setIsPiBrowser] = useState<boolean" href="/seller/dashboard">(false);
+  const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
@@ -125,11 +125,11 @@ export default function AccountPage() {
         {piUser ? (
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center shrink-0">
-              <UserCheck className="w-7 h-7 text-yellow-300"/>
+              <UserCheck className="w-7 h-7 text-yellow-300" />
             </div>
             <div className="min-w-0 flex-1">
               <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-yellow-400 text-gray-900 px-2.5 py-0.5 rounded-full">
-                <Sparkles className="w-3 h-3"/> {t('connectedAs')}
+                <Sparkles className="w-3 h-3" /> {t('connectedAs')}
               </span>
               <h1 className="text-xl sm:text-2xl font-extrabold truncate mt-1">
                 @{piUser.username}
@@ -153,7 +153,7 @@ export default function AccountPage() {
               disabled={loading}
               className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-5 py-3 rounded-2xl text-xs transition shadow-md inline-flex items-center gap-2 disabled:opacity-50"
             >
-              {isPiBrowser ? <Wallet className="w-4 h-4"/> : <ShieldCheck className="w-4 h-4"/>}
+              {isPiBrowser ? <Wallet className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
               <span>
                 {loading
                   ? t('redirecting')
@@ -168,74 +168,89 @@ export default function AccountPage() {
 
       {/* Daftar Menu Akun */}
       <div className="space-y-3">
-        {/* 1. Menu Chat (Pindahan dari BottomNav ke dalam Account) */}
-        <Link className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition" href="/chat">
+        {/* 1. Menu Chat */}
+        <Link
+          href="/chat"
+          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <MessageCircle className="w-5 h-5"/>
+              <MessageCircle className="w-5 h-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{t('navChat')}</p>
               <p className="text-xs text-gray-500">NTTStorePi</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400"/>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
         {/* 2. Riwayat Pesanan */}
-        <Link className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition" href="/orders">
+        <Link
+          href="/orders"
+          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5"/>
+              <ClipboardList className="w-5 h-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{t('orderHistory')}</p>
               <p className="text-xs text-gray-500">{t('navOrders')}</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400"/>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
         {/* 3. Alamat Pengiriman */}
-        <Link className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition" href="/addresses">
+        <Link
+          href="/addresses"
+          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <MapPin className="w-5 h-5"/>
+              <MapPin className="w-5 h-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{t('shippingAddress')}</p>
               <p className="text-xs text-gray-500">{t('selectOrAddAddress')}</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400"/>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
         {/* 4. Dashboard Seller */}
-        <Link className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition" href="/seller/dashboard">
+        <Link
+          href="/seller/dashboard"
+          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-              <LayoutDashboard className="w-5 h-5"/>
+              <LayoutDashboard className="w-5 h-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{t('sellerDashboard')}</p>
               <p className="text-xs text-gray-500">{t('manageMyStore')}</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400"/>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
         {/* 5. Buka / Daftar Toko */}
-        <Link className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition" href="/seller/register">
+        <Link
+          href="/seller/register"
+          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
-              <Store className="w-5 h-5"/>
+              <Store className="w-5 h-5" />
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{t('registerStoreBtn')}</p>
               <p className="text-xs text-gray-500">{t('registerStoreTitle')}</p>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400"/>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
       </div>
 
@@ -246,12 +261,12 @@ export default function AccountPage() {
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 p-4 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-2xl border border-red-100 transition"
         >
-          <LogOut className="w-4 h-4"/>
+          <LogOut className="w-4 h-4" />
           <span>{t('logout')}</span>
         </button>
       )}
 
-      <BottomNav/>
+      <BottomNav />
     </div>
   );
 }
