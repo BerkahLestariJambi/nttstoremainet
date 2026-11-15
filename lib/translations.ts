@@ -35,6 +35,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     navProfile: 'Profile',
     backToHome: 'Back to Home',
     backToCart: 'Back to Cart',
+    backToSellerDashboard: 'Back to Seller Dashboard',
 
     // ProductGrid & Catalog
     allProducts: 'All Products',
@@ -207,6 +208,31 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     productImage: 'Product Image',
     saveProduct: 'Save Product',
     cancel: 'Cancel',
+
+    // Register & Update Seller Page
+    checkingStoreStatus: 'Checking store status...',
+    manageStoreProductsBtn: 'Manage Products',
+    storeAlreadyRegisteredBadge: 'Your store is already registered on NTTStorePi',
+    storeUpdateOnlyHint: 'Each account can only register one store. You can update your store details below.',
+    updateStoreProfileTitle: 'Update Store Information',
+    updateStoreProfileSubtitle: 'Keep your store profile, phone number, and shipping origin address up to date.',
+    openStoreRegisterTitle: 'Open Store / Register Seller',
+    openStoreRegisterSubtitle: 'Start marketing authentic NTT crafts and specialty products to the Pi Network community.',
+    sellerRegisterSuccessAlert: 'Seller registration successful! Your account is ready to use.',
+    sellerRegisterFailedError: 'Failed to register as a seller. Please make sure you are signed in.',
+    storeUpdateSuccessMsg: 'Store information updated successfully!',
+    storeUpdateFailedError: 'Failed to update store information.',
+    storeNameFieldLabel: 'Store / Business Name',
+    storeNamePlaceholder: 'Example: Tenun Ikat NTT Official',
+    whatsappPhoneFieldLabel: 'WhatsApp / Phone Number',
+    storeFullAddressFieldLabel: 'Full Store / Shipping Origin Address',
+    storeFullAddressPlaceholder: 'Jl. El Tari No. 12, Kupang, East Nusa Tenggara',
+    storeShortDescriptionFieldLabel: 'Short Store Description',
+    storeShortDescriptionPlaceholder: 'Specializing in authentic Flores and Sumba Ikat handwoven fabrics...',
+    updatingStoreBtnLoading: 'Updating Store...',
+    registeringStoreBtnLoading: 'Processing Registration...',
+    saveStoreChangesBtn: 'Save Store Changes',
+    registerStoreNowBtn: 'Register Store Now',
   },
 
   id: {
@@ -235,6 +261,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     navProfile: 'Profil',
     backToHome: 'Kembali ke Beranda',
     backToCart: 'Kembali ke Keranjang',
+    backToSellerDashboard: 'Kembali ke Dashboard Penjual',
 
     // ProductGrid & Catalog
     allProducts: 'Semua Produk',
@@ -407,6 +434,31 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     productImage: 'Foto Produk',
     saveProduct: 'Simpan Produk',
     cancel: 'Batal',
+
+    // Register & Update Seller Page
+    checkingStoreStatus: 'Memeriksa status toko...',
+    manageStoreProductsBtn: 'Kelola Produk',
+    storeAlreadyRegisteredBadge: 'Toko Anda sudah terdaftar di NTTStorePi',
+    storeUpdateOnlyHint: 'Setiap akun hanya dapat mendaftarkan satu toko. Anda dapat memperbarui data toko di bawah ini.',
+    updateStoreProfileTitle: 'Perbarui Data Toko',
+    updateStoreProfileSubtitle: 'Pastikan profil toko, nomor kontak, dan alamat asal pengiriman Anda selalu akurat.',
+    openStoreRegisterTitle: 'Buka Toko / Daftar Seller',
+    openStoreRegisterSubtitle: 'Mulai pasarkan kerajinan dan produk unggulan NTT ke komunitas Pi Network.',
+    sellerRegisterSuccessAlert: 'Pendaftaran seller berhasil! Akun Anda siap digunakan.',
+    sellerRegisterFailedError: 'Gagal mendaftar sebagai seller. Pastikan Anda sudah login.',
+    storeUpdateSuccessMsg: 'Data toko berhasil diperbarui!',
+    storeUpdateFailedError: 'Gagal memperbarui data toko.',
+    storeNameFieldLabel: 'Nama Toko / Usaha',
+    storeNamePlaceholder: 'Contoh: Tenun Ikat NTT Official',
+    whatsappPhoneFieldLabel: 'Nomor WhatsApp / HP',
+    storeFullAddressFieldLabel: 'Alamat Lengkap Toko / Pengiriman',
+    storeFullAddressPlaceholder: 'Jl. El Tari No. 12, Kupang, Nusa Tenggara Timur',
+    storeShortDescriptionFieldLabel: 'Deskripsi Singkat Toko',
+    storeShortDescriptionPlaceholder: 'Spesialisasi pengrajin kain tenun ikat asli Flores dan Sumba...',
+    updatingStoreBtnLoading: 'Menyimpan Perubahan...',
+    registeringStoreBtnLoading: 'Memproses Pendaftaran...',
+    saveStoreChangesBtn: 'Simpan Perubahan Toko',
+    registerStoreNowBtn: 'Daftar Toko Sekarang',
   },
 
   zh: {
@@ -435,6 +487,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     navProfile: '我的',
     backToHome: '返回首页',
     backToCart: '返回购物车',
+    backToSellerDashboard: '返回卖家中心',
 
     // ProductGrid & Catalog
     allProducts: '全部商品',
@@ -607,6 +660,31 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     productImage: '商品图片',
     saveProduct: '保存商品',
     cancel: '取消',
+
+    // Register & Update Seller Page
+    checkingStoreStatus: '正在检查店铺状态...',
+    manageStoreProductsBtn: '管理商品',
+    storeAlreadyRegisteredBadge: '您的店铺已在 NTTStorePi 注册',
+    storeUpdateOnlyHint: '每个账号只能注册一家店铺，您可以在下方更新店铺信息。',
+    updateStoreProfileTitle: '更新店铺信息',
+    updateStoreProfileSubtitle: '保持您的店铺资料、联系电话和发货地址准确无误。',
+    openStoreRegisterTitle: '开设店铺 / 注册卖家',
+    openStoreRegisterSubtitle: '开始向 Pi Network 社区推广正宗 NTT 手工艺品和特色产品。',
+    sellerRegisterSuccessAlert: '卖家注册成功！您的账户已准备就绪。',
+    sellerRegisterFailedError: '注册卖家失败，请确保您已登录。',
+    storeUpdateSuccessMsg: '店铺信息更新成功！',
+    storeUpdateFailedError: '更新店铺信息失败。',
+    storeNameFieldLabel: '店铺 / 企业名称',
+    storeNamePlaceholder: '例如：Tenun Ikat NTT Official',
+    whatsappPhoneFieldLabel: 'WhatsApp / 联系电话',
+    storeFullAddressFieldLabel: '店铺完整地址 / 发货地',
+    storeFullAddressPlaceholder: 'Jl. El Tari No. 12, Kupang, East Nusa Tenggara',
+    storeShortDescriptionFieldLabel: '店铺简介',
+    storeShortDescriptionPlaceholder: '专注于正宗弗洛勒斯和松巴手工伊卡特织布...',
+    updatingStoreBtnLoading: '正在更新店铺...',
+    registeringStoreBtnLoading: '正在处理注册...',
+    saveStoreChangesBtn: '保存店铺修改',
+    registerStoreNowBtn: '立即注册店铺',
   },
 
   ja: {
@@ -635,6 +713,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     navProfile: 'マイページ',
     backToHome: 'ホームに戻る',
     backToCart: 'カートに戻る',
+    backToSellerDashboard: '出品者ダッシュボードに戻る',
 
     // ProductGrid & Catalog
     allProducts: 'すべての商品',
@@ -807,6 +886,31 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     productImage: '商品画像',
     saveProduct: '商品を保存',
     cancel: 'キャンセル',
+
+    // Register & Update Seller Page
+    checkingStoreStatus: '店舗ステータスを確認中...',
+    manageStoreProductsBtn: '商品を管理',
+    storeAlreadyRegisteredBadge: 'あなたの店舗はすでに NTTStorePi に登録されています',
+    storeUpdateOnlyHint: '1つのアカウントにつき1店舗のみ登録可能です。以下から店舗情報を更新できます。',
+    updateStoreProfileTitle: '店舗情報の更新',
+    updateStoreProfileSubtitle: '店舗プロフィール、連絡先電話番号、発送元住所を最新の状態に保ちます。',
+    openStoreRegisterTitle: '店舗開設 / 出品者登録',
+    openStoreRegisterSubtitle: 'Pi Network コミュニティに向けて NTT の伝統工芸品や特産品の販売を始めましょう。',
+    sellerRegisterSuccessAlert: '出品者登録が完了しました！アカウントをご利用いただけます。',
+    sellerRegisterFailedError: '出品者登録に失敗しました。ログインしているか確認してください。',
+    storeUpdateSuccessMsg: '店舗情報が正常に更新されました！',
+    storeUpdateFailedError: '店舗情報の更新に失敗しました。',
+    storeNameFieldLabel: '店舗名 / 屋号',
+    storeNamePlaceholder: '例：Tenun Ikat NTT Official',
+    whatsappPhoneFieldLabel: 'WhatsApp / 電話番号',
+    storeFullAddressFieldLabel: '店舗の住所 / 発送元住所',
+    storeFullAddressPlaceholder: 'Jl. El Tari No. 12, Kupang, East Nusa Tenggara',
+    storeShortDescriptionFieldLabel: '店舗の簡単な説明',
+    storeShortDescriptionPlaceholder: 'フローレス島やスンバ島の伝統的な手織りイカット生地を専門に扱っています...',
+    updatingStoreBtnLoading: '店舗情報を更新中...',
+    registeringStoreBtnLoading: '登録処理中...',
+    saveStoreChangesBtn: '店舗の変更を保存',
+    registerStoreNowBtn: '今すぐ店舗を登録',
   },
 
   ar: {
@@ -835,6 +939,7 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     navProfile: 'حسابي',
     backToHome: 'العودة إلى الرئيسية',
     backToCart: 'العودة إلى السلة',
+    backToSellerDashboard: 'العودة إلى لوحة تحكم البائع',
 
     // ProductGrid & Catalog
     allProducts: 'جميع المنتجات',
@@ -1007,5 +1112,30 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     productImage: 'صورة المنتج',
     saveProduct: 'حفظ المنتج',
     cancel: 'إلغاء',
+
+    // Register & Update Seller Page
+    checkingStoreStatus: 'جاري التحقق من حالة المتجر...',
+    manageStoreProductsBtn: 'إدارة المنتجات',
+    storeAlreadyRegisteredBadge: 'متجرك مسجل بالفعل على NTTStorePi',
+    storeUpdateOnlyHint: 'يمكن لكل حساب تسجيل متجر واحد فقط. يمكنك تحديث بيانات متجرك أدناه.',
+    updateStoreProfileTitle: 'تحديث بيانات المتجر',
+    updateStoreProfileSubtitle: 'حافظ على تحديث ملف متجرك ورقم الاتصال وعنوان الشحن.',
+    openStoreRegisterTitle: 'فتح متجر / تسجيل بائع',
+    openStoreRegisterSubtitle: 'ابدأ في تسويق الحرف اليدوية ومنتجات NTT الأصيلة لمجتمع Pi Network.',
+    sellerRegisterSuccessAlert: 'تم تسجيل البائع بنجاح! حسابك جاهز للاستخدام.',
+    sellerRegisterFailedError: 'فشل التسجيل كبائع. يرجى التأكد من تسجيل الدخول.',
+    storeUpdateSuccessMsg: 'تم تحديث بيانات المتجر بنجاح!',
+    storeUpdateFailedError: 'فشل تحديث بيانات المتجر.',
+    storeNameFieldLabel: 'اسم المتجر / النشاط التجاري',
+    storeNamePlaceholder: 'مثال: Tenun Ikat NTT Official',
+    whatsappPhoneFieldLabel: 'رقم واتساب / الهاتف',
+    storeFullAddressFieldLabel: 'العنوان الكامل للمتجر / عنوان الشحن',
+    storeFullAddressPlaceholder: 'Jl. El Tari No. 12, Kupang, East Nusa Tenggara',
+    storeShortDescriptionFieldLabel: 'وصف مختصر للمتجر',
+    storeShortDescriptionPlaceholder: 'متخصصون في منسوجات الإيكات اليدوية الأصيلة من فلوريس وسومبا...',
+    updatingStoreBtnLoading: 'جاري تحديث المتجر...',
+    registeringStoreBtnLoading: 'جاري معالجة التسجيل...',
+    saveStoreChangesBtn: 'حفظ تغييرات المتجر',
+    registerStoreNowBtn: 'سجل المتجر الآن',
   },
 };
