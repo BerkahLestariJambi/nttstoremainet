@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
@@ -120,11 +119,6 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Pemilih 5 Bahasa */}
-      <div className="flex justify-end">
-        <LanguageSwitcher />
-      </div>
-
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
