@@ -34,7 +34,7 @@ interface Product {
   flash_sale_ends_at?: string | null;
   flash_sale_quota?: number | null;
   sold_count?: number;
-  stock?: number;
+  sisa_stock?: number;
   image_url: string;
   category?: {
     id?: number;
@@ -157,7 +157,7 @@ export default function ProductsPage() {
         pricePi: effectivePrice,
         image: product.image_url,
         description: product.description,
-        stock: product.stock ?? 10,
+        stock: product.sisa_stock ?? 10,
         rating: 5,
       });
 
