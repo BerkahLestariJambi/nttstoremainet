@@ -376,12 +376,12 @@ export default function ProductsPage() {
                     </div>
                     {typeof product.stock === 'number' && (
                       <span className="text-[11px] text-gray-400 shrink-0">
-                        {t('stock')}: {product.stock}
+                        {t('sold')}: {product.sold}
                       </span>
                     )}
                     {typeof product.sisa_stock === 'number' && (
                       <span className="text-[11px] text-gray-400 shrink-0">
-                        {t('sisa_stock')}: {product.sisa_stock}
+                        {t('stock')}: {product.sisa_stock}
                       </span>
                     )}
                   </div>
