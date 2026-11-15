@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cartService, CartItemData } from '@/services/cartService';
+import { useLanguage } from '@/context/LanguageContext';
 import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckSquare, Square } from 'lucide-react';
 
 export default function CartPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [cartItems, setCartItems] = useState<CartItemData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -69,17 +71,17 @@ export default function CartPage() {
   };
 
   if (loading) {
-    return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat keranjang belanja...</div>;
+    return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">{t('loadingCart')}</div>;
   }
 
   if (cartItems.length === 0) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <ShoppingBag className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Keranjang Kosong</h2>
-        <p className="text-xs text-gray-500 mb-6">Belum ada produk yang Anda tambahkan ke keranjang.</p>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">{t('emptyCartTitle')}</h2>
+        <p className="text-xs text-gray-500 mb-6">{t('emptyCart')}</p>
         <Link href="/" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200">
-          Mulai Belanja
+          {t('startShopping')}
         </Link>
       </div>
     );
@@ -88,11 +90,11 @@ export default function CartPage() {
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
       <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 font-medium mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> Lanjut Belanja
+        <ArrowLeft className="w-4 h-4" /> {t('continueShopping')}
       </Link>
 
       <h1 className="text-2xl font-extrabold text-gray-900 mb-6 flex items-center gap-2">
-        <ShoppingBag className="w-7 h-7 text-amber-500" /> Keranjang Belanja
+        <ShoppingBag className="w-7 h-7 text-amber-500" /> {t('shoppingCart')}
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -126,13 +128,13 @@ export default function CartPage() {
         </div>
 
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
-          <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">Ringkasan Pesanan</h2>
+          <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">{t('orderSummary')}</h2>
           <div className="flex justify-between items-center text-xs text-gray-600">
-            <span>Produk Dipilih ({selectedItems.length})</span>
+            <span>{t('selectedProducts')} ({selectedItems.length})</span>
             <span className="font-bold text-gray-800">π {totalAmountPi.toFixed(4)}</span>
           </div>
           <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-700">Total Tagihan</span>
+            <span className="text-xs font-bold text-gray-700">{t('totalPayment')}</span>
             <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(4)}</span>
           </div>
 
@@ -141,7 +143,7 @@ export default function CartPage() {
             disabled={selectedItems.length === 0}
             className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50 text-xs"
           >
-            Pilih Alamat Pengiriman ({selectedItems.length}) <ArrowRight className="w-4 h-4" />
+            {t('selectShippingAddress')} ({selectedItems.length}) <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
