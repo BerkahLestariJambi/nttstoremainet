@@ -163,56 +163,51 @@ export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProp
 
   return (
     <>
-      {/* 1. TOMBOL MELAYANG (FLOATING PILL BUTTON + LIVE TIMER) */}
+      {/* 1. TOMBOL MELAYANG DI KANAN TENGAH LAYAR */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 group flex items-center gap-2.5 pl-3 pr-4 py-2.5 rounded-full text-white shadow-2xl border border-yellow-300/60 transition-all duration-300 hover:scale-105 active:scale-95 ${
+        className={`fixed right-0 top-1/2 -translate-y-1/2 z-50 group flex flex-col items-center gap-1.5 px-2.5 py-3 rounded-l-2xl text-white shadow-2xl border-y border-l border-yellow-300/60 transition-all duration-300 hover:pr-3.5 active:scale-95 ${
           isUrgent
-            ? 'bg-gradient-to-r from-red-700 via-red-600 to-orange-600 animate-pulse shadow-red-600/40'
-            : 'bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 shadow-orange-600/40'
+            ? 'bg-gradient-to-b from-red-700 via-red-600 to-orange-600 animate-pulse shadow-red-600/40'
+            : 'bg-gradient-to-b from-amber-600 via-orange-600 to-red-600 shadow-orange-600/40'
         }`}
       >
-        {/* Ikon Petir + Ping Indicator */}
-        <span className="relative flex items-center justify-center w-8 h-8 rounded-full bg-yellow-300 text-red-800 shadow-inner shrink-0">
-          <Zap className="w-4 h-4 fill-red-700 group-hover:rotate-12 transition-transform" />
-          <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+        {/* Ikon Petir + Badge Jumlah Promo */}
+        <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-yellow-300 text-red-800 shadow-inner">
+          <Zap className="w-5 h-5 fill-red-700 group-hover:rotate-12 transition-transform" />
+          <span className="absolute -top-1.5 -left-1.5 flex h-4 min-w-4 items-center justify-center px-1 rounded-full bg-red-700 text-white text-[10px] font-black border border-white shadow">
+            {activeProducts.length}
           </span>
+        </div>
+
+        {/* Label Vertikal */}
+        <span className="text-[10px] font-black uppercase tracking-wider text-yellow-200 leading-none">
+          FLASH
         </span>
 
-        {/* Label & Live Countdown */}
-        <div className="flex flex-col items-start leading-tight">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-black uppercase tracking-wider text-yellow-200">
-              FLASH SALE
-            </span>
-            <span className="text-[10px] font-extrabold bg-white/20 px-1.5 py-0.2 rounded-full">
-              {activeProducts.length}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 font-mono font-black text-xs sm:text-sm mt-0.5">
-            <span className="bg-black/30 px-1.5 py-0.2 rounded">{pad(timeLeft.hours)}</span>
-            <span className="text-yellow-300">:</span>
-            <span className="bg-black/30 px-1.5 py-0.2 rounded">{pad(timeLeft.minutes)}</span>
-            <span className="text-yellow-300">:</span>
-            <span
-              className={`px-1.5 py-0.2 rounded transition-transform duration-200 ${
-                tickPulse ? 'scale-110 bg-yellow-300 text-red-900' : 'bg-black/30 text-white'
-              }`}
-            >
-              {pad(timeLeft.seconds)}
-            </span>
-          </div>
+        {/* Live Countdown Vertikal Ringkas */}
+        <div className="flex flex-col items-center gap-0.5 font-mono font-black text-[11px] leading-none">
+          <span className="bg-black/35 px-1.5 py-1 rounded w-full text-center">
+            {pad(timeLeft.hours)}
+          </span>
+          <span className="bg-black/35 px-1.5 py-1 rounded w-full text-center">
+            {pad(timeLeft.minutes)}
+          </span>
+          <span
+            className={`px-1.5 py-1 rounded w-full text-center transition-transform duration-200 ${
+              tickPulse ? 'scale-110 bg-yellow-300 text-red-900' : 'bg-black/35 text-white'
+            }`}
+          >
+            {pad(timeLeft.seconds)}
+          </span>
         </div>
       </button>
 
       {/* 2. POP-UP DRAWER / MODAL DAFTAR PRODUK FLASH SALE SAAT TOMBOL DIKLIK */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
+          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
           onClick={() => setIsOpen(false)}
         >
           <div
