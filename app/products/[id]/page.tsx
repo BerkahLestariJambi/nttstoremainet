@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ShoppingBag, ArrowLeft, ShieldCheck, Truck, Star, Loader2 } from 'lucide-react';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function ProductDetailPage({
   params,
@@ -13,6 +14,7 @@ export default function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const { t } = useLanguage();
   const resolvedParams = React.use(params);
   const productId = resolvedParams.id;
 
@@ -49,7 +51,7 @@ export default function ProductDetailPage({
       router.push('/cart');
     } catch (err: any) {
       console.error('Gagal menambahkan ke keranjang DB:', err);
-      alert(err.message || 'Gagal menambahkan produk ke keranjang. Silakan pastikan Anda sudah login.');
+      alert(err.message || t('addToCartError'));
     } finally {
       setAdding(false);
     }
@@ -59,7 +61,7 @@ export default function ProductDetailPage({
     return (
       <div className="max-w-5xl mx-auto py-16 text-center text-gray-500 flex flex-col items-center gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-        <p className="text-xs">Memuat detail produk...</p>
+        <p className="text-xs">{t('loadingProductDetail')}</p>
       </div>
     );
   }
@@ -67,10 +69,10 @@ export default function ProductDetailPage({
   if (!product) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Produk Tidak Ditemukan</h2>
-        <p className="text-xs text-gray-500 mb-6">Produk yang Anda cari tidak tersedia atau telah dihapus.</p>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">{t('productNotFound')}</h2>
+        <p className="text-xs text-gray-500 mb-6">{t('productNotFoundDesc')}</p>
         <Link href="/" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition">
-          Kembali ke Katalog
+          {t('backToCatalog')}
         </Link>
       </div>
     );
@@ -82,7 +84,7 @@ export default function ProductDetailPage({
         href="/"
         className="inline-flex items-center gap-2 text-gray-600 hover:text-amber-700 mb-6 font-medium text-sm transition"
       >
-        <ArrowLeft className="w-4 h-4" /> Kembali ke Katalog
+        <ArrowLeft className="w-4 h-4" /> {t('backToCatalog')}
       </Link>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm">
@@ -109,13 +111,13 @@ export default function ProductDetailPage({
                 {product.rating || '4.9'}
               </span>
               <span className="text-gray-400 text-sm">
-                • Stok: {product.stock ?? 10} pcs
+                • {t('stock')}: {product.stock ?? 10} pcs
               </span>
             </div>
 
             <div className="mt-4 p-4 bg-amber-50 rounded-2xl border border-amber-100">
               <p className="text-xs text-amber-700 font-semibold uppercase">
-                Harga Pi Ecosystem
+                {t('piEcosystemPrice')}
               </p>
               <div className="flex items-baseline gap-3 mt-1">
                 <span className="text-3xl font-black text-amber-600">
@@ -130,13 +132,13 @@ export default function ProductDetailPage({
             </div>
 
             <p className="text-gray-600 mt-4 leading-relaxed text-sm">
-              {product.description || 'Produk khas unggulan Nusa Tenggara Timur dengan kualitas terjamin.'}
+              {product.description || t('defaultProductDesc')}
             </p>
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-100">
             <div className="flex items-center gap-4 mb-4">
-              <span className="text-sm font-medium text-gray-700">Jumlah:</span>
+              <span className="text-sm font-medium text-gray-700">{t('quantity')}:</span>
               <div className="flex items-center border rounded-xl overflow-hidden">
                 <button
                   type="button"
@@ -164,21 +166,21 @@ export default function ProductDetailPage({
             >
               {adding ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Menyimpan ke DB...
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t('savingToDb')}
                 </>
               ) : (
                 <>
-                  <ShoppingBag className="w-4 h-4" /> + Masukkan Keranjang
+                  <ShoppingBag className="w-4 h-4" /> + {t('addToCart')}
                 </>
               )}
             </button>
 
             <div className="grid grid-cols-2 gap-4 mt-6 text-xs text-gray-500">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-green-600" /> Transaksi Aman via Pi SDK
+                <ShieldCheck className="w-4 h-4 text-green-600" /> {t('securePiSdk')}
               </div>
               <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-blue-600" /> Pengiriman dari NTT
+                <Truck className="w-4 h-4 text-blue-600" /> {t('shippedFromNtt')}
               </div>
             </div>
           </div>
