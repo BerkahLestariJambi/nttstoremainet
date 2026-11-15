@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -9,11 +8,13 @@ import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
 import { shippingService, BiteshipRate, BiteshipItemPayload } from '@/services/shippingService';
+import { useLanguage } from '@/context/LanguageContext';
 import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id');
   const addressId = searchParams.get('address_id');
@@ -133,16 +134,16 @@ function CheckoutFormContent() {
   const shippingFeePi = selectedRate ? Number(selectedRate.price_pi) : 0;
   const totalAmountPi = subtotalPi + shippingFeePi;
 
-  if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat detail checkout...</div>;
+  if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">{t('loadingCheckoutDetail')}</div>;
 
   if (checkoutItems.length === 0) {
     return (
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Belum Ada Produk Dipilih</h2>
-        <p className="text-xs text-gray-500 mb-6">Silakan pilih produk terlebih dahulu.</p>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">{t('noProductsSelected')}</h2>
+        <p className="text-xs text-gray-500 mb-6">{t('pleaseSelectProductFirst')}</p>
         <Link href="/cart" className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition shadow-md shadow-amber-200">
-          Buka Keranjang
+          {t('openCart')}
         </Link>
       </div>
     );
@@ -151,11 +152,11 @@ function CheckoutFormContent() {
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
       <Link href="/addresses?select=true" className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> Ubah Alamat Pengiriman
+        <ArrowLeft className="w-4 h-4" /> {t('changeShippingAddress')}
       </Link>
 
       <h1 className="text-2xl font-extrabold text-gray-900 mb-6 flex items-center gap-2">
-        <ShoppingBag className="w-7 h-7 text-amber-500" /> Ringkasan & Pembayaran
+        <ShoppingBag className="w-7 h-7 text-amber-500" /> {t('summaryAndPayment')}
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -164,10 +165,10 @@ function CheckoutFormContent() {
           <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-amber-500" /> Alamat Tujuan Pengiriman
+                <MapPin className="w-5 h-5 text-amber-500" /> {t('destinationShippingAddress')}
               </h2>
               <Link href="/addresses?select=true" className="text-xs text-amber-600 font-bold hover:underline">
-                Ubah Alamat
+                {t('changeAddress')}
               </Link>
             </div>
 
@@ -177,7 +178,7 @@ function CheckoutFormContent() {
                   <span className="font-bold text-xs text-gray-900">{address.recipient_name}</span>
                   <span className="text-[10px] bg-white text-gray-600 border border-gray-200 px-2 py-0.5 rounded-full font-semibold">{address.label}</span>
                   {address.is_primary && (
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Utama</span>
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">{t('primaryLabel')}</span>
                   )}
                 </div>
                 <p className="text-xs text-gray-600">{address.phone_number}</p>
@@ -187,9 +188,9 @@ function CheckoutFormContent() {
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-xs text-red-500 font-semibold mb-2">Belum ada alamat pengiriman yang dipilih.</p>
+                <p className="text-xs text-red-500 font-semibold mb-2">{t('noShippingAddressSelected')}</p>
                 <Link href="/addresses?select=true" className="inline-block bg-amber-500 text-white font-bold px-4 py-2 rounded-xl text-xs">
-                  Pilih / Tambah Alamat
+                  {t('selectOrAddAddress')}
                 </Link>
               </div>
             )}
@@ -198,21 +199,21 @@ function CheckoutFormContent() {
           {/* Opsi Jasa Ekspedisi / Kurir Biteship */}
           <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
             <h2 className="text-sm font-bold text-gray-900 mb-4 border-b border-gray-100 pb-3 flex items-center gap-2">
-              <Truck className="w-5 h-5 text-amber-500" /> Opsi Ekspedisi / Kurir Biteship
+              <Truck className="w-5 h-5 text-amber-500" /> {t('courierOptionsTitle')}
             </h2>
 
             {loadingRates ? (
               <div className="py-6 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> Menghitung ongkir real-time Biteship...
+                <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> {t('calculatingShippingRates')}
               </div>
             ) : biteshipRates.length === 0 ? (
               <div className="text-center py-4 text-xs text-gray-500">
                 {!address ? (
                   <p className="text-red-500 font-semibold">
-                    Harap pilih alamat pengiriman terlebih dahulu.
+                    {t('selectAddressFirstHint')}
                   </p>
                 ) : (
-                  <p>Tidak ada opsi kurir yang tersedia untuk area ini.</p>
+                  <p>{t('noCourierAvailable')}</p>
                 )}
               </div>
             ) : (
@@ -240,7 +241,7 @@ function CheckoutFormContent() {
                             {rate.courier_name} - {rate.courier_service_name}
                           </h4>
                           <p className="text-[11px] text-gray-500">{rate.description}</p>
-                          <span className="text-[10px] text-gray-400">Estimasi: {rate.duration}</span>
+                          <span className="text-[10px] text-gray-400">{t('estimatedDelivery')}: {rate.duration}</span>
                         </div>
                       </div>
                       <div className="text-right whitespace-nowrap">
@@ -262,7 +263,7 @@ function CheckoutFormContent() {
         {/* Ringkasan Tagihan & Tombol Pi Payment */}
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
           <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3 flex items-center gap-2">
-            <PackageCheck className="w-5 h-5 text-amber-500" /> Ringkasan Tagihan
+            <PackageCheck className="w-5 h-5 text-amber-500" /> {t('billingSummary')}
           </h2>
 
           <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto pr-1 space-y-2">
@@ -281,17 +282,17 @@ function CheckoutFormContent() {
 
           <div className="space-y-1.5 pt-2 border-t border-gray-100 text-xs text-gray-600">
             <div className="flex justify-between">
-              <span>Subtotal Produk</span>
+              <span>{t('productSubtotal')}</span>
               <span className="font-medium text-gray-800">π {subtotalPi.toFixed(4)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Ongkir ({selectedRate ? `${selectedRate.courier_name} ${selectedRate.courier_service_name}` : '-'})</span>
+              <span>{t('shippingFeeLabel')} ({selectedRate ? `${selectedRate.courier_name} ${selectedRate.courier_service_name}` : '-'})</span>
               <span className="font-medium text-amber-600">π {shippingFeePi.toFixed(6)}</span>
             </div>
           </div>
 
           <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-700">Total Pembayaran</span>
+            <span className="text-xs font-bold text-gray-700">{t('totalPayment')}</span>
             <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(6)}</span>
           </div>
 
@@ -318,7 +319,7 @@ function CheckoutFormContent() {
             />
           ) : (
             <button disabled className="w-full bg-gray-200 text-gray-400 font-bold py-3.5 px-6 rounded-2xl cursor-not-allowed text-xs">
-              {!address ? 'Pilih Alamat Dulu' : 'Pilih Kurir Pengiriman'}
+              {!address ? t('selectAddressBtnDisabled') : t('selectCourierBtnDisabled')}
             </button>
           )}
         </div>
@@ -327,9 +328,14 @@ function CheckoutFormContent() {
   );
 }
 
+function CheckoutSuspenseFallback() {
+  const { t } = useLanguage();
+  return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">{t('loadingCheckout')}</div>;
+}
+
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat checkout...</div>}>
+    <Suspense fallback={<CheckoutSuspenseFallback />}>
       <CheckoutFormContent />
     </Suspense>
   );
