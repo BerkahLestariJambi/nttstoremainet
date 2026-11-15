@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { addressService, UserAddressData } from '@/services/addressService';
 import { shippingService, BiteshipArea } from '@/services/shippingService';
+import { useLanguage } from '@/context/LanguageContext';
 import { ArrowLeft, MapPin, Plus, CheckCircle2, Trash2, ArrowRight, Search, Loader2, Edit3, X } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function AddressListContent() {
   const router = useRouter();
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const isSelectMode = searchParams.get('select') === 'true';
 
@@ -112,7 +114,7 @@ function AddressListContent() {
 
   const resetForm = () => {
     setForm({
-      label: 'Rumah',
+      label: t('defaultAddressLabel'),
       recipient_name: '',
       phone_number: '',
       full_address: '',
@@ -129,7 +131,7 @@ function AddressListContent() {
   const handleStartEdit = (addr: UserAddressData) => {
     setEditingAddress(addr);
     setForm({
-      label: addr.label || 'Rumah',
+      label: addr.label || t('defaultAddressLabel'),
       recipient_name: addr.recipient_name || '',
       phone_number: addr.phone_number || '',
       full_address: addr.full_address || '',
@@ -137,7 +139,7 @@ function AddressListContent() {
       postal_code: addr.postal_code || '',
       area_id: addr.area_id || '',
     });
-    setSelectedAreaName(addr.city ? `${addr.city} (Kode Pos: ${addr.postal_code || '-'})` : '');
+    setSelectedAreaName(addr.city ? `${addr.city} (${t('postalCodeLabel')}: ${addr.postal_code || '-'})` : '');
     setShowForm(true);
   };
 
@@ -146,7 +148,7 @@ function AddressListContent() {
     e.preventDefault();
 
     if (!form.postal_code || form.postal_code === 'undefined') {
-      alert('Kode pos tidak terdeteksi. Silakan pilih lokasi dari hasil pencarian Biteship secara tepat.');
+      alert(t('postalCodeNotDetectedAlert'));
       return;
     }
 
@@ -186,7 +188,7 @@ function AddressListContent() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus alamat ini?')) return;
+    if (!confirm(t('confirmDeleteAddress'))) return;
     try {
       await addressService.deleteAddress(id);
       fetchAddresses();
@@ -200,17 +202,17 @@ function AddressListContent() {
     router.push(`/checkout?address_id=${selectedAddressId}`);
   };
 
-  if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat data alamat...</div>;
+  if (loading) return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">{t('loadingAddresses')}</div>;
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-4 sm:px-6">
       <Link href={isSelectMode ? '/cart' : '/'} className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-amber-600 font-medium mb-6 transition">
-        <ArrowLeft className="w-4 h-4" /> {isSelectMode ? 'Kembali ke Keranjang' : 'Kembali ke Beranda'}
+        <ArrowLeft className="w-4 h-4" /> {isSelectMode ? t('backToCart') : t('backToHome')}
       </Link>
 
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-          <MapPin className="w-7 h-7 text-amber-500" /> {isSelectMode ? 'Pilih Alamat Pengiriman' : 'Daftar Alamat Saya'}
+          <MapPin className="w-7 h-7 text-amber-500" /> {isSelectMode ? t('selectShippingAddress') : t('myAddressesTitle')}
         </h1>
         <button
           onClick={() => {
@@ -220,7 +222,7 @@ function AddressListContent() {
           className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-200"
         >
           {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Batal' : 'Tambah Alamat'}
+          {showForm ? t('cancel') : t('addAddressBtn')}
         </button>
       </div>
 
@@ -228,15 +230,15 @@ function AddressListContent() {
       {showForm && (
         <form onSubmit={handleSubmitForm} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm mb-6 space-y-4 relative">
           <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">
-            {editingAddress ? 'Edit Alamat Pengiriman' : 'Tambah Alamat (Biteship Location Verified)'}
+            {editingAddress ? t('editAddressTitle') : t('addVerifiedAddressTitle')}
           </h2>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Label Alamat</label>
+              <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">{t('addressLabelField')}</label>
               <input
                 type="text"
-                placeholder="Rumah / Kantor"
+                placeholder={t('addressLabelPlaceholder')}
                 required
                 value={form.label}
                 onChange={(e) => setForm({ ...form, label: e.target.value })}
@@ -244,10 +246,10 @@ function AddressListContent() {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Nama Penerima *</label>
+              <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">{t('recipientName')} *</label>
               <input
                 type="text"
-                placeholder="Nama Lengkap"
+                placeholder={t('recipientNamePlaceholder')}
                 required
                 value={form.recipient_name}
                 onChange={(e) => setForm({ ...form, recipient_name: e.target.value })}
@@ -257,7 +259,7 @@ function AddressListContent() {
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Nomor Telepon / WA *</label>
+            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">{t('phoneNumber')} *</label>
             <input
               type="tel"
               placeholder="081234567890"
@@ -269,11 +271,11 @@ function AddressListContent() {
           </div>
 
           <div className="relative">
-            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Cari Kecamatan / Kota / Kode Pos (Biteship API) *</label>
+            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">{t('searchAreaBiteshipLabel')} *</label>
             <div className="relative">
               <input
                 type="text"
-                placeholder="Ketik min 3 karakter, misal: Kupang, Oebobo, 85111..."
+                placeholder={t('searchAreaBiteshipPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full p-3 pl-9 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
@@ -292,7 +294,7 @@ function AddressListContent() {
                   >
                     <p className="font-semibold text-gray-900">{area.name}</p>
                     <span className="text-[10px] text-gray-500">
-                      Kode Pos: {area.postal_code || area.postalCode || 'Tersedia'}
+                      {t('postalCodeLabel')}: {area.postal_code || area.postalCode || t('availableLabel')}
                     </span>
                   </div>
                 ))}
@@ -301,17 +303,17 @@ function AddressListContent() {
 
             {selectedAreaName && (
               <div className="mt-2 p-2.5 bg-green-50 border border-green-200 rounded-xl text-xs text-green-800">
-                <span className="font-bold">Lokasi Terpilih:</span> {selectedAreaName}{' '}
-                {form.postal_code && form.postal_code !== 'undefined' ? `(Kode Pos: ${form.postal_code})` : ''}
+                <span className="font-bold">{t('selectedLocationLabel')}:</span> {selectedAreaName}{' '}
+                {form.postal_code && form.postal_code !== 'undefined' ? `(${t('postalCodeLabel')}: ${form.postal_code})` : ''}
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Alamat Detail (Jalan, No. Rumah, RT/RW) *</label>
+            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">{t('detailAddressLabel')} *</label>
             <textarea
               rows={2}
-              placeholder="Jl. El Tari No. 12, RT 01 / RW 02..."
+              placeholder={t('detailAddressPlaceholder')}
               required
               value={form.full_address}
               onChange={(e) => setForm({ ...form, full_address: e.target.value })}
@@ -325,10 +327,10 @@ function AddressListContent() {
               onClick={resetForm}
               className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700"
             >
-              Batal
+              {t('cancel')}
             </button>
             <button type="submit" className="px-5 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md hover:bg-amber-600 transition">
-              {editingAddress ? 'Perbarui Alamat' : 'Simpan Alamat Terverifikasi'}
+              {editingAddress ? t('updateAddressBtn') : t('saveVerifiedAddressBtn')}
             </button>
           </div>
         </form>
@@ -338,9 +340,9 @@ function AddressListContent() {
       {addresses.length === 0 && !showForm ? (
         <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 p-6">
           <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Belum ada alamat tersimpan.</p>
+          <p className="text-sm font-semibold text-gray-600">{t('noSavedAddresses')}</p>
           <button onClick={() => setShowForm(true)} className="mt-3 text-xs text-amber-600 font-bold underline">
-            Tambah Alamat Sekarang
+            {t('addAddressNow')}
           </button>
         </div>
       ) : (
@@ -358,7 +360,7 @@ function AddressListContent() {
                   <span className="font-bold text-sm text-gray-900">{addr.recipient_name}</span>
                   <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-semibold">{addr.label}</span>
                   {addr.is_primary && (
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">Utama</span>
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">{t('primaryLabel')}</span>
                   )}
                 </div>
 
@@ -369,7 +371,7 @@ function AddressListContent() {
                       e.stopPropagation();
                       handleStartEdit(addr);
                     }}
-                    title="Edit Alamat"
+                    title={t('editAddressTitle')}
                     className="text-gray-400 hover:text-amber-600 transition p-1"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -383,7 +385,7 @@ function AddressListContent() {
                       }}
                       className="text-[10px] text-amber-600 font-bold hover:underline"
                     >
-                      Jadikan Utama
+                      {t('setAsPrimary')}
                     </button>
                   )}
                   <button
@@ -391,7 +393,7 @@ function AddressListContent() {
                       e.stopPropagation();
                       handleDelete(addr.id);
                     }}
-                    title="Hapus Alamat"
+                    title={t('deleteAddressTitle')}
                     className="text-gray-400 hover:text-red-500 transition p-1"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -401,7 +403,7 @@ function AddressListContent() {
 
               <p className="text-xs font-semibold text-gray-700">{addr.phone_number}</p>
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                {addr.full_address} {addr.city && `, ${addr.city}`} {addr.postal_code && `(Kode Pos: ${addr.postal_code})`}
+                {addr.full_address} {addr.city && `, ${addr.city}`} {addr.postal_code && `(${t('postalCodeLabel')}: ${addr.postal_code})`}
               </p>
 
               {isSelectMode && selectedAddressId === addr.id && (
@@ -421,7 +423,7 @@ function AddressListContent() {
             disabled={!selectedAddressId}
             className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50 text-xs"
           >
-            Lanjut ke Checkout Pembayaran <ArrowRight className="w-4 h-4" />
+            {t('proceedToCheckoutPayment')} <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -429,9 +431,14 @@ function AddressListContent() {
   );
 }
 
+function AddressSuspenseFallback() {
+  const { t } = useLanguage();
+  return <div className="max-w-2xl mx-auto p-8 text-center text-gray-500">{t('loadingAddressPage')}</div>;
+}
+
 export default function AddressPage() {
   return (
-    <Suspense fallback={<div className="max-w-2xl mx-auto p-8 text-center text-gray-500">Memuat halaman alamat...</div>}>
+    <Suspense fallback={<AddressSuspenseFallback />}>
       <AddressListContent />
     </Suspense>
   );
