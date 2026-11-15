@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { useCart } from '@/context/CartContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Package, ShoppingBag, ShoppingCart, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -24,6 +25,7 @@ interface Product {
 export default function ProductGrid() {
   const router = useRouter();
   const { addToCart: addToLocalCart } = useCart();
+  const { t } = useLanguage();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -45,12 +47,12 @@ export default function ProductGrid() {
       })
       .catch((err) => {
         console.error('Gagal mengambil data produk:', err);
-        setError('Gagal memuat produk dari server.');
+        setError(t('loadProductsError'));
       })
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [t]);
 
   const getFullImageUrl = (url: string | null) => {
     if (!url || typeof url !== 'string' || url.trim() === '') return '';
@@ -97,15 +99,15 @@ export default function ProductGrid() {
       });
 
       Swal.fire({
-        title: 'Berhasil!',
-        text: 'Produk berhasil ditambahkan ke keranjang.',
+        title: t('successTitle'),
+        text: t('addedToCart'),
         icon: 'success',
         timer: 1500,
         showConfirmButton: false,
       });
     } catch (err: any) {
       console.error('Gagal menambahkan ke keranjang:', err);
-      Swal.fire('Gagal', err.message || 'Gagal menambahkan produk ke keranjang.', 'error');
+      Swal.fire(t('failedTitle'), err.message || t('addToCartError'), 'error');
     } finally {
       setAddingCartId(null);
     }
@@ -135,7 +137,7 @@ export default function ProductGrid() {
       router.push('/cart');
     } catch (err: any) {
       console.error('Gagal memproses Beli Langsung:', err);
-      Swal.fire('Gagal', 'Terjadi kesalahan saat memproses pembelian.', 'error');
+      Swal.fire(t('failedTitle'), t('buyNowError'), 'error');
     } finally {
       setBuyingId(null);
     }
@@ -162,7 +164,7 @@ export default function ProductGrid() {
   if (products.length === 0) {
     return (
       <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-2xl">
-        Belum ada produk yang tersedia.
+        {t('noProductsFound')}
       </div>
     );
   }
@@ -194,12 +196,12 @@ export default function ProductGrid() {
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 z-0">
                   <Package className="w-8 h-8 mb-1 opacity-50" />
-                  <span className="text-[10px] text-gray-400">Tidak Ada Gambar</span>
+                  <span className="text-[10px] text-gray-400">{t('noImage')}</span>
                 </div>
               </div>
 
               <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-full inline-block">
-                {product.seller?.store_name || 'Penjual NTT'}
+                {product.seller?.store_name || t('defaultSellerName')}
               </span>
               <h3 className="font-bold text-gray-900 mt-1.5 line-clamp-1 text-sm">
                 {product.name}
@@ -222,7 +224,7 @@ export default function ProductGrid() {
                   type="button"
                   disabled={isAddingThis || isBuyingThis}
                   onClick={() => handleAddToCart(product)}
-                  title="Tambah ke Keranjang"
+                  title={t('addToCart')}
                   className="bg-amber-100 hover:bg-amber-200 text-amber-800 p-2 rounded-xl transition flex items-center justify-center disabled:opacity-50"
                 >
                   {isAddingThis ? (
@@ -236,7 +238,7 @@ export default function ProductGrid() {
                   href={`/products/${product.slug}`}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-2 rounded-xl transition text-center flex-1"
                 >
-                  Detail
+                  {t('viewDetails')}
                 </Link>
 
                 <button
@@ -250,7 +252,7 @@ export default function ProductGrid() {
                   ) : (
                     <ShoppingBag className="w-3.5 h-3.5" />
                   )}
-                  <span>Beli</span>
+                  <span>{t('buyShort')}</span>
                 </button>
               </div>
             </div>
