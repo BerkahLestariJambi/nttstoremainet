@@ -111,7 +111,7 @@ export default function ProductDetailPage({
                 {product.rating || '4.9'}
               </span>
               <span className="text-gray-400 text-sm">
-                • {t('stock')}: {product.stock ?? 10} pcs
+                • {t('stock')}: {product.sisa_stock ?? 10} pcs
               </span>
             </div>
 
