@@ -244,6 +244,7 @@ export default function ProductsPage() {
               {t('allCategories')}
             </button>
             {categories.map((cat) => (
+            
               <button
                 key={cat}
                 type="button"
@@ -263,6 +264,8 @@ export default function ProductsPage() {
 
       {/* Konten Daftar Produk */}
       {loading ? (
+      
+               <FlashSaleBanner />
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
             <div key={n} className="bg-gray-100 animate-pulse h-72 rounded-2xl"></div>
@@ -380,7 +383,6 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
-               <FlashSaleBanner />
             );
           })}
         </div>
