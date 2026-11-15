@@ -19,9 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           src="https://sdk.minepi.com/pi-sdk.js" 
           strategy="beforeInteractive"
         />
+         <LanguageProvider>
       </head>
       <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased pb-24 md:pb-0">
-        <LanguageProvider>
+       
           <CartProvider>
             {/* Header & Menu Utama */}
             <Navbar />
