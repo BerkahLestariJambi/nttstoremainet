@@ -5,7 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { sellerService } from '@/services/sellerService';
 import { useLanguage } from '@/context/LanguageContext';
-import { ArrowLeft, Store, CheckCircle2, AlertCircle, Edit3, Package, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Store,
+  CheckCircle2,
+  AlertCircle,
+  Edit3,
+  Package,
+  Loader2,
+  Clock,
+} from 'lucide-react';
 
 export default function RegisterSellerPage() {
   const router = useRouter();
@@ -13,7 +22,7 @@ export default function RegisterSellerPage() {
 
   const [checkingStatus, setCheckingStatus] = useState<boolean>(true);
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
-  const [sellerId, setSellerId] = useState<number | null>(null);
+  const [sellerStatus, setSellerStatus] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -25,37 +34,49 @@ export default function RegisterSellerPage() {
     address: '',
   });
 
-  // Cek apakah user sudah memiliki profil seller saat halaman dibuka
   useEffect(() => {
     const checkExistingSeller = async () => {
       setCheckingStatus(true);
       try {
-        // Mendukung method getProfile / getMyStore / getDashboard dari sellerService
-        const serviceAny = sellerService as any;
-        const fetcher =
-          serviceAny.getProfile ||
-          serviceAny.getMyStore ||
-          serviceAny.getDashboard ||
-          serviceAny.getSellerProfile;
+        const res: any = await sellerService.getStatus();
 
-        if (typeof fetcher === 'function') {
-          const res: any = await fetcher.call(sellerService);
-          const sellerData = res?.seller || res?.store || res?.data?.seller || res?.data || res;
+        // Ekstrak payload dari berbagai kemungkinan struktur JSON Laravel (/seller/status)
+        const root = res?.data && typeof res.data === 'object' && !Array.isArray(res.data) ? res.data : res;
+        const sellerObj =
+          root?.seller ||
+          root?.store ||
+          root?.data ||
+          (root?.store_name || root?.id ? root : null);
 
-          if (sellerData && (sellerData.id || sellerData.store_name)) {
-            setIsRegistered(true);
-            setSellerId(sellerData.id || null);
-            setFormData({
-              store_name: sellerData.store_name || sellerData.name || '',
-              store_description: sellerData.store_description || sellerData.description || '',
-              phone_number: sellerData.phone_number || sellerData.phone || '',
-              address: sellerData.address || sellerData.city || '',
-            });
-          }
+        const rawStatus = String(
+          root?.status ||
+            sellerObj?.status ||
+            root?.seller_status ||
+            (root?.is_approved || sellerObj?.is_approved ? 'approved' : '')
+        ).toLowerCase();
+
+        const alreadyExists = Boolean(
+          root?.is_seller === true ||
+            root?.registered === true ||
+            root?.has_store === true ||
+            sellerObj?.store_name ||
+            sellerObj?.id ||
+            ['approved', 'active', 'verified', 'pending', 'review'].includes(rawStatus)
+        );
+
+        if (alreadyExists) {
+          setIsRegistered(true);
+          setSellerStatus(rawStatus || 'approved');
+          setFormData({
+            store_name: sellerObj?.store_name || sellerObj?.name || '',
+            store_description: sellerObj?.store_description || sellerObj?.description || '',
+            phone_number: sellerObj?.phone_number || sellerObj?.phone || '',
+            address: sellerObj?.address || sellerObj?.city || '',
+          });
         }
       } catch (err) {
-        // Jika 404 / belum terdaftar sebagai seller, tetap dalam mode pendaftaran baru
-        console.log('User belum terdaftar sebagai seller:', err);
+        // Jika 404 atau user belum mendaftar seller, biarkan mode daftar baru
+        console.log('Belum terdaftar sebagai seller:', err);
         setIsRegistered(false);
       } finally {
         setCheckingStatus(false);
@@ -81,40 +102,39 @@ export default function RegisterSellerPage() {
     setSuccessMessage(null);
 
     try {
-      const serviceAny = sellerService as any;
-
       if (isRegistered) {
         // MODE UPDATE DATA TOKO
-        const updater =
-          serviceAny.updateStore ||
-          serviceAny.updateProfile ||
-          serviceAny.update ||
-          serviceAny.register;
+        let res: any;
+        try {
+          res = await sellerService.updateStore(formData);
+        } catch {
+          // Fallback jika backend Laravel memakai POST /seller/register untuk upsert
+          res = await sellerService.register(formData);
+        }
 
-        const payload = sellerId ? { ...formData, id: sellerId } : formData;
-        const res = await updater.call(sellerService, payload);
-
-        if (res?.success || res?.message || res?.data) {
+        if (res?.success || res?.message || res?.data || res) {
           setSuccessMessage(t('storeUpdateSuccessMsg'));
         }
       } else {
         // MODE PENDAFTARAN TOKO BARU
-        const res = await sellerService.register(formData);
+        const res: any = await sellerService.register(formData);
 
-        if (res.success || res.message) {
+        if (res?.success || res?.message || res?.data) {
           alert(t('sellerRegisterSuccessAlert'));
           router.push('/seller/products/create');
         }
       }
     } catch (err: any) {
       setErrorMessage(
-        err.message ||
+        err?.message ||
           (isRegistered ? t('storeUpdateFailedError') : t('sellerRegisterFailedError'))
       );
     } finally {
       setLoading(false);
     }
   };
+
+  const isPending = sellerStatus === 'pending' || sellerStatus === 'review';
 
   if (checkingStatus) {
     return (
@@ -136,7 +156,7 @@ export default function RegisterSellerPage() {
           {isRegistered ? t('backToSellerDashboard') : t('backToHome')}
         </Link>
 
-        {isRegistered && (
+        {isRegistered && !isPending && (
           <Link
             href="/seller/products/create"
             className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 px-3.5 py-2 rounded-xl transition"
@@ -149,11 +169,32 @@ export default function RegisterSellerPage() {
       <div className="bg-white border border-gray-100 rounded-3xl p-6 sm:p-10 shadow-sm">
         {/* Banner Status jika sudah terdaftar */}
         {isRegistered && (
-          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3 text-emerald-800 text-xs sm:text-sm">
-            <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600" />
+          <div
+            className={`mb-6 p-4 rounded-2xl flex items-start gap-3 text-xs sm:text-sm border ${
+              isPending
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {isPending ? (
+              <Clock className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600" />
+            )}
             <div>
-              <p className="font-bold">{t('storeAlreadyRegisteredBadge')}</p>
-              <p className="text-emerald-700 mt-0.5">{t('storeUpdateOnlyHint')}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-bold">{t('storeAlreadyRegisteredBadge')}</p>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full text-white ${
+                    isPending ? 'bg-amber-600' : 'bg-emerald-600'
+                  }`}
+                >
+                  {sellerStatus || 'approved'}
+                </span>
+              </div>
+              <p className={`mt-1 ${isPending ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {t('storeUpdateOnlyHint')}
+              </p>
             </div>
           </div>
         )}
