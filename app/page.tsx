@@ -8,7 +8,6 @@ import { useLanguage } from '@/context/LanguageContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
 
-
 declare global {
   interface Window {
     Pi: any;
