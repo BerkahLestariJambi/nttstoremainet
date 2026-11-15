@@ -7,7 +7,6 @@ export interface SellerRegisterInput {
   address: string;
 }
 
-
 export const sellerService = {
   register: (data: SellerRegisterInput) =>
     apiClient('/seller/register', {
@@ -16,4 +15,10 @@ export const sellerService = {
     }),
 
   getStatus: () => apiClient('/seller/status'),
+
+  updateStore: (data: SellerRegisterInput) =>
+    apiClient('/seller/update', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
