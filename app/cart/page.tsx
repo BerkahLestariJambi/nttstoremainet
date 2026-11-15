@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cartService, CartItemData } from '@/services/cartService';
+import { getEffectivePricePi } from '@/services/productService';
 import { useLanguage } from '@/context/LanguageContext';
-import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckSquare, Square } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckSquare, Square, Zap } from 'lucide-react';
 
 export default function CartPage() {
   const router = useRouter();
@@ -59,11 +60,23 @@ export default function CartPage() {
     }
   };
 
+  const resolveUnitPrice = (item: any): number => {
+    if (Number(item?.effective_price_pi) > 0) {
+      return Number(item.effective_price_pi);
+    }
+    return getEffectivePricePi(item?.product || item);
+  };
+
   const selectedItems = cartItems.filter((i) => i.selected);
   const totalAmountPi = selectedItems.reduce(
-    (sum, i) => sum + Number(i.product?.price_pi || 0) * i.quantity,
+    (sum, i) => sum + resolveUnitPrice(i) * i.quantity,
     0
   );
+  const totalSavingsPi = selectedItems.reduce((sum, i: any) => {
+    const basePrice = Number(i.product?.price_pi ?? i.original_price_pi ?? 0);
+    const effectivePrice = resolveUnitPrice(i);
+    return effectivePrice < basePrice ? sum + (basePrice - effectivePrice) * i.quantity : sum;
+  }, 0);
 
   const handleProceedToCheckout = () => {
     if (selectedItems.length === 0) return;
@@ -99,32 +112,55 @@ export default function CartPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-4">
-          {cartItems.map((item) => (
-            <div key={item.id} className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-              <button onClick={() => handleToggleSelect(item)} className="text-amber-500">
-                {item.selected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-300" />}
-              </button>
+          {cartItems.map((item: any) => {
+            const basePrice = Number(item.product?.price_pi ?? item.original_price_pi ?? 0);
+            const effectivePrice = resolveUnitPrice(item);
+            const isPromo = effectivePrice > 0 && effectivePrice < basePrice;
 
-              <div className="flex-1">
-                <h3 className="font-bold text-gray-800 text-sm">{item.product?.name}</h3>
-                <p className="text-xs font-semibold text-amber-600 mt-0.5">π {item.product?.price_pi}</p>
-              </div>
-
-              <div className="flex items-center border border-gray-200 rounded-xl px-2 py-1 gap-3">
-                <button onClick={() => handleUpdateQty(item, -1)} className="text-gray-500 hover:text-amber-600">
-                  <Minus className="w-3.5 h-3.5" />
+            return (
+              <div key={item.id} className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                <button onClick={() => handleToggleSelect(item)} className="text-amber-500">
+                  {item.selected ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5 text-gray-300" />}
                 </button>
-                <span className="text-xs font-bold text-gray-800">{item.quantity}</span>
-                <button onClick={() => handleUpdateQty(item, 1)} className="text-gray-500 hover:text-amber-600">
-                  <Plus className="w-3.5 h-3.5" />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-bold text-gray-800 text-sm truncate">{item.product?.name}</h3>
+                    {isPromo && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full shrink-0">
+                        <Zap className="w-2.5 h-2.5 fill-red-600" /> PROMO
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <p className={`text-xs font-bold ${isPromo ? 'text-red-600' : 'text-amber-600'}`}>
+                      π {effectivePrice}
+                    </p>
+                    {isPromo && (
+                      <span className="text-[11px] text-gray-400 line-through">
+                        π {basePrice}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center border border-gray-200 rounded-xl px-2 py-1 gap-3">
+                  <button onClick={() => handleUpdateQty(item, -1)} className="text-gray-500 hover:text-amber-600">
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-xs font-bold text-gray-800">{item.quantity}</span>
+                  <button onClick={() => handleUpdateQty(item, 1)} className="text-gray-500 hover:text-amber-600">
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <button onClick={() => handleRemove(item.id)} className="text-gray-400 hover:text-red-500 transition">
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-
-              <button onClick={() => handleRemove(item.id)} className="text-gray-400 hover:text-red-500 transition">
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-4 h-fit">
@@ -133,6 +169,12 @@ export default function CartPage() {
             <span>{t('selectedProducts')} ({selectedItems.length})</span>
             <span className="font-bold text-gray-800">π {totalAmountPi.toFixed(4)}</span>
           </div>
+          {totalSavingsPi > 0 && (
+            <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold">
+              <span>Hemat Promo</span>
+              <span>- π {totalSavingsPi.toFixed(4)}</span>
+            </div>
+          )}
           <div className="border-t border-gray-100 pt-3 flex justify-between items-center">
             <span className="text-xs font-bold text-gray-700">{t('totalPayment')}</span>
             <span className="text-base font-extrabold text-amber-600">π {totalAmountPi.toFixed(4)}</span>
