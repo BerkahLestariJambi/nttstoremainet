@@ -198,7 +198,7 @@ export default function ProductsPage() {
         pricePi: effectivePrice,
         image: product.image_url,
         description: product.description,
-        stock: product.stock ?? 10,
+        stock: product.sisa_stock ?? 10,
         rating: 5,
       });
 
@@ -373,7 +373,7 @@ export default function ProductsPage() {
                     </div>
                     {typeof product.stock === 'number' && (
                       <span className="text-[11px] text-gray-400 shrink-0">
-                        {t('stock')}: {product.stock}
+                        {t('stock')}: {product.sisa_stock}
                       </span>
                     )}
                   </div>
