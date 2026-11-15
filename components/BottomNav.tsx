@@ -4,9 +4,11 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, ClipboardList, Store, MessageCircle, User } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { t } = useLanguage();
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
@@ -25,7 +27,7 @@ export default function BottomNav() {
           }`}
         >
           <Home className={`w-5 h-5 ${isActive('/') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-          <span className="text-[10px] font-bold mt-1">Home</span>
+          <span className="text-[10px] font-bold mt-1">{t('navHome')}</span>
         </Link>
 
         {/* 2. Menu Order */}
@@ -38,14 +40,14 @@ export default function BottomNav() {
           <ClipboardList
             className={`w-5 h-5 ${isActive('/orders') ? 'stroke-[2.5px]' : 'stroke-2'}`}
           />
-          <span className="text-[10px] font-bold mt-1">Order</span>
+          <span className="text-[10px] font-bold mt-1">{t('navOrders')}</span>
         </Link>
 
         {/* 3. Menu Store (Tengah - Daftar Toko Terdaftar) */}
         <div className="relative -top-5 flex flex-col items-center">
           <Link
             href="/stores"
-            aria-label="Daftar Toko Terdaftar"
+            aria-label={t('storeDirectoryTitle')}
             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border-4 border-white transition transform active:scale-95 ${
               isActive('/stores')
                 ? 'bg-purple-700 text-white shadow-purple-200'
@@ -59,7 +61,7 @@ export default function BottomNav() {
               isActive('/stores') ? 'text-purple-700' : 'text-amber-600'
             }`}
           >
-            Store
+            {t('navStores')}
           </span>
         </div>
 
@@ -73,7 +75,7 @@ export default function BottomNav() {
           <MessageCircle
             className={`w-5 h-5 ${isActive('/chat') ? 'stroke-[2.5px]' : 'stroke-2'}`}
           />
-          <span className="text-[10px] font-bold mt-1">Chat</span>
+          <span className="text-[10px] font-bold mt-1">{t('navChat')}</span>
         </Link>
 
         {/* 5. Menu Account */}
@@ -84,7 +86,7 @@ export default function BottomNav() {
           }`}
         >
           <User className={`w-5 h-5 ${isActive('/account') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
-          <span className="text-[10px] font-bold mt-1">Account</span>
+          <span className="text-[10px] font-bold mt-1">{t('navProfile')}</span>
         </Link>
 
       </div>
