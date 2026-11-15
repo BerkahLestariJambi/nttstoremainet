@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  ShoppingBag, 
   UserCheck, 
   Wallet, 
   PackagePlus, 
@@ -20,13 +19,12 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 export default function Navbar() {
   const router = useRouter();
-  // 1. Ambil totalItems dan fetchCart langsung dari CartContext
-  const { cart, totalItems, piUser, setPiUser, fetchCart } = useCart();
+  const { piUser, setPiUser, fetchCart } = useCart();
   const { t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 2. Refresh data keranjang saat komponen Navbar dipasang
+  // Refresh data keranjang agar badge di BottomNav tetap sinkron
   useEffect(() => {
     if (fetchCart) {
       fetchCart();
@@ -51,11 +49,6 @@ export default function Navbar() {
     router.push('/');
   };
 
-  // Gunakan totalItems dari context (fallback hitung manual jika undefined)
-  const itemBadgeCount = typeof totalItems === 'number' 
-    ? totalItems 
-    : (Array.isArray(cart) ? cart.reduce((acc, item) => acc + (item.quantity || 0), 0) : 0);
-
   return (
     <nav className="bg-white border-b sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
@@ -65,7 +58,7 @@ export default function Navbar() {
           NTTStore<span className="text-purple-600">Pi</span>
         </Link>
 
-        {/* Action Area (Kanan Atas) */}
+        {/* Action Area (Kanan Atas: User Status + Pemilih 5 Bahasa) */}
         <div className="flex items-center gap-2 sm:gap-3">
           
           {/* Indikator Status User Pi + Dropdown Menu */}
@@ -148,16 +141,6 @@ export default function Navbar() {
               <span>Pi Browser</span>
             </div>
           )}
-
-          {/* Keranjang Belanja -> Arahkan ke /cart dan Tampilkan Badge Sesuai Isi DB */}
-          <Link href="/cart" className="relative p-2 text-gray-700 hover:text-purple-700 transition">
-            <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
-            {itemBadgeCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-amber-600 text-white text-[10px] font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center">
-                {itemBadgeCount}
-              </span>
-            )}
-          </Link>
 
           {/* Pemilih 5 Bahasa di Header Paling Atas Kanan */}
           <LanguageSwitcher />
