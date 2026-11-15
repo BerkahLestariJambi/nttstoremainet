@@ -3,17 +3,24 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ClipboardList, Store, MessageCircle, User } from 'lucide-react';
+import { Home, ClipboardList, Store, ShoppingBag, User } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { useCart } from '@/context/CartContext';
 
 export default function BottomNav() {
   const pathname = usePathname();
   const { t } = useLanguage();
+  const { cart, totalItems } = useCart();
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
     return pathname.startsWith(path);
   };
+
+  // Hitung badge keranjang dari CartContext
+  const itemBadgeCount = typeof totalItems === 'number'
+    ? totalItems
+    : (Array.isArray(cart) ? cart.reduce((acc, item) => acc + (item.quantity || 0), 0) : 0);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)]">
@@ -65,27 +72,34 @@ export default function BottomNav() {
           </span>
         </div>
 
-        {/* 4. Menu Chat */}
+        {/* 4. Menu Cart (Pindahan dari Header Kanan Atas) */}
         <Link
-          href="/chat"
-          className={`flex flex-col items-center justify-center w-14 h-full transition ${
-            isActive('/chat') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+          href="/cart"
+          className={`relative flex flex-col items-center justify-center w-14 h-full transition ${
+            isActive('/cart') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          <MessageCircle
-            className={`w-5 h-5 ${isActive('/chat') ? 'stroke-[2.5px]' : 'stroke-2'}`}
-          />
-          <span className="text-[10px] font-bold mt-1">{t('navChat')}</span>
+          <div className="relative">
+            <ShoppingBag
+              className={`w-5 h-5 ${isActive('/cart') ? 'stroke-[2.5px]' : 'stroke-2'}`}
+            />
+            {itemBadgeCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 bg-amber-600 text-white text-[9px] font-extrabold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-xs">
+                {itemBadgeCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] font-bold mt-1">{t('navCart')}</span>
         </Link>
 
-        {/* 5. Menu Account */}
+        {/* 5. Menu Account (Berisi Chat di dalamnya) */}
         <Link
           href="/account"
           className={`flex flex-col items-center justify-center w-14 h-full transition ${
-            isActive('/account') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
+            isActive('/account') || isActive('/chat') ? 'text-amber-600' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          <User className={`w-5 h-5 ${isActive('/account') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
+          <User className={`w-5 h-5 ${isActive('/account') || isActive('/chat') ? 'stroke-[2.5px]' : 'stroke-2'}`} />
           <span className="text-[10px] font-bold mt-1">{t('navProfile')}</span>
         </Link>
 
