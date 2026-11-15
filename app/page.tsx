@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useCart } from '@/context/CartContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
 
@@ -17,6 +19,7 @@ const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
 
 export default function HomePage() {
   const { piUser, setPiUser } = useCart();
+  const { t } = useLanguage();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -117,26 +120,31 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
+      {/* Pemilih 5 Bahasa */}
+      <div className="flex justify-end">
+        <LanguageSwitcher />
+      </div>
+
       {/* Hero Banner */}
       <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
         <div className="max-w-3xl space-y-4">
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? 'Pi Browser Native' : 'Pi Sign-in OAuth Mode'}
+            {isPiBrowser ? t('piBrowserNative') : t('piOauthMode')}
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
-            Selamat Datang di NTTStore<span className="text-yellow-400">Pi TestNet</span>
+            {t('welcomeTitle')}<span className="text-yellow-400">Pi TestNet</span>
           </h1>
 
           <p className="text-lg opacity-90 leading-relaxed">
-            Pusat belanja produk khas NTT — Tenun Ikat, Kopi Flores, & Hasil Alam menggunakan Pi Coin (π).
+            {t('heroSubtitle')}
           </p>
 
           <div className="pt-4 flex flex-wrap gap-4 items-center">
             {piUser ? (
               <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-3 rounded-2xl font-medium">
                 <CheckCircle2 className="w-5 h-5 text-green-400" />
-                <span>Terhubung sebagai <strong>@{piUser.username}</strong></span>
+                <span>{t('connectedAs')} <strong>@{piUser.username}</strong></span>
               </div>
             ) : (
               <button
@@ -146,7 +154,7 @@ export default function HomePage() {
                 className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
               >
                 {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
-                {loading ? 'Mengalihkan...' : isPiBrowser ? 'Hubungkan Pi Wallet' : 'Sign in with Pi'}
+                {loading ? t('redirecting') : isPiBrowser ? t('connectPiWallet') : t('signInWithPi')}
               </button>
             )}
 
@@ -154,13 +162,13 @@ export default function HomePage() {
               href="/products"
               className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
             >
-              Jelajahi Produk
+              {t('exploreProducts')}
             </Link>
           </div>
 
           {!isPiBrowser && !piUser && (
             <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> Menggunakan Browser Luar? Klik <strong>Sign in with Pi</strong> untuk masuk.
+              <AlertCircle className="w-4 h-4" /> {t('externalBrowserHint')}
             </div>
           )}
         </div>
@@ -168,7 +176,7 @@ export default function HomePage() {
 
       {/* Katalog Produk Unggulan */}
       <section>
-        <h2 className="text-2xl font-bold mb-6 text-gray-900">Produk Unggulan NTT</h2>
+        <h2 className="text-2xl font-bold mb-6 text-gray-900">{t('featuredProducts')}</h2>
         <ProductGrid />
       </section>
     </div>
