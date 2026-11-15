@@ -5,6 +5,7 @@ export interface Category {
   name: string;
   slug?: string;
 }
+
 export interface Product {
   id: number;
   name: string;
@@ -39,6 +40,41 @@ export interface Product {
     store_name?: string;
   };
   category?: Category;
+}
+
+/**
+ * Helper menghitung harga efektif produk (otomatis memakai harga diskon / Flash Sale jika masih aktif)
+ */
+export function getEffectivePricePi(product: any): number {
+  if (!product) return 0;
+
+  const basePrice = Number(product.price_pi ?? product.price ?? 0);
+  const discountPrice = Number(product.discount_price_pi ?? 0);
+
+  if (product.is_promo_active === true && Number(product.effective_price_pi) > 0) {
+    return Number(product.effective_price_pi);
+  }
+
+  if (discountPrice > 0 && discountPrice < basePrice) {
+    if (product.is_flash_sale && product.flash_sale_ends_at) {
+      const isExpired = new Date(product.flash_sale_ends_at).getTime() <= Date.now();
+      if (isExpired) return basePrice;
+    }
+
+    const soldCount = Number(product.sold ?? product.sold_count ?? 0);
+    if (
+      product.is_flash_sale &&
+      product.flash_sale_quota !== null &&
+      product.flash_sale_quota !== undefined &&
+      soldCount >= Number(product.flash_sale_quota)
+    ) {
+      return basePrice;
+    }
+
+    return discountPrice;
+  }
+
+  return basePrice;
 }
 
 export const productService = {
