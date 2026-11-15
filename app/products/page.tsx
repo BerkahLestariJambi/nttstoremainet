@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { productService } from '@/services/productService';
+import { productService, getEffectivePricePi } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -16,6 +16,7 @@ import {
   Loader2,
   ArrowLeft,
   SlidersHorizontal,
+  Zap,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -24,7 +25,15 @@ interface Product {
   name: string;
   slug: string;
   description: string;
-  price_pi: string;
+  price_pi: string | number;
+  discount_price_pi?: string | number | null;
+  effective_price_pi?: string | number;
+  discount_percentage?: number;
+  is_promo_active?: boolean;
+  is_flash_sale?: boolean;
+  flash_sale_ends_at?: string | null;
+  flash_sale_quota?: number | null;
+  sold_count?: number;
   stock?: number;
   image_url: string;
   category?: {
@@ -135,6 +144,8 @@ export default function ProductsPage() {
         console.warn('API Cart error, falling back to Context state:', err);
       }
 
+      const effectivePrice = getEffectivePricePi(product);
+
       addToLocalCart({
         id: String(product.id),
         name: product.name,
@@ -143,7 +154,7 @@ export default function ProductsPage() {
             ? product.category?.name
             : product.category) || 'Umum',
         priceIdr: 0,
-        pricePi: parseFloat(product.price_pi) || 0,
+        pricePi: effectivePrice,
         image: product.image_url,
         description: product.description,
         stock: product.stock ?? 10,
@@ -174,6 +185,8 @@ export default function ProductsPage() {
         console.warn('API Cart error, falling back to Context state:', err);
       }
 
+      const effectivePrice = getEffectivePricePi(product);
+
       addToLocalCart({
         id: String(product.id),
         name: product.name,
@@ -182,7 +195,7 @@ export default function ProductsPage() {
             ? product.category?.name
             : product.category) || 'Umum',
         priceIdr: 0,
-        pricePi: parseFloat(product.price_pi) || 0,
+        pricePi: effectivePrice,
         image: product.image_url,
         description: product.description,
         stock: product.stock ?? 10,
@@ -200,6 +213,9 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Tombol Melayang Flash Sale (di luar kondisi loading agar tidak error JSX) */}
+      <FlashSaleBanner />
+
       {/* Header & Tombol Kembali */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -244,7 +260,6 @@ export default function ProductsPage() {
               {t('allCategories')}
             </button>
             {categories.map((cat) => (
-            
               <button
                 key={cat}
                 type="button"
@@ -264,13 +279,10 @@ export default function ProductsPage() {
 
       {/* Konten Daftar Produk */}
       {loading ? (
-      
-               <FlashSaleBanner />
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
             <div key={n} className="bg-gray-100 animate-pulse h-72 rounded-2xl"></div>
           ))}
-          
         </div>
       ) : error ? (
         <div className="p-6 bg-red-50 text-red-600 rounded-2xl text-center text-sm font-medium">
@@ -287,6 +299,13 @@ export default function ProductsPage() {
             const imgUrl = getFullImageUrl(product.image_url);
             const isAddingThis = addingCartId === product.id;
             const isBuyingThis = buyingId === product.id;
+
+            const basePrice = Number(product.price_pi || 0);
+            const effectivePrice = getEffectivePricePi(product);
+            const isPromo = effectivePrice > 0 && effectivePrice < basePrice;
+            const discountPct =
+              product.discount_percentage ||
+              (isPromo ? Math.round(((basePrice - effectivePrice) / basePrice) * 100) : 0);
 
             return (
               <div
@@ -308,6 +327,13 @@ export default function ProductsPage() {
                         }}
                       />
                     ) : null}
+
+                    {isPromo && (
+                      <span className="absolute top-2 left-2 z-20 inline-flex items-center gap-0.5 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow">
+                        <Zap className="w-3 h-3 fill-yellow-300 text-yellow-300" />
+                        -{discountPct}%
+                      </span>
+                    )}
 
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 z-0">
                       <Package className="w-8 h-8 mb-1 opacity-50" />
@@ -332,14 +358,21 @@ export default function ProductsPage() {
 
                 <div className="mt-4 pt-3 border-t border-gray-100 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xs font-bold text-amber-600">π</span>
-                      <span className="text-sm font-extrabold text-amber-600 truncate">
-                        {product.price_pi}
-                      </span>
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                      <div className="flex items-baseline gap-1">
+                        <span className={`text-xs font-bold ${isPromo ? 'text-red-600' : 'text-amber-600'}`}>π</span>
+                        <span className={`text-sm font-extrabold truncate ${isPromo ? 'text-red-600' : 'text-amber-600'}`}>
+                          {effectivePrice}
+                        </span>
+                      </div>
+                      {isPromo && (
+                        <span className="text-[11px] text-gray-400 line-through truncate">
+                          π {basePrice}
+                        </span>
+                      )}
                     </div>
                     {typeof product.stock === 'number' && (
-                      <span className="text-[11px] text-gray-400">
+                      <span className="text-[11px] text-gray-400 shrink-0">
                         {t('stock')}: {product.stock}
                       </span>
                     )}
