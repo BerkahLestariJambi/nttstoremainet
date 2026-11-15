@@ -7,6 +7,7 @@ import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
+import FlashSaleBanner from '@/components/FlashSaleBanner';
 import {
   Search,
   Package,
@@ -266,6 +267,7 @@ export default function ProductsPage() {
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
             <div key={n} className="bg-gray-100 animate-pulse h-72 rounded-2xl"></div>
           ))}
+          
         </div>
       ) : error ? (
         <div className="p-6 bg-red-50 text-red-600 rounded-2xl text-center text-sm font-medium">
@@ -378,6 +380,7 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
+               <FlashSaleBanner />
             );
           })}
         </div>
