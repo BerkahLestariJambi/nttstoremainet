@@ -14,6 +14,7 @@ export interface Product {
   image_url?: string;
   description?: string;
   stock?: number;
+  sisa_stock?: number;
   rating?: number;
   product_id?: number;
 }
