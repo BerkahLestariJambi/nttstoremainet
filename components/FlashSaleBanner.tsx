@@ -37,9 +37,13 @@ export interface FlashSaleProduct {
 
 interface FlashSaleBannerProps {
   initialProducts?: FlashSaleProduct[];
+  logoUrl?: string;
 }
 
-export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProps) {
+export default function FlashSaleBanner({
+  initialProducts,
+  logoUrl = '/logo.png', // Sesuaikan dengan path logo NTTStorePi di folder public/ (misal: /logo.png atau /images/logo.png)
+}: FlashSaleBannerProps) {
   const { t } = useLanguage();
 
   const [products, setProducts] = useState<FlashSaleProduct[]>(initialProducts || []);
@@ -47,6 +51,7 @@ export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProp
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [addedId, setAddedId] = useState<number | null>(null);
+  const [logoError, setLogoError] = useState<boolean>(false);
 
   const [timeLeft, setTimeLeft] = useState({
     hours: 0,
@@ -163,46 +168,78 @@ export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProp
 
   return (
     <>
-      {/* 1. TOMBOL MELAYANG DI KANAN TENGAH LAYAR */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={`fixed right-0 top-1/2 -translate-y-1/2 z-50 group flex flex-col items-center gap-1.5 px-2.5 py-3 rounded-l-2xl text-white shadow-2xl border-y border-l border-yellow-300/60 transition-all duration-300 hover:pr-3.5 active:scale-95 ${
-          isUrgent
-            ? 'bg-gradient-to-b from-red-700 via-red-600 to-orange-600 animate-pulse shadow-red-600/40'
-            : 'bg-gradient-to-b from-amber-600 via-orange-600 to-red-600 shadow-orange-600/40'
-        }`}
-      >
-        {/* Ikon Petir + Badge Jumlah Promo */}
-        <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-yellow-300 text-red-800 shadow-inner">
-          <Zap className="w-5 h-5 fill-red-700 group-hover:rotate-12 transition-transform" />
-          <span className="absolute -top-1.5 -left-1.5 flex h-4 min-w-4 items-center justify-center px-1 rounded-full bg-red-700 text-white text-[10px] font-black border border-white shadow">
-            {activeProducts.length}
-          </span>
-        </div>
-
-        {/* Label Vertikal */}
-        <span className="text-[10px] font-black uppercase tracking-wider text-yellow-200 leading-none">
-          FLASH
-        </span>
-
-        {/* Live Countdown Vertikal Ringkas */}
-        <div className="flex flex-col items-center gap-0.5 font-mono font-black text-[11px] leading-none">
-          <span className="bg-black/35 px-1.5 py-1 rounded w-full text-center">
-            {pad(timeLeft.hours)}
-          </span>
-          <span className="bg-black/35 px-1.5 py-1 rounded w-full text-center">
-            {pad(timeLeft.minutes)}
-          </span>
+      {/* 1. TOMBOL MELINGKAR MELAYANG DI KANAN TENGAH DENGAN BACKGROUND LOGO NTTSTOREPI */}
+      <div className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center">
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          aria-label="Flash Sale NTTStorePi"
+          className="group relative flex flex-col items-center justify-center focus:outline-none"
+        >
+          {/* Efek Cincin Cahaya Berdenyut (Pulse Halo) */}
           <span
-            className={`px-1.5 py-1 rounded w-full text-center transition-transform duration-200 ${
-              tickPulse ? 'scale-110 bg-yellow-300 text-red-900' : 'bg-black/35 text-white'
+            className={`absolute inset-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full blur-md opacity-75 transition-opacity group-hover:opacity-100 animate-pulse ${
+              isUrgent
+                ? 'bg-gradient-to-tr from-red-600 via-orange-500 to-yellow-400'
+                : 'bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600'
+            }`}
+          />
+
+          {/* Lingkaran Utama dengan Background Logo NTTStorePi */}
+          <div
+            className={`relative w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full overflow-hidden border-[3px] shadow-2xl transition-transform duration-300 group-hover:scale-110 group-active:scale-95 bg-white flex items-center justify-center ${
+              isUrgent ? 'border-red-500' : 'border-amber-400'
             }`}
           >
-            {pad(timeLeft.seconds)}
+            {/* Gambar Logo NTTStorePi */}
+            {!logoError ? (
+              <img
+                src={logoUrl}
+                alt="NTTStorePi Flash Sale"
+                onError={() => setLogoError(true)}
+                className="w-full h-full object-cover p-1 group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 flex items-center justify-center text-white font-black text-xs">
+                NTT π
+              </div>
+            )}
+
+            {/* Overlay Gradien Tipis + Ikon Petir di Sudut Bawah */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <span className="absolute bottom-1 flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-yellow-300 drop-shadow">
+              <Zap className="w-2.5 h-2.5 fill-yellow-300 text-yellow-300 animate-bounce" />
+              FLASH
+            </span>
+          </div>
+
+          {/* Badge Jumlah Produk Promo di Pojok Kiri Atas Lingkaran */}
+          <span className="absolute -top-1 -left-1 flex h-5 min-w-5 items-center justify-center px-1.5 rounded-full bg-red-600 text-white text-[10px] font-black border-2 border-white shadow-md">
+            {activeProducts.length}
           </span>
-        </div>
-      </button>
+
+          {/* Pill Live Countdown Timer Menempel di Bawah Lingkaran */}
+          <div
+            className={`-mt-2 relative z-10 flex items-center gap-0.5 px-2 py-0.5 rounded-full font-mono font-black text-[10px] sm:text-[11px] text-white shadow-lg border border-yellow-300/80 ${
+              isUrgent
+                ? 'bg-red-700 animate-pulse'
+                : 'bg-gradient-to-r from-amber-600 via-orange-600 to-red-600'
+            }`}
+          >
+            <span>{pad(timeLeft.hours)}</span>
+            <span className="text-yellow-300">:</span>
+            <span>{pad(timeLeft.minutes)}</span>
+            <span className="text-yellow-300">:</span>
+            <span
+              className={`inline-block transition-transform duration-200 ${
+                tickPulse ? 'scale-125 text-yellow-300' : 'scale-100 text-white'
+              }`}
+            >
+              {pad(timeLeft.seconds)}
+            </span>
+          </div>
+        </button>
+      </div>
 
       {/* 2. POP-UP DRAWER / MODAL DAFTAR PRODUK FLASH SALE SAAT TOMBOL DIKLIK */}
       {isOpen && (
