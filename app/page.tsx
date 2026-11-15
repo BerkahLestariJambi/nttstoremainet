@@ -125,7 +125,7 @@ export default function HomePage() {
           </span>
 
           <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
-            Selamat Datang di NTTStore<span className="text-yellow-400">Pi</span>
+            Selamat Datang di NTTStore<span className="text-yellow-400">Pi TestNet</span>
           </h1>
 
           <p className="text-lg opacity-90 leading-relaxed">
