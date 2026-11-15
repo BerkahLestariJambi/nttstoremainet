@@ -15,11 +15,13 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Navbar() {
   const router = useRouter();
   // 1. Ambil totalItems dan fetchCart langsung dari CartContext
   const { cart, totalItems, piUser, setPiUser, fetchCart } = useCart();
+  const { t } = useLanguage();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -82,7 +84,7 @@ export default function Navbar() {
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-2xl shadow-xl py-2 z-50">
                   <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Akun Terhubung</p>
+                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{t('connectedAs')}</p>
                     <p className="text-xs font-bold text-gray-900 truncate flex items-center gap-1 mt-0.5">
                       <Sparkles className="w-3 h-3 text-amber-500" /> @{piUser.username}
                     </p>
@@ -95,7 +97,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition"
                     >
                       <ClipboardList className="w-4 h-4 text-purple-600" />
-                      Pesanan Saya
+                      {t('orderHistory')}
                     </Link>
 
                     <Link
@@ -104,7 +106,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition"
                     >
                       <LayoutDashboard className="w-4 h-4 text-amber-600" />
-                      Dashboard Seller
+                      {t('sellerDashboard')}
                     </Link>
 
                     <Link
@@ -113,7 +115,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 rounded-xl transition"
                     >
                       <PackagePlus className="w-4 h-4 text-purple-600" />
-                      Tambah Produk Baru
+                      {t('addProduct')}
                     </Link>
 
                     <Link
@@ -122,7 +124,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition"
                     >
                       <Store className="w-4 h-4 text-amber-600" />
-                      Daftar Toko / Seller
+                      {t('registerStoreBtn')}
                     </Link>
                   </div>
 
@@ -133,7 +135,7 @@ export default function Navbar() {
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-xl transition"
                     >
                       <LogOut className="w-4 h-4" />
-                      Keluar (Logout)
+                      {t('logout')}
                     </button>
                   </div>
                 </div>
