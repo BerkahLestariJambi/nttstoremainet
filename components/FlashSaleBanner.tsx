@@ -7,12 +7,11 @@ import { cartService } from '@/services/cartService';
 import { useLanguage } from '@/context/LanguageContext';
 import {
   Zap,
-  Clock,
   ShoppingCart,
   Flame,
-  ChevronDown,
-  ChevronUp,
+  X,
   Check,
+  Clock,
 } from 'lucide-react';
 
 export interface FlashSaleProduct {
@@ -45,7 +44,7 @@ export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProp
 
   const [products, setProducts] = useState<FlashSaleProduct[]>(initialProducts || []);
   const [loading, setLoading] = useState<boolean>(!initialProducts);
-  const [isExpanded, setIsExpanded] = useState<boolean>(true);
+  const [isOpen, setIsOpen] = useState<boolean>(false);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [addedId, setAddedId] = useState<number | null>(null);
 
@@ -163,136 +162,175 @@ export default function FlashSaleBanner({ initialProducts }: FlashSaleBannerProp
   };
 
   return (
-    <div className="sticky top-16 z-30 mb-5 rounded-2xl bg-gradient-to-r from-amber-600/95 via-orange-600/95 to-red-600/95 backdrop-blur-md text-white shadow-lg shadow-orange-900/15 border border-amber-300/30 transition-all duration-300">
-      {/* Compact Header Bar */}
-      <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 sm:px-5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-yellow-300 text-red-800 shrink-0 shadow-sm">
-            <Zap className="w-4 h-4 fill-red-700 animate-pulse" />
-          </div>
-          <div className="flex items-center gap-2 truncate">
-            <span className="font-black text-xs sm:text-sm uppercase tracking-wide truncate">
-              {t('flashSaleTitle')}
-            </span>
-            <span className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-bold bg-black/25 px-2 py-0.5 rounded-full text-yellow-200">
-              <Flame className="w-3 h-3 fill-yellow-300" /> {activeProducts.length} Promo
-            </span>
-          </div>
-        </div>
+    <>
+      {/* 1. TOMBOL MELAYANG (FLOATING PILL BUTTON + LIVE TIMER) */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className={`fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 group flex items-center gap-2.5 pl-3 pr-4 py-2.5 rounded-full text-white shadow-2xl border border-yellow-300/60 transition-all duration-300 hover:scale-105 active:scale-95 ${
+          isUrgent
+            ? 'bg-gradient-to-r from-red-700 via-red-600 to-orange-600 animate-pulse shadow-red-600/40'
+            : 'bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 shadow-orange-600/40'
+        }`}
+      >
+        {/* Ikon Petir + Ping Indicator */}
+        <span className="relative flex items-center justify-center w-8 h-8 rounded-full bg-yellow-300 text-red-800 shadow-inner shrink-0">
+          <Zap className="w-4 h-4 fill-red-700 group-hover:rotate-12 transition-transform" />
+          <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+          </span>
+        </span>
 
-        {/* Mini Countdown & Toggle Collapse */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-mono font-black ${
-              isUrgent ? 'bg-red-950/70 text-yellow-300 animate-pulse' : 'bg-black/25 text-white'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-yellow-300 mr-0.5 hidden xs:inline" />
-            <span className="bg-white text-gray-900 px-1.5 py-0.5 rounded text-[11px]">
-              {pad(timeLeft.hours)}
+        {/* Label & Live Countdown */}
+        <div className="flex flex-col items-start leading-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-black uppercase tracking-wider text-yellow-200">
+              FLASH SALE
             </span>
-            <span>:</span>
-            <span className="bg-white text-gray-900 px-1.5 py-0.5 rounded text-[11px]">
-              {pad(timeLeft.minutes)}
+            <span className="text-[10px] font-extrabold bg-white/20 px-1.5 py-0.2 rounded-full">
+              {activeProducts.length}
             </span>
-            <span>:</span>
+          </div>
+
+          <div className="flex items-center gap-1 font-mono font-black text-xs sm:text-sm mt-0.5">
+            <span className="bg-black/30 px-1.5 py-0.2 rounded">{pad(timeLeft.hours)}</span>
+            <span className="text-yellow-300">:</span>
+            <span className="bg-black/30 px-1.5 py-0.2 rounded">{pad(timeLeft.minutes)}</span>
+            <span className="text-yellow-300">:</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[11px] transition-transform duration-200 ${
-                tickPulse ? 'scale-110 bg-yellow-300 text-red-900' : 'bg-white text-red-600'
+              className={`px-1.5 py-0.2 rounded transition-transform duration-200 ${
+                tickPulse ? 'scale-110 bg-yellow-300 text-red-900' : 'bg-black/30 text-white'
               }`}
             >
               {pad(timeLeft.seconds)}
             </span>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setIsExpanded((prev) => !prev)}
-            aria-label="Toggle Flash Sale"
-            className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition text-white"
-          >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
         </div>
-      </div>
+      </button>
 
-      {/* Horizontal Mini-Cards Strip (Collapsible) */}
-      {isExpanded && (
-        <div className="px-3.5 pb-3 sm:px-5 sm:pb-3.5 pt-0.5">
-          <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-white/30">
-            {activeProducts.map((product) => {
-              const originalPrice = Number(product.price_pi);
-              const promoPrice = Number(product.discount_price_pi);
-              const discountPct =
-                product.discount_percentage ||
-                Math.round(((originalPrice - promoPrice) / originalPrice) * 100);
-              const isAdded = addedId === product.id;
-
-              return (
-                <Link
-                  key={product.id}
-                  href={`/products/${product.slug || product.id}`}
-                  className="group flex items-center gap-2.5 bg-white text-gray-900 rounded-xl p-2 min-w-[220px] sm:min-w-[245px] max-w-[260px] shrink-0 shadow-sm hover:shadow-md transition"
-                >
-                  {/* Thumbnail Mini */}
-                  <div className="relative w-14 h-14 rounded-lg bg-gray-100 overflow-hidden shrink-0">
-                    {product.image_url ? (
-                      <img
-                        src={resolveImage(product.image_url)}
-                        alt={product.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[9px] text-gray-400">
-                        {t('noImage')}
-                      </div>
-                    )}
-                    <span className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-lg">
-                      -{discountPct}%
+      {/* 2. POP-UP DRAWER / MODAL DAFTAR PRODUK FLASH SALE SAAT TOMBOL DIKLIK */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 animate-fadeIn"
+          onClick={() => setIsOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-lg max-h-[82vh] bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 px-5 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-yellow-300 text-red-800 rounded-xl">
+                  <Zap className="w-5 h-5 fill-red-700 animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base sm:text-lg uppercase tracking-wide">
+                    {t('flashSaleTitle')}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-xs text-amber-100 mt-0.5">
+                    <Clock className="w-3.5 h-3.5 text-yellow-300" />
+                    <span>{t('endsInLabel')}:</span>
+                    <span className="font-mono font-black bg-black/25 px-2 py-0.5 rounded text-yellow-200">
+                      {pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}
                     </span>
                   </div>
+                </div>
+              </div>
 
-                  {/* Info Mini */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-xs font-bold text-gray-900 truncate group-hover:text-amber-700">
-                      {product.name}
-                    </h4>
-                    <div className="flex items-baseline gap-1 mt-0.5">
-                      <span className="text-sm font-black text-red-600">{promoPrice} π</span>
-                      <span className="text-[10px] text-gray-400 line-through">
-                        {originalPrice} π
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-2 rounded-full bg-white/15 hover:bg-white/25 transition text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Daftar Produk Promo */}
+            <div className="p-4 overflow-y-auto space-y-3 divide-y divide-gray-100">
+              {activeProducts.map((product) => {
+                const originalPrice = Number(product.price_pi);
+                const promoPrice = Number(product.discount_price_pi);
+                const discountPct =
+                  product.discount_percentage ||
+                  Math.round(((originalPrice - promoPrice) / originalPrice) * 100);
+                const soldCount = Number(product.sold ?? product.sold_count ?? 0);
+                const isAdded = addedId === product.id;
+
+                return (
+                  <Link
+                    key={product.id}
+                    href={`/products/${product.slug || product.id}`}
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3.5 pt-3 first:pt-0 group"
+                  >
+                    <div className="relative w-20 h-20 rounded-2xl bg-gray-100 overflow-hidden shrink-0 border border-gray-100">
+                      {product.image_url ? (
+                        <img
+                          src={resolveImage(product.image_url)}
+                          alt={product.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">
+                          {t('noImage')}
+                        </div>
+                      )}
+                      <span className="absolute top-1 left-1 bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-lg shadow">
+                        -{discountPct}%
                       </span>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] font-semibold text-orange-600">
-                        {t('stock')}: {product.stock}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => handleQuickAdd(e, product.id)}
-                        disabled={product.stock <= 0 || addingId === product.id}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 transition ${
-                          isAdded
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-amber-500 hover:bg-amber-600 text-white'
-                        }`}
-                      >
-                        {isAdded ? (
-                          <Check className="w-3 h-3" />
-                        ) : (
-                          <>
-                            <ShoppingCart className="w-2.5 h-2.5" /> +
-                          </>
-                        )}
-                      </button>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-gray-400 truncate">
+                        {product.seller?.store_name || t('defaultSellerName')}
+                      </p>
+                      <h4 className="font-bold text-sm text-gray-900 line-clamp-1 group-hover:text-amber-700">
+                        {product.name}
+                      </h4>
+
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-base font-black text-red-600">{promoPrice} π</span>
+                        <span className="text-xs text-gray-400 line-through">{originalPrice} π</span>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600">
+                          <Flame className="w-3 h-3 fill-orange-500" />
+                          {t('sold')} {soldCount} • {t('stock')}: {product.stock}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleQuickAdd(e, product.id)}
+                          disabled={product.stock <= 0 || addingId === product.id}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1 transition ${
+                            isAdded
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-amber-500 hover:bg-amber-600 text-white'
+                          }`}
+                        >
+                          {isAdded ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" /> {t('addedToCart')}
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart className="w-3.5 h-3.5" /> {t('grabDealBtn')}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
