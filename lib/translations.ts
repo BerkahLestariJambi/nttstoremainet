@@ -8,6 +8,7 @@ export const LANGUAGES: { code: LanguageCode; label: string; flag: string; dir: 
   { code: 'ar', label: 'العربية', flag: '🇸🇦', dir: 'rtl' },
 ];
 
+
 export const translations: Record<LanguageCode, Record<string, string>> = {
   en: {
     // Auth & Hero
