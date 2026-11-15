@@ -5,7 +5,6 @@ export interface Category {
   name: string;
   slug?: string;
 }
-
 export interface Product {
   id: number;
   name: string;
