@@ -123,6 +123,21 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     selectCourierBtnDisabled: 'Select Delivery Courier',
     proceedToCheckoutPayment: 'Proceed to Payment Checkout',
 
+    // CheckoutButton & Pi Payment SDK
+    paymentOrderMemo: 'Payment for Order',
+    createOrderFailedError: 'Failed to create order. Order ID not found.',
+    piPaymentSuccessText: 'Pi Coin Payment Successful!',
+    paymentCancelledTitle: 'Cancelled',
+    paymentCancelledText: 'Payment transaction was cancelled.',
+    piSdkErrorTitle: 'Pi SDK Error',
+    piPaymentFailedFallback: 'Payment failed',
+    orderCreatedSuffix: 'Successfully Created!',
+    openInPiBrowserToPayText: 'To complete payment with Pi Coin, please open this application inside Pi Browser.',
+    backendConnectionFailedError: 'Failed to connect to the backend server.',
+    checkoutFailedTitle: 'Checkout Failed',
+    connectingToPiSdk: 'Connecting to Pi SDK...',
+    payNowViaPiBrowser: 'Pay Now via Pi Browser',
+
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'Home',
     postalCodeLabel: 'Postal Code',
@@ -307,6 +322,21 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     selectAddressBtnDisabled: 'Pilih Alamat Dulu',
     selectCourierBtnDisabled: 'Pilih Kurir Pengiriman',
     proceedToCheckoutPayment: 'Lanjut ke Checkout Pembayaran',
+
+    // CheckoutButton & Pi Payment SDK
+    paymentOrderMemo: 'Pembayaran Order',
+    createOrderFailedError: 'Gagal membuat order. ID Pesanan tidak ditemukan.',
+    piPaymentSuccessText: 'Pembayaran Pi Coin Berhasil!',
+    paymentCancelledTitle: 'Dibatalkan',
+    paymentCancelledText: 'Transaksi pembayaran dibatalkan.',
+    piSdkErrorTitle: 'Error Pi SDK',
+    piPaymentFailedFallback: 'Gagal membayar',
+    orderCreatedSuffix: 'Berhasil Dibuat!',
+    openInPiBrowserToPayText: 'Untuk menyelesaikan pembayaran dengan Pi Coin, silakan buka aplikasi ini di dalam Pi Browser.',
+    backendConnectionFailedError: 'Gagal terhubung ke server backend Laravel.',
+    checkoutFailedTitle: 'Gagal Checkout',
+    connectingToPiSdk: 'Menghubungkan ke Pi SDK...',
+    payNowViaPiBrowser: 'Bayar Sekarang via Pi Browser',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'Rumah',
@@ -493,6 +523,21 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     selectCourierBtnDisabled: '请选择快递',
     proceedToCheckoutPayment: '前往结账付款',
 
+    // CheckoutButton & Pi Payment SDK
+    paymentOrderMemo: '订单支付',
+    createOrderFailedError: '创建订单失败，未找到订单号。',
+    piPaymentSuccessText: 'Pi 币支付成功！',
+    paymentCancelledTitle: '已取消',
+    paymentCancelledText: '支付交易已取消。',
+    piSdkErrorTitle: 'Pi SDK 错误',
+    piPaymentFailedFallback: '支付失败',
+    orderCreatedSuffix: '创建成功！',
+    openInPiBrowserToPayText: '要使用 Pi 币完成支付，请在 Pi 浏览器中打开此应用。',
+    backendConnectionFailedError: '连接后端服务器失败。',
+    checkoutFailedTitle: '结账失败',
+    connectingToPiSdk: '正在连接 Pi SDK...',
+    payNowViaPiBrowser: '立即通过 Pi 浏览器支付',
+
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: '家',
     postalCodeLabel: '邮政编码',
@@ -678,6 +723,21 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     selectCourierBtnDisabled: '配送業者を選択',
     proceedToCheckoutPayment: 'お支払いチェックアウトへ進む',
 
+    // CheckoutButton & Pi Payment SDK
+    paymentOrderMemo: '注文のお支払い',
+    createOrderFailedError: '注文の作成に失敗しました。注文IDが見つかりません。',
+    piPaymentSuccessText: 'Pi コインでの支払いが完了しました！',
+    paymentCancelledTitle: 'キャンセルされました',
+    paymentCancelledText: '支払い取引がキャンセルされました。',
+    piSdkErrorTitle: 'Pi SDK エラー',
+    piPaymentFailedFallback: '支払いに失敗しました',
+    orderCreatedSuffix: 'が正常に作成されました！',
+    openInPiBrowserToPayText: 'Pi コインでの支払いを完了するには、Pi ブラウザ内でこのアプリを開いてください。',
+    backendConnectionFailedError: 'バックエンドサーバーへの接続に失敗しました。',
+    checkoutFailedTitle: 'チェックアウト失敗',
+    connectingToPiSdk: 'Pi SDK に接続中...',
+    payNowViaPiBrowser: 'Pi ブラウザで今すぐ支払う',
+
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: '自宅',
     postalCodeLabel: '郵便番号',
@@ -862,6 +922,21 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     selectAddressBtnDisabled: 'اختر العنوان أولاً',
     selectCourierBtnDisabled: 'اختر شركة الشحن',
     proceedToCheckoutPayment: 'المتابعة إلى الدفع',
+
+    // CheckoutButton & Pi Payment SDK
+    paymentOrderMemo: 'دفع الطلب',
+    createOrderFailedError: 'فشل إنشاء الطلب. لم يتم العثور على رقم الطلب.',
+    piPaymentSuccessText: 'تم الدفع بعملة Pi بنجاح!',
+    paymentCancelledTitle: 'تم الإلغاء',
+    paymentCancelledText: 'تم إلغاء معاملة الدفع.',
+    piSdkErrorTitle: 'خطأ في Pi SDK',
+    piPaymentFailedFallback: 'فشل الدفع',
+    orderCreatedSuffix: 'تم إنشاؤه بنجاح!',
+    openInPiBrowserToPayText: 'لإتمام الدفع باستخدام عملة Pi، يرجى فتح هذا التطبيق داخل متصفح Pi.',
+    backendConnectionFailedError: 'فشل الاتصال بالخادم الخلفي.',
+    checkoutFailedTitle: 'فشل إتمام الطلب',
+    connectingToPiSdk: 'جاري الاتصال بـ Pi SDK...',
+    payNowViaPiBrowser: 'ادفع الآن عبر متصفح Pi',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'المنزل',
