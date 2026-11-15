@@ -7,7 +7,7 @@ import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
-
+import FlashSaleBanner from '@/components/FlashSaleBanner';
 declare global {
   interface Window {
     Pi: any;
@@ -173,6 +173,7 @@ export default function HomePage() {
       <section>
         <h2 className="text-2xl font-bold mb-6 text-gray-900">{t('featuredProducts')}</h2>
         <ProductGrid />
+        <FlashSaleBanner />
       </section>
     </div>
   );
