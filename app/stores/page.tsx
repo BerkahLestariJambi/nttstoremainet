@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Store, Search, MapPin, Package, ShieldCheck, Loader2, ArrowRight } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface RegisteredStore {
   id: number;
@@ -17,6 +18,7 @@ interface RegisteredStore {
 }
 
 export default function StoresDirectoryPage() {
+  const { t } = useLanguage();
   const [stores, setStores] = useState<RegisteredStore[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -52,10 +54,10 @@ export default function StoresDirectoryPage() {
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Store className="w-6 h-6 text-amber-500" /> Toko Terdaftar NTTStorePi
+            <Store className="w-6 h-6 text-amber-500" /> {t('storeDirectoryTitle')}
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Jelajahi merchant dan pelaku UMKM NTT yang sudah terverifikasi menerima Pi Coin.
+            {t('storeDirectorySubtitle')}
           </p>
         </div>
 
@@ -64,7 +66,7 @@ export default function StoresDirectoryPage() {
           href="/seller/dashboard"
           className="inline-flex items-center justify-center gap-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-4 py-2.5 rounded-2xl transition shadow-sm"
         >
-          <span>Kelola Toko Saya</span>
+          <span>{t('manageMyStore')}</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
@@ -74,7 +76,7 @@ export default function StoresDirectoryPage() {
         <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
-          placeholder="Cari nama toko di NTT..."
+          placeholder={t('searchStorePlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
@@ -85,12 +87,12 @@ export default function StoresDirectoryPage() {
       {loading ? (
         <div className="p-12 text-center text-gray-400 flex flex-col items-center justify-center gap-2">
           <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-          <span className="text-xs font-medium">Memuat daftar toko terdaftar...</span>
+          <span className="text-xs font-medium">{t('loadingStores')}</span>
         </div>
       ) : filteredStores.length === 0 ? (
         <div className="bg-white p-12 rounded-3xl border border-gray-100 text-center text-gray-400">
           <Store className="w-12 h-12 mx-auto mb-2 opacity-30" />
-          <p className="text-sm font-medium">Belum ada toko terdaftar yang cocok dengan pencarian.</p>
+          <p className="text-sm font-medium">{t('noMatchingStores')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -121,7 +123,7 @@ export default function StoresDirectoryPage() {
                   </div>
 
                   <p className="text-xs text-gray-500 line-clamp-2 mt-1">
-                    {store.description || 'Merchant resmi produk lokal NTT.'}
+                    {store.description || t('defaultStoreDesc')}
                   </p>
 
                   <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-gray-500">
@@ -131,7 +133,7 @@ export default function StoresDirectoryPage() {
                     </span>
                     <span className="inline-flex items-center gap-1 font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
                       <Package className="w-3 h-3" />
-                      {store.products_count ?? 0} Produk
+                      {store.products_count ?? 0} {t('navProducts')}
                     </span>
                   </div>
                 </div>
@@ -142,7 +144,7 @@ export default function StoresDirectoryPage() {
                   href={`/?seller_id=${store.id}`}
                   className="text-xs font-bold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1"
                 >
-                  <span>Lihat Produk Toko</span>
+                  <span>{t('viewStoreProducts')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
