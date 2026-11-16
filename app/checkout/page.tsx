@@ -9,12 +9,14 @@ import { cartService } from '@/services/cartService';
 import { addressService, UserAddressData } from '@/services/addressService';
 import { shippingService, BiteshipRate, BiteshipItemPayload } from '@/services/shippingService';
 import { useLanguage } from '@/context/LanguageContext';
+import { useCart } from '@/context/CartContext';
 import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2, Zap } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
   const { t } = useLanguage();
+  const { removeFromCart, fetchCart } = useCart();
   const searchParams = useSearchParams();
   const productId = searchParams.get('product_id') || searchParams.get('productId');
   const addressId = searchParams.get('address_id');
@@ -35,10 +37,9 @@ function CheckoutFormContent() {
 
     setLoadingRates(true);
     try {
-      // Susun item payload sesuai spesifikasi Biteship menggunakan harga efektif
       const biteshipItems: BiteshipItemPayload[] = items.map((item) => ({
         name: item.name || 'Produk NTTStorePi',
-        value: Math.round(Number(item.price_pi || 1) * 1500000), // estimasi IDR item
+        value: Math.round(Number(item.price_pi || 1) * 1500000),
         quantity: Number(item.quantity || 1),
         weight: Number(item.weight_gram || item.weight || 500),
         category: 'others',
@@ -85,7 +86,7 @@ function CheckoutFormContent() {
         console.error('Gagal mengambil alamat pengiriman:', err);
       }
 
-      // 2. Memuat Produk yang Akan Dibayar (Beli Langsung vs Database Cart) dengan Harga Efektif (Diskon/Flash Sale)
+      // 2. Memuat Produk yang Akan Dibayar
       if (isDirectBuy && productId) {
         try {
           const res: any = await productService.getProductById(productId);
@@ -124,6 +125,7 @@ function CheckoutFormContent() {
                 : getEffectivePricePi(prod);
 
             return {
+              cart_item_id: i.id,
               product_id: i.product_id,
               name: prod.name,
               price_pi: finalPrice,
@@ -150,6 +152,29 @@ function CheckoutFormContent() {
 
     initCheckout();
   }, [productId, addressId, isDirectBuy, searchParams]);
+
+  // Sinkronisasi pasca-pembayaran: hapus produk yang dibeli dari keranjang & kurangi stok UI
+  const handlePaymentSuccess = async () => {
+    for (const item of checkoutItems) {
+      if (item.cart_item_id) {
+        removeFromCart(item.cart_item_id);
+      }
+      removeFromCart(item.product_id);
+    }
+
+    await fetchCart();
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('nttstorepi:stock-updated', {
+          detail: checkoutItems.map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+          })),
+        })
+      );
+    }
+  };
 
   const subtotalPi = checkoutItems.reduce((sum, item) => sum + item.price_pi * item.quantity, 0);
   const totalSavingsPi = checkoutItems.reduce(
@@ -342,6 +367,7 @@ function CheckoutFormContent() {
 
           {address && selectedRate ? (
             <CheckoutButton
+              onSuccess={handlePaymentSuccess}
               checkoutData={{
                 recipient_name: address.recipient_name,
                 phone_number: address.phone_number,
