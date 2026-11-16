@@ -56,25 +56,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       const res: any = await cartService.getCart();
-      const cartData = res?.data || res || [];
+      const cartData = res?.data?.items || res?.data || res || [];
 
-      if (Array.isArray(cartData) && cartData.length > 0) {
-        setCart(
-          cartData.map((item: any) => ({
-            id: String(item.id || item.product_id),
-            product_id: item.product_id || item.id,
-            name: item.product?.name || item.name || 'Produk',
-            category: item.product?.category?.name || 'Umum',
-            priceIdr: item.product?.price_idr || 0,
-            pricePi: parseFloat(item.product?.price_pi || item.price_pi || item.pricePi || 0),
-            image: item.product?.image_url || item.image_url || item.image || '',
-            image_url: item.product?.image_url || item.image_url || item.image || '',
-            description: item.product?.description || '',
-            stock: item.product?.stock || 10,
-            rating: 5,
-            quantity: item.quantity || 1,
-          }))
-        );
+      if (Array.isArray(cartData)) {
+        const mappedCart = cartData.map((item: any) => ({
+          id: String(item.id || item.product_id),
+          product_id: item.product_id || item.id,
+          name: item.product?.name || item.name || 'Produk',
+          category: item.product?.category?.name || 'Umum',
+          priceIdr: item.product?.price_idr || 0,
+          pricePi: parseFloat(item.product?.price_pi || item.price_pi || item.pricePi || 0),
+          image: item.product?.image_url || item.image_url || item.image || '',
+          image_url: item.product?.image_url || item.image_url || item.image || '',
+          description: item.product?.description || '',
+          stock: item.product?.stock || 10,
+          rating: 5,
+          quantity: item.quantity || 1,
+        }));
+
+        // Tetap update state & localStorage meskipun mappedCart kosong ([])
+        setCart(mappedCart);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('nttstorepi_cart', JSON.stringify(mappedCart));
+        }
         return;
       }
     } catch (e) {
@@ -134,28 +138,33 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     setCart((prev) => {
       const existingIndex = prev.findIndex((item) => String(item.id) === targetId);
+      let updated: CartItem[];
       if (existingIndex > -1) {
-        const updated = [...prev];
+        updated = [...prev];
         updated[existingIndex].quantity += qty;
-        return updated;
+      } else {
+        const newItem: CartItem = {
+          ...product,
+          id: targetId,
+          product_id: Number(product.id || product.product_id),
+          name: product.name || 'Produk',
+          category: product.category || 'Umum',
+          priceIdr: product.priceIdr || 0,
+          pricePi: pricePi,
+          image: product.image || product.image_url || '',
+          image_url: product.image_url || product.image || '',
+          description: product.description || '',
+          stock: product.stock || 10,
+          rating: product.rating || 5,
+          quantity: qty,
+        };
+        updated = [...prev, newItem];
       }
 
-      const newItem: CartItem = {
-        ...product,
-        id: targetId,
-        product_id: Number(product.id || product.product_id),
-        name: product.name || 'Produk',
-        category: product.category || 'Umum',
-        priceIdr: product.priceIdr || 0,
-        pricePi: pricePi,
-        image: product.image || product.image_url || '',
-        image_url: product.image_url || product.image || '',
-        description: product.description || '',
-        stock: product.stock || 10,
-        rating: product.rating || 5,
-        quantity: qty,
-      };
-      return [...prev, newItem];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nttstorepi_cart', JSON.stringify(updated));
+      }
+      return updated;
     });
 
     cartService.addToCart(Number(targetId), qty).catch(() => {});
@@ -163,7 +172,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const removeFromCart = (id: string | number) => {
     const targetId = String(id);
-    setCart((prev) => prev.filter((item) => String(item.id) !== targetId));
+    setCart((prev) => {
+      const updated = prev.filter(
+        (item) => String(item.id) !== targetId && String(item.product_id) !== targetId
+      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nttstorepi_cart', JSON.stringify(updated));
+      }
+      return updated;
+    });
     cartService.removeFromCart(Number(id)).catch(() => {});
   };
 
@@ -171,9 +188,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (qty <= 0) return removeFromCart(id);
     const targetId = String(id);
 
-    setCart((prev) =>
-      prev.map((item) => (String(item.id) === targetId ? { ...item, quantity: qty } : item))
-    );
+    setCart((prev) => {
+      const updated = prev.map((item) =>
+        String(item.id) === targetId || String(item.product_id) === targetId
+          ? { ...item, quantity: qty }
+          : item
+      );
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nttstorepi_cart', JSON.stringify(updated));
+      }
+      return updated;
+    });
 
     cartService.updateCartItem(Number(id), { quantity: qty }).catch(() => {});
   };
