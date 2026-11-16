@@ -9,10 +9,10 @@ import logoNtt from './logonttstorepi.ico';
 export const metadata = {
   title: 'NTTStorePi - Toko Online Khas NTT',
   description: 'Belanja Tenun Ikat & Kopi Flores dengan Pi Coin',
-  icons: {
-    icon: 'logonttstorepi.ico',
-    shortcut: '//logonttstorepi.ico',
-    apple: '//logonttstorepi.ico',
+ icons: {
+    icon: logoNtt.src,
+    shortcut: logoNtt.src,
+    apple: logoNtt.src,
   },
 };
 
