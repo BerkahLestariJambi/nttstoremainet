@@ -8,6 +8,11 @@ import { LanguageProvider } from '@/context/LanguageContext';
 export const metadata = {
   title: 'NTTStorePi - Toko Online Khas NTT',
   description: 'Belanja Tenun Ikat & Kopi Flores dengan Pi Coin',
+  icons: {
+    icon: '/logonttstorepi.ico',
+    shortcut: '//logonttstorepi.ico',
+    apple: '//logonttstorepi.ico',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
