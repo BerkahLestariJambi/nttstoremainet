@@ -55,6 +55,11 @@ export default function Navbar() {
         
         {/* Brand Logo */}
         <Link href="/" className="text-xl sm:text-2xl font-extrabold text-amber-700 shrink-0">
+          <img
+    src="/logonttstorepi.ico"
+    alt="Logo NTTStorePi"
+    className="w-9 h-9 rounded-xl object-contain"
+  />
           NTTStore<span className="text-purple-600">Pi</span>
         </Link>
 
