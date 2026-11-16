@@ -17,41 +17,23 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   const { t } = useLanguage();
 
   /**
-   * Mengecek apakah aplikasi benar-benar berjalan di dalam Pi Browser resmi
+   * Deteksi ketat apakah dibuka dari dalam aplikasi Pi Browser resmi
    */
-  const checkIsPiBrowser = async (): Promise<boolean> => {
+  const isOfficialPiBrowser = (): boolean => {
     if (typeof window === 'undefined') return false;
-
-    const Pi = (window as any).Pi;
-    const ua = navigator.userAgent || '';
-    const hasPiUserAgent = /PiBrowser/i.test(ua);
-
-    if (!Pi) return false;
-
-    try {
-      await Pi.init({ version: '2.0', sandbox: false });
-      if (typeof Pi.nativeFeaturesList === 'function') {
-        const features = await Pi.nativeFeaturesList();
-        if (Array.isArray(features) && features.length > 0) {
-          return true;
-        }
-      }
-    } catch {
-      // Fallback ke pengecekan User-Agent jika init gagal di browser eksternal
-    }
-
-    return hasPiUserAgent;
+    const ua = window.navigator.userAgent || '';
+    return /PiBrowser/i.test(ua);
   };
 
   /**
-   * Menampilkan peringatan SweetAlert & mengarahkan ke Pi Browser di posisi URL checkout saat ini
+   * Munculkan SweetAlert dan arahkan langsung ke Pi Browser pada posisi link checkout
    */
-  const promptOpenInPiBrowser = async () => {
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://nttstorepi.vercel.app/checkout';
+  const showPiBrowserWarning = async () => {
+    const currentUrl = window.location.href;
     const piDeepLink = currentUrl.replace(/^https?:\/\//i, 'pi://');
 
     const result = await Swal.fire({
-      title: 'Gunakan Pi Browser Resmi',
+      title: 'Buka di Pi Browser Resmi',
       text: 'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
       icon: 'warning',
       showCancelButton: true,
@@ -64,33 +46,39 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     });
 
     if (result.isConfirmed) {
-      // Langsung arahkan ke Pi Browser pada posisi link checkout saat ini
       window.location.href = piDeepLink;
     } else if (result.isDenied && navigator.clipboard) {
       await navigator.clipboard.writeText(currentUrl);
-      Swal.fire({
-        title: 'Link Disalin!',
-        text: 'Silakan tempel (paste) link checkout ini di bilah alamat aplikasi Pi Browser resmi.',
+      await Swal.fire({
+        title: 'Link Berhasil Disalin!',
+        text: 'Silakan buka aplikasi Pi Browser resmi lalu tempel (paste) link checkout ini.',
         icon: 'success',
-        timer: 2200,
+        timer: 2500,
         showConfirmButton: false,
       });
     }
   };
 
   const processCheckout = async () => {
+    // 0. Jika bukan Pi Browser resmi, langsung tampilkan SweetAlert & hentikan proses
+    if (!isOfficialPiBrowser()) {
+      await showPiBrowserWarning();
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // 0. Pastikan transaksi dijalankan di dalam Pi Browser resmi
-      const isPiBrowser = await checkIsPiBrowser();
-      if (!isPiBrowser) {
-        setLoading(false);
-        await promptOpenInPiBrowser();
-        return;
+      const Pi = (window as any).Pi;
+      if (!Pi) {
+        throw new Error('Pi SDK tidak terdeteksi. Pastikan Anda menggunakan Pi Browser versi terbaru.');
       }
 
-      const Pi = (window as any).Pi;
+      try {
+        await Pi.init({ version: '2.0', sandbox: false });
+      } catch (initErr) {
+        console.warn('Pi SDK init warning:', initErr);
+      }
 
       // 1. Kirim data checkout ke Laravel Backend (/api/orders)
       const rawRes: any = await orderService.createOrder(checkoutData);
@@ -133,7 +121,6 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
 
       const paymentCallbacks = {
         onReadyForServerApproval: async (paymentId: string) => {
-          console.log('Server Approval Payment ID:', paymentId);
           try {
             await orderService.approvePayment(paymentId, orderId);
           } catch (approvalErr: any) {
@@ -141,7 +128,6 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
           }
         },
         onReadyForServerCompletion: async (paymentId: string, txid: string) => {
-          console.log('Server Completion TXID:', txid);
           try {
             await orderService.completePayment(paymentId, txid, orderId);
 
@@ -159,13 +145,11 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
             setLoading(false);
           }
         },
-        onCancel: (paymentId: string) => {
-          console.log('Pembayaran dibatalkan:', paymentId);
+        onCancel: () => {
           Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
           setLoading(false);
         },
-        onError: (error: Error, payment?: unknown) => {
-          console.error('Error transaksi Pi SDK:', error, payment);
+        onError: (error: Error) => {
           Swal.fire(t('piSdkErrorTitle'), error.message || t('piPaymentFailedFallback'), 'error');
           setLoading(false);
         },
@@ -188,6 +172,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
 
   return (
     <button
+      type="button"
       onClick={processCheckout}
       disabled={loading}
       className="w-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold py-3.5 px-6 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs disabled:opacity-50"
