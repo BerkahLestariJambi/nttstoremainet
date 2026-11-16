@@ -49,6 +49,11 @@ export default function Navbar() {
           
           {/* Logo NTTStorePi */}
           <Link href="/" className="flex items-center gap-2 group">
+            <img
+    src="/logonttstorepi.ico"
+    alt="Logo NTTStorePi"
+    className="w-9 h-9 rounded-xl object-contain"
+  />
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 to-purple-700 flex items-center justify-center text-white font-extrabold text-xl shadow-md group-hover:scale-105 transition transform">
               π
             </div>
