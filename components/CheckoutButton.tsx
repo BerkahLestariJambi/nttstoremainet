@@ -4,30 +4,27 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { orderService, CheckoutInput } from '@/services/orderService';
 import { useLanguage } from '@/context/LanguageContext';
+import { useCart } from '@/context/CartContext';
 import { Loader2, CreditCard } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface CheckoutButtonProps {
   checkoutData: CheckoutInput;
+  onSuccess?: () => Promise<void> | void;
 }
 
-export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
+export default function CheckoutButton({ checkoutData, onSuccess }: CheckoutButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { t } = useLanguage();
+  const { removeFromCart, fetchCart } = useCart();
 
-  /**
-   * Deteksi ketat apakah dibuka dari dalam aplikasi Pi Browser resmi
-   */
   const isOfficialPiBrowser = (): boolean => {
     if (typeof window === 'undefined') return false;
     const ua = window.navigator.userAgent || '';
     return /PiBrowser/i.test(ua);
   };
 
-  /**
-   * Munculkan SweetAlert dengan QR Code siap scan + tombol deep link ke Pi Browser
-   */
   const showPiBrowserWarning = async () => {
     const currentUrl = window.location.href;
     const piDeepLink = currentUrl.replace(/^https?:\/\//i, 'pi://');
@@ -70,14 +67,53 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     }
   };
 
+  const syncCartAndStockAfterPayment = async () => {
+    try {
+      const purchasedItems = Array.isArray((checkoutData as any)?.items)
+        ? (checkoutData as any).items
+        : (checkoutData as any)?.product_id
+        ? [
+            {
+              product_id: (checkoutData as any).product_id,
+              quantity: Number((checkoutData as any).quantity || 1),
+            },
+          ]
+        : [];
+
+      if (onSuccess) {
+        await onSuccess();
+      } else {
+        for (const item of purchasedItems) {
+          if (item?.product_id) {
+            removeFromCart(item.product_id);
+          }
+        }
+        await fetchCart();
+
+        if (typeof window !== 'undefined' && purchasedItems.length > 0) {
+          window.dispatchEvent(
+            new CustomEvent('nttstorepi:stock-updated', {
+              detail: purchasedItems.map((i: any) => ({
+                product_id: Number(i.product_id),
+                quantity: Number(i.quantity || 1),
+              })),
+            })
+          );
+        }
+      }
+    } catch (syncErr) {
+      console.warn('Gagal sinkronisasi keranjang/stok setelah pembayaran:', syncErr);
+    }
+  };
+
   const processCheckout = async () => {
-    // 0. Jika bukan Pi Browser resmi, langsung tampilkan QR Code & hentikan proses
     if (!isOfficialPiBrowser()) {
       await showPiBrowserWarning();
       return;
     }
 
     setLoading(true);
+    let createdOrderId: string | number | null = null;
 
     try {
       const Pi = (window as any).Pi;
@@ -98,6 +134,8 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       const orderData = res?.order || res?.data || res;
 
       const orderId = orderData?.id || orderData?.order_id || res?.order_id;
+      createdOrderId = orderId;
+
       const totalPi =
         orderData?.total_pi ||
         orderData?.total_amount_pi ||
@@ -141,6 +179,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         onReadyForServerCompletion: async (paymentId: string, txid: string) => {
           try {
             await orderService.completePayment(paymentId, txid, orderId);
+            await syncCartAndStockAfterPayment();
 
             Swal.fire({
               title: t('successTitle'),
@@ -156,11 +195,26 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
             setLoading(false);
           }
         },
-        onCancel: () => {
-          Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
-          setLoading(false);
+        onCancel: async (paymentId?: string) => {
+          try {
+            if (createdOrderId) {
+              await orderService.cancelOrder(createdOrderId, paymentId);
+            }
+          } catch (cancelErr) {
+            console.error('Gagal membatalkan & menghapus order di server:', cancelErr);
+          } finally {
+            Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
+            setLoading(false);
+          }
         },
-        onError: (error: Error) => {
+        onError: async (error: Error) => {
+          try {
+            if (createdOrderId) {
+              await orderService.cancelOrder(createdOrderId);
+            }
+          } catch (cancelErr) {
+            console.error('Gagal membatalkan order saat SDK error:', cancelErr);
+          }
           Swal.fire(t('piSdkErrorTitle'), error.message || t('piPaymentFailedFallback'), 'error');
           setLoading(false);
         },
@@ -170,6 +224,10 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
       Pi.createPayment(paymentData, paymentCallbacks);
     } catch (err: any) {
       console.error('Checkout Detail Error:', err);
+
+      if (createdOrderId) {
+        orderService.cancelOrder(createdOrderId).catch(() => {});
+      }
 
       const errorMessage =
         err?.message ||
