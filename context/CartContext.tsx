@@ -32,7 +32,7 @@ export interface PiUser {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product, qty?: number) => void;
+  addToCart: (product: Product, qty?: number) => Promise<void>;
   removeFromCart: (id: string | number) => void;
   updateQuantity: (id: string | number, qty: number) => void;
   clearCart: () => void;
@@ -132,21 +132,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addToCart = (product: Product, qty = 1) => {
-    const targetId = String(product.id || product.product_id);
+  const addToCart = async (product: Product, qty = 1) => {
+    const targetId = String(product.product_id || product.id);
     const pricePi = parseFloat(String(product.price_pi || product.pricePi || 0));
 
     setCart((prev) => {
-      const existingIndex = prev.findIndex((item) => String(item.id) === targetId);
+      const existingIndex = prev.findIndex(
+        (item) => String(item.product_id || item.id) === targetId
+      );
       let updated: CartItem[];
       if (existingIndex > -1) {
         updated = [...prev];
-        updated[existingIndex].quantity += qty;
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + qty,
+        };
       } else {
         const newItem: CartItem = {
           ...product,
           id: targetId,
-          product_id: Number(product.id || product.product_id),
+          product_id: Number(product.product_id || product.id),
           name: product.name || 'Produk',
           category: product.category || 'Umum',
           priceIdr: product.priceIdr || 0,
@@ -167,7 +172,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return updated;
     });
 
-    cartService.addToCart(Number(targetId), qty).catch(() => {});
+    try {
+      await cartService.addToCart(Number(targetId), qty);
+      await fetchCart();
+    } catch (err) {
+      console.warn('Gagal sync addToCart ke backend:', err);
+    }
   };
 
   const removeFromCart = (id: string | number) => {
