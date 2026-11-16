@@ -46,13 +46,24 @@ export const orderService = {
       order_id: orderId,
     }),
 
-  // 4. Riwayat Order Buyer & Seller
+  // 4. Batalkan & Hapus Draft Order Saat Pembayaran Dibatalkan (/api/orders/{orderId}/cancel)
+  cancelOrder: (orderId: number | string, paymentId?: string) =>
+    apiClient.post(`/orders/${orderId}/cancel`, {
+      paymentId: paymentId || null,
+      payment_id: paymentId || null,
+      orderId: orderId,
+      order_id: orderId,
+      status: 'cancelled',
+      delete_record: true,
+    }),
+
+  // 5. Riwayat Order Buyer & Seller
   getBuyerOrders: () => apiClient.get('/orders/buyer'),
   getSellerOrders: () => apiClient.get('/orders/seller'),
   getOrders: () => apiClient.get('/orders'),
   getOrderById: (orderId: number | string) => apiClient.get(`/orders/${orderId}`),
 
-  // 5. Fitur Tambahan (Pelacakan Kurir Biteship & Selesaikan Pesanan)
+  // 6. Fitur Tambahan (Pelacakan Kurir Biteship & Selesaikan Pesanan)
   getTracking: (orderId: number | string) => apiClient.get(`/orders/${orderId}/tracking`),
   markAsDelivered: (orderId: number | string) => apiClient.post(`/orders/${orderId}/deliver`),
 };
