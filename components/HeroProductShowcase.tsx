@@ -4,13 +4,14 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { getEffectivePricePi } from '@/services/productService';
 import { useLanguage } from '@/context/LanguageContext';
-import { Sparkles, Zap, ChevronLeft, ChevronRight, Package, ArrowUpRight } from 'lucide-react';
+import { Sparkles, Zap, ChevronLeft, ChevronRight, ArrowUpRight } from 'lucide-react';
 
 interface HeroProductShowcaseProps {
   products: any[];
+  children: React.ReactNode;
 }
 
-export default function HeroProductShowcase({ products }: HeroProductShowcaseProps) {
+export default function HeroProductShowcase({ products, children }: HeroProductShowcaseProps) {
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -36,10 +37,10 @@ export default function HeroProductShowcase({ products }: HeroProductShowcasePro
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  // Acak urutan produk saat pertama dimuat (maksimal 8 produk untuk showcase)
+  // Acak urutan produk secara dinamis (maksimal 8 produk untuk reel)
   const shuffledProducts = useMemo(() => {
     if (!Array.isArray(products) || products.length === 0) return [];
-    const copy = [...products];
+    const copy = [...products].filter((p) => p?.image_url);
     for (let i = copy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [copy[i], copy[j]] = [copy[j], copy[i]];
@@ -47,171 +48,148 @@ export default function HeroProductShowcase({ products }: HeroProductShowcasePro
     return copy.slice(0, 8);
   }, [products]);
 
-  // Auto-play seperti video reel setiap 4 detik
+  // Transisi otomatis setiap 4.5 detik seperti video
   useEffect(() => {
     if (shuffledProducts.length <= 1 || isPaused) return;
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % shuffledProducts.length);
-    }, 4000);
+    }, 4500);
     return () => clearInterval(timer);
   }, [shuffledProducts.length, isPaused]);
 
-  if (shuffledProducts.length === 0) return null;
-
   const activeProduct = shuffledProducts[currentIndex];
-  const imgUrl = getFullImageUrl(activeProduct?.image_url);
+  const imgUrl = activeProduct ? getFullImageUrl(activeProduct.image_url) : '';
   const basePrice = Number(activeProduct?.price_pi || 0);
-  const effectivePrice = getEffectivePricePi(activeProduct);
+  const effectivePrice = activeProduct ? getEffectivePricePi(activeProduct) : 0;
   const isPromo = effectivePrice > 0 && effectivePrice < basePrice;
   const discountPct =
     activeProduct?.discount_percentage ||
     (isPromo ? Math.round(((basePrice - effectivePrice) / basePrice) * 100) : 0);
 
-  const handlePrev = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePrev = () => {
     setCurrentIndex((prev) => (prev - 1 + shuffledProducts.length) % shuffledProducts.length);
   };
 
-  const handleNext = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleNext = () => {
     setCurrentIndex((prev) => (prev + 1) % shuffledProducts.length);
   };
 
   return (
-    <div
+    <section
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      className="relative w-full max-w-[340px] mx-auto lg:ml-auto lg:mr-4 select-none"
+      className="relative overflow-hidden bg-gradient-to-r from-amber-800 via-amber-900 to-purple-950 text-white rounded-3xl shadow-xl min-h-[360px] md:min-h-[420px] flex flex-col justify-between"
     >
-      {/* Efek Glow Latar Belakang */}
-      <div className="absolute -inset-2 bg-gradient-to-tr from-amber-400/30 via-fuchsia-500/20 to-yellow-300/30 rounded-[28px] blur-xl pointer-events-none" />
-
-      {/* Kartu Utama Glassmorphism */}
-      <Link
-        href={`/products/${activeProduct.slug || activeProduct.id}`}
-        className="group relative block bg-white/15 backdrop-blur-md border border-white/25 rounded-3xl p-3.5 shadow-2xl overflow-hidden transition-transform duration-500 hover:scale-[1.02]"
-      >
-        {/* Area Visual Produk dengan Animasi Ken Burns (Zoom/Pan halus seperti video) */}
-        <div className="relative h-48 w-full rounded-2xl overflow-hidden bg-black/20 border border-white/15">
-          {imgUrl ? (
-            <img
-              key={activeProduct.id}
-              src={imgUrl}
-              alt={activeProduct.name}
-              className="w-full h-full object-cover animate-kenburns"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-white/50">
-              <Package className="w-10 h-10 mb-1" />
-              <span className="text-[10px]">{t('noImage')}</span>
-            </div>
-          )}
-
-          {/* Overlay Gradien Bawah */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-
-          {/* Badge Status Atas */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2">
-            {isPromo ? (
-              <span className="inline-flex items-center gap-1 bg-red-600/95 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md animate-pulse">
-                <Zap className="w-3 h-3 fill-yellow-300 text-yellow-300" />
-                -{discountPct}% {t('promoTag') || 'PROMO'}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 bg-amber-400/95 text-gray-950 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md">
-                <Sparkles className="w-3 h-3" />
-                NTT SPOTLIGHT
-              </span>
-            )}
-
-            <span className="bg-black/45 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/15">
-              {currentIndex + 1}/{shuffledProducts.length}
-            </span>
-          </div>
-
-          {/* Tombol Navigasi Kiri & Kanan */}
-          {shuffledProducts.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={handlePrev}
-                aria-label="Previous product"
-                className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                aria-label="Next product"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition backdrop-blur-sm"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </>
-          )}
-
-          {/* Info Produk & Harga di Bagian Bawah Gambar */}
-          <div
-            key={`info-${activeProduct.id}`}
-            className="absolute bottom-2.5 left-3 right-3 text-white animate-slideUpFade"
-          >
-            <p className="text-[10px] text-amber-300 font-semibold truncate">
-              {activeProduct.seller?.store_name || t('defaultSellerName')}
-            </p>
-            <div className="flex items-end justify-between gap-2 mt-0.5">
-              <div className="min-w-0">
-                <h3 className="font-extrabold text-sm leading-tight truncate">
-                  {activeProduct.name}
-                </h3>
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-sm font-black text-amber-400">
-                    π {effectivePrice}
-                  </span>
-                  {isPromo && (
-                    <span className="text-[11px] text-white/60 line-through">
-                      π {basePrice}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <span className="shrink-0 w-7 h-7 rounded-full bg-amber-400 text-gray-950 flex items-center justify-center shadow-md group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">
-                <ArrowUpRight className="w-4 h-4 stroke-[2.5]" />
-              </span>
-            </div>
-          </div>
+      {/* Background Video-Style Full Gambar Produk Acak */}
+      {activeProduct && imgUrl && (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            key={activeProduct.id}
+            src={imgUrl}
+            alt={activeProduct.name}
+            className="w-full h-full object-cover object-center animate-kenburns opacity-65"
+          />
+          {/* Overlay Gradien Gelap & Hangat supaya teks Hero tetap kontras & terbaca jelas */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-amber-950/70 to-purple-950/55" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
         </div>
+      )}
 
-        {/* Indikator Progress Bar Seperti Video Story */}
-        <div className="flex items-center gap-1.5 mt-2.5 px-1">
+      {/* Progress Bar Story di Bagian Paling Atas Hero */}
+      {shuffledProducts.length > 1 && (
+        <div className="relative z-20 flex items-center gap-1.5 px-6 pt-4">
           {shuffledProducts.map((p, idx) => (
             <button
               key={p.id}
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCurrentIndex(idx);
-              }}
+              onClick={() => setCurrentIndex(idx)}
               aria-label={`Slide ${idx + 1}`}
-              className="h-1 flex-1 rounded-full bg-white/25 overflow-hidden"
+              className="h-1 flex-1 rounded-full bg-white/25 overflow-hidden cursor-pointer"
             >
               <div
                 className={`h-full rounded-full transition-all duration-300 ${
                   idx === currentIndex
-                    ? 'bg-amber-400 w-full'
+                    ? 'bg-yellow-400 w-full'
                     : idx < currentIndex
-                    ? 'bg-white/70 w-full'
+                    ? 'bg-white/75 w-full'
                     : 'w-0'
                 }`}
               />
             </button>
           ))}
         </div>
-      </Link>
-    </div>
+      )}
+
+      {/* Konten Utama Hero (Teks Welcome & Tombol Auth/Explore) */}
+      <div className="relative z-10 p-6 sm:p-8 md:p-12 flex-1 flex flex-col justify-center">
+        {children}
+      </div>
+
+      {/* Kartu Mini Info Produk Aktif & Kontrol Slide di Bagian Bawah Hero */}
+      {activeProduct && (
+        <div className="relative z-20 px-6 sm:px-8 md:px-12 pb-5 flex flex-wrap items-center justify-between gap-3">
+          <Link
+            key={`pill-${activeProduct.id}`}
+            href={`/products/${activeProduct.slug || activeProduct.id}`}
+            className="group inline-flex items-center gap-3 bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/20 rounded-2xl px-3.5 py-2 transition animate-slideUpFade max-w-full sm:max-w-md"
+          >
+            {imgUrl && (
+              <img
+                src={imgUrl}
+                alt={activeProduct.name}
+                className="w-10 h-10 rounded-xl object-cover border border-white/25 shrink-0"
+              />
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                {isPromo ? (
+                  <span className="inline-flex items-center gap-0.5 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">
+                    <Zap className="w-2.5 h-2.5 fill-yellow-300 text-yellow-300" />
+                    -{discountPct}%
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 bg-yellow-400 text-gray-950 text-[9px] font-black px-1.5 py-0.5 rounded">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    FEATURED
+                  </span>
+                )}
+                <span className="text-[10px] text-amber-200 truncate">
+                  {activeProduct.seller?.store_name || t('defaultSellerName')}
+                </span>
+              </div>
+              <p className="text-xs font-bold text-white truncate mt-0.5">
+                {activeProduct.name}{' '}
+                <span className="text-yellow-300 font-extrabold ml-1">
+                  π {effectivePrice}
+                </span>
+              </p>
+            </div>
+            <ArrowUpRight className="w-4 h-4 text-yellow-300 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+          </Link>
+
+          {/* Tombol Geser Slide Kiri / Kanan */}
+          {shuffledProducts.length > 1 && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <button
+                type="button"
+                onClick={handlePrev}
+                aria-label="Previous slide"
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                aria-label="Next slide"
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
