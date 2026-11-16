@@ -16,10 +16,82 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   const router = useRouter();
   const { t } = useLanguage();
 
+  /**
+   * Mengecek apakah aplikasi benar-benar berjalan di dalam Pi Browser resmi
+   */
+  const checkIsPiBrowser = async (): Promise<boolean> => {
+    if (typeof window === 'undefined') return false;
+
+    const Pi = (window as any).Pi;
+    const ua = navigator.userAgent || '';
+    const hasPiUserAgent = /PiBrowser/i.test(ua);
+
+    if (!Pi) return false;
+
+    try {
+      await Pi.init({ version: '2.0', sandbox: false });
+      if (typeof Pi.nativeFeaturesList === 'function') {
+        const features = await Pi.nativeFeaturesList();
+        if (Array.isArray(features) && features.length > 0) {
+          return true;
+        }
+      }
+    } catch {
+      // Fallback ke pengecekan User-Agent jika init gagal di browser eksternal
+    }
+
+    return hasPiUserAgent;
+  };
+
+  /**
+   * Menampilkan peringatan SweetAlert & mengarahkan ke Pi Browser di posisi URL checkout saat ini
+   */
+  const promptOpenInPiBrowser = async () => {
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://nttstorepi.vercel.app/checkout';
+    const piDeepLink = currentUrl.replace(/^https?:\/\//i, 'pi://');
+
+    const result = await Swal.fire({
+      title: 'Gunakan Pi Browser Resmi',
+      text: 'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
+      icon: 'warning',
+      showCancelButton: true,
+      showDenyButton: true,
+      confirmButtonText: 'Buka di Pi Browser',
+      denyButtonText: 'Salin Link Checkout',
+      cancelButtonText: t('cancel') || 'Batal',
+      confirmButtonColor: '#f59e0b',
+      denyButtonColor: '#7c3aed',
+    });
+
+    if (result.isConfirmed) {
+      // Langsung arahkan ke Pi Browser pada posisi link checkout saat ini
+      window.location.href = piDeepLink;
+    } else if (result.isDenied && navigator.clipboard) {
+      await navigator.clipboard.writeText(currentUrl);
+      Swal.fire({
+        title: 'Link Disalin!',
+        text: 'Silakan tempel (paste) link checkout ini di bilah alamat aplikasi Pi Browser resmi.',
+        icon: 'success',
+        timer: 2200,
+        showConfirmButton: false,
+      });
+    }
+  };
+
   const processCheckout = async () => {
     setLoading(true);
 
     try {
+      // 0. Pastikan transaksi dijalankan di dalam Pi Browser resmi
+      const isPiBrowser = await checkIsPiBrowser();
+      if (!isPiBrowser) {
+        setLoading(false);
+        await promptOpenInPiBrowser();
+        return;
+      }
+
+      const Pi = (window as any).Pi;
+
       // 1. Kirim data checkout ke Laravel Backend (/api/orders)
       const rawRes: any = await orderService.createOrder(checkoutData);
 
@@ -41,87 +113,66 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
         throw new Error(res?.message || t('createOrderFailedError'));
       }
 
-      // 2. Inisialisasi & Authenticate Pi Network SDK dengan Scope Payments
-      if (typeof window !== 'undefined' && (window as any).Pi) {
-        const Pi = (window as any).Pi;
-
-        // Auto-Initialize Pi SDK jika belum dipanggil sebelumnya
-        try {
-          await Pi.init({ version: '2.0', sandbox: false });
-        } catch (initErr) {
-          console.warn('Pi SDK sudah ter-initialized:', initErr);
-        }
-
-        // Meminta Izin / Scope 'payments' dari Pengguna
-        try {
-          const scopes = ['username', 'payments'];
-          const onIncompletePaymentFound = (payment: any) => {
-            console.log('Incomplete payment found:', payment);
-          };
-          await Pi.authenticate(scopes, onIncompletePaymentFound);
-        } catch (authErr: any) {
-          console.error('Pi Authenticate Error:', authErr);
-        }
-
-        const paymentData = {
-          amount: Number(totalPi),
-          memo: memo,
-          metadata: { orderId: orderId },
+      // 2. Authenticate Pi Network SDK dengan Scope 'payments'
+      try {
+        const scopes = ['username', 'payments'];
+        const onIncompletePaymentFound = (payment: any) => {
+          console.log('Incomplete payment found:', payment);
         };
-
-        const paymentCallbacks = {
-          onReadyForServerApproval: async (paymentId: string) => {
-            console.log('Server Approval Payment ID:', paymentId);
-            try {
-              await orderService.approvePayment(paymentId, orderId);
-            } catch (approvalErr: any) {
-              console.error('Approval Error:', approvalErr);
-            }
-          },
-          onReadyForServerCompletion: async (paymentId: string, txid: string) => {
-            console.log('Server Completion TXID:', txid);
-            try {
-              await orderService.completePayment(paymentId, txid, orderId);
-
-              Swal.fire({
-                title: t('successTitle'),
-                text: t('piPaymentSuccessText'),
-                icon: 'success',
-                confirmButtonColor: '#f59e0b',
-              }).then(() => {
-                setLoading(false);
-                router.push('/orders');
-              });
-            } catch (completionErr: any) {
-              console.error('Completion Error:', completionErr);
-              setLoading(false);
-            }
-          },
-          onCancel: (paymentId: string) => {
-            console.log('Pembayaran dibatalkan:', paymentId);
-            Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
-            setLoading(false);
-          },
-          onError: (error: Error, payment?: unknown) => {
-            console.error('Error transaksi Pi SDK:', error, payment);
-            Swal.fire(t('piSdkErrorTitle'), error.message || t('piPaymentFailedFallback'), 'error');
-            setLoading(false);
-          },
-        };
-
-        // 3. Eksekusi Pembayaran via Pi SDK
-        Pi.createPayment(paymentData, paymentCallbacks);
-      } else {
-        Swal.fire({
-          title: `${t('orderNumberLabel')} #${orderId} ${t('orderCreatedSuffix')}`,
-          text: t('openInPiBrowserToPayText'),
-          icon: 'info',
-          confirmButtonColor: '#f59e0b',
-        }).then(() => {
-          setLoading(false);
-          router.push('/orders');
-        });
+        await Pi.authenticate(scopes, onIncompletePaymentFound);
+      } catch (authErr: any) {
+        console.error('Pi Authenticate Error:', authErr);
+        throw new Error(authErr?.message || 'Gagal autentikasi Pi Wallet di Pi Browser.');
       }
+
+      const paymentData = {
+        amount: Number(totalPi),
+        memo: memo,
+        metadata: { orderId: orderId },
+      };
+
+      const paymentCallbacks = {
+        onReadyForServerApproval: async (paymentId: string) => {
+          console.log('Server Approval Payment ID:', paymentId);
+          try {
+            await orderService.approvePayment(paymentId, orderId);
+          } catch (approvalErr: any) {
+            console.error('Approval Error:', approvalErr);
+          }
+        },
+        onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+          console.log('Server Completion TXID:', txid);
+          try {
+            await orderService.completePayment(paymentId, txid, orderId);
+
+            Swal.fire({
+              title: t('successTitle'),
+              text: t('piPaymentSuccessText'),
+              icon: 'success',
+              confirmButtonColor: '#f59e0b',
+            }).then(() => {
+              setLoading(false);
+              router.push('/orders');
+            });
+          } catch (completionErr: any) {
+            console.error('Completion Error:', completionErr);
+            setLoading(false);
+          }
+        },
+        onCancel: (paymentId: string) => {
+          console.log('Pembayaran dibatalkan:', paymentId);
+          Swal.fire(t('paymentCancelledTitle'), t('paymentCancelledText'), 'info');
+          setLoading(false);
+        },
+        onError: (error: Error, payment?: unknown) => {
+          console.error('Error transaksi Pi SDK:', error, payment);
+          Swal.fire(t('piSdkErrorTitle'), error.message || t('piPaymentFailedFallback'), 'error');
+          setLoading(false);
+        },
+      };
+
+      // 3. Eksekusi Pembayaran via Pi SDK
+      Pi.createPayment(paymentData, paymentCallbacks);
     } catch (err: any) {
       console.error('Checkout Detail Error:', err);
 
