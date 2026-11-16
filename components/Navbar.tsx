@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
+import logoNtt from '@/app/logonttstorepi.ico';
 import { 
   ShoppingBag, 
   Store, 
