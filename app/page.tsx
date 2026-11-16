@@ -136,75 +136,65 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Hero Banner */}
-      <section className="relative overflow-hidden bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-6 sm:p-8 md:p-12 shadow-lg">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          {/* Kolom Kiri: Teks Sambutan & Tombol Auth */}
-          <div className="lg:col-span-7 space-y-4">
-            <span className="inline-block bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-              {isPiBrowser ? t('piBrowserNative') : t('piOauthMode')}
-            </span>
+      {/* Hero Banner Full Video-Style Product Showcase */}
+      <HeroProductShowcase products={showcaseProducts}>
+        <div className="max-w-3xl space-y-4">
+          <span className="inline-block bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow">
+            {isPiBrowser ? t('piBrowserNative') : t('piOauthMode')}
+          </span>
 
-            <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
-              {t('welcomeTitle')}
-              <span className="text-yellow-400">Pi TestNet</span>
-            </h1>
+          <h1 className="text-3xl md:text-5xl font-extrabold leading-tight drop-shadow">
+            {t('welcomeTitle')}
+            <span className="text-yellow-400">Pi TestNet</span>
+          </h1>
 
-            <p className="text-base sm:text-lg opacity-90 leading-relaxed">
-              {t('heroSubtitle')}
-            </p>
+          <p className="text-base sm:text-lg text-white/90 leading-relaxed drop-shadow-sm">
+            {t('heroSubtitle')}
+          </p>
 
-            <div className="pt-4 flex flex-wrap gap-4 items-center">
-              {piUser ? (
-                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-3 rounded-2xl font-medium">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span>
-                    {t('connectedAs')} <strong>@{piUser.username}</strong>
-                  </span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAuthenticate}
-                  disabled={loading}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isPiBrowser ? (
-                    <Wallet className="w-5 h-5" />
-                  ) : (
-                    <ShieldCheck className="w-5 h-5 text-yellow-300" />
-                  )}
-                  {loading
-                    ? t('redirecting')
-                    : isPiBrowser
-                    ? t('connectPiWallet')
-                    : t('signInWithPi')}
-                </button>
-              )}
-
-              <Link
-                href="/products"
-                className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
-              >
-                {t('exploreProducts')}
-              </Link>
-            </div>
-
-            {!isPiBrowser && !piUser && (
-              <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4" /> {t('externalBrowserHint')}
+          <div className="pt-3 flex flex-wrap gap-4 items-center">
+            {piUser ? (
+              <div className="flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/25 text-white px-5 py-3 rounded-2xl font-medium">
+                <CheckCircle2 className="w-5 h-5 text-green-400" />
+                <span>
+                  {t('connectedAs')} <strong>@{piUser.username}</strong>
+                </span>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAuthenticate}
+                disabled={loading}
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
+              >
+                {isPiBrowser ? (
+                  <Wallet className="w-5 h-5" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-yellow-300" />
+                )}
+                {loading
+                  ? t('redirecting')
+                  : isPiBrowser
+                  ? t('connectPiWallet')
+                  : t('signInWithPi')}
+              </button>
             )}
+
+            <Link
+              href="/products"
+              className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
+            >
+              {t('exploreProducts')}
+            </Link>
           </div>
 
-          {/* Kolom Kanan: Animasi Etalase Produk Acak Interaktif Seperti Video */}
-          {showcaseProducts.length > 0 && (
-            <div className="lg:col-span-5">
-              <HeroProductShowcase products={showcaseProducts} />
+          {!isPiBrowser && !piUser && (
+            <div className="mt-2 text-xs text-yellow-200/90 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4" /> {t('externalBrowserHint')}
             </div>
           )}
         </div>
-      </section>
+      </HeroProductShowcase>
 
       {/* Katalog Produk Unggulan */}
       <section>
