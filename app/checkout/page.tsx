@@ -12,6 +12,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { useCart } from '@/context/CartContext';
 import { ArrowLeft, MapPin, PackageCheck, ShoppingBag, AlertCircle, Truck, CheckCircle2, Loader2, Zap } from 'lucide-react';
 
+
 export const dynamic = 'force-dynamic';
 
 function CheckoutFormContent() {
