@@ -26,18 +26,39 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   };
 
   /**
-   * Munculkan SweetAlert dan arahkan langsung ke Pi Browser pada posisi link checkout
+   * Munculkan SweetAlert dengan QR Code siap scan + tombol deep link ke Pi Browser
    */
   const showPiBrowserWarning = async () => {
     const currentUrl = window.location.href;
     const piDeepLink = currentUrl.replace(/^https?:\/\//i, 'pi://');
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(
+      piDeepLink
+    )}`;
+
+    const title = t('openOfficialPiBrowserTitle') || 'Buka di Pi Browser Resmi';
+    const message =
+      t('mustOpenInPiBrowserText') ||
+      'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.';
 
     const result = await Swal.fire({
-      title: t('openOfficialPiBrowserTitle') || 'Buka di Pi Browser Resmi',
-      text:
-        t('mustOpenInPiBrowserText') ||
-        'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
-      icon: 'warning',
+      title,
+      html: `
+        <p style="font-size: 13px; color: #4b5563; margin-bottom: 14px;">
+          ${message}
+        </p>
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #fffbeb; border: 1px solid #fde68a; border-radius: 16px; padding: 14px;">
+          <img
+            src="${qrImageUrl}"
+            alt="QR Code Pi Browser Checkout"
+            width="200"
+            height="200"
+            style="border-radius: 12px; background: #ffffff; padding: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);"
+          />
+          <span style="margin-top: 10px; font-size: 11px; font-weight: 700; color: #b45309;">
+            Scan QR Code ini untuk membuka langsung di Pi Browser
+          </span>
+        </div>
+      `,
       showCancelButton: true,
       confirmButtonText: t('openInPiBrowserBtn') || 'Buka di Pi Browser',
       cancelButtonText: t('cancel') || 'Batal',
@@ -50,7 +71,7 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
   };
 
   const processCheckout = async () => {
-    // 0. Jika bukan Pi Browser resmi, langsung tampilkan SweetAlert & hentikan proses
+    // 0. Jika bukan Pi Browser resmi, langsung tampilkan QR Code & hentikan proses
     if (!isOfficialPiBrowser()) {
       await showPiBrowserWarning();
       return;
