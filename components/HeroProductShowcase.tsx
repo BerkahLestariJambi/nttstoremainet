@@ -10,11 +10,21 @@ interface HeroProductShowcaseProps {
   products?: any[];
 }
 
+type TransitionMode = 'shatter' | 'wave' | 'pop' | 'slice';
+const TRANSITION_MODES: TransitionMode[] = ['shatter', 'wave', 'pop', 'slice'];
+
+const COLS = 6;
+const ROWS = 4;
+const TOTAL_TILES = COLS * ROWS;
+
 export default function HeroProductShowcase({
   products = [],
 }: HeroProductShowcaseProps) {
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [prevProduct, setPrevProduct] = useState<any>(null);
+  const [transitionMode, setTransitionMode] = useState<TransitionMode>('shatter');
+  const [transitionKey, setTransitionKey] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
 
   const API_BASE_URL =
@@ -38,7 +48,7 @@ export default function HeroProductShowcase({
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  // Acak urutan produk secara dinamis (maksimal 8 produk untuk reel)
+  // Acak urutan produk secara dinamis (maksimal 8 produk)
   const shuffledProducts = useMemo(() => {
     if (!Array.isArray(products) || products.length === 0) return [];
     const withImages = products.filter((p) => p?.image_url);
@@ -53,21 +63,62 @@ export default function HeroProductShowcase({
 
   useEffect(() => {
     setCurrentIndex(0);
+    setPrevProduct(null);
   }, [shuffledProducts.length]);
 
-  // Transisi otomatis setiap 4.5 detik seperti video
+  const triggerSlideChange = (nextIdx: number) => {
+    if (shuffledProducts.length === 0) return;
+    const currentSafe = currentIndex % shuffledProducts.length;
+    setPrevProduct(shuffledProducts[currentSafe]);
+    const randomMode =
+      TRANSITION_MODES[Math.floor(Math.random() * TRANSITION_MODES.length)];
+    setTransitionMode(randomMode);
+    setTransitionKey((k) => k + 1);
+    setCurrentIndex(nextIdx);
+  };
+
+  // Auto-play setiap 4.5 detik dengan mode transisi acak
   useEffect(() => {
     if (shuffledProducts.length <= 1 || isPaused) return;
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % shuffledProducts.length);
+      triggerSlideChange((currentIndex + 1) % shuffledProducts.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, [shuffledProducts.length, isPaused]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shuffledProducts.length, isPaused, currentIndex]);
+
+  // Konfigurasi koordinat & arah lemparan acak tiap kepingan grid
+  const tiles = useMemo(() => {
+    return Array.from({ length: TOTAL_TILES }, (_, index) => {
+      const col = index % COLS;
+      const row = Math.floor(index / COLS);
+      const posX = (col / (COLS - 1)) * 100;
+      const posY = (row / (ROWS - 1)) * 100;
+      const randomAngle = ((index * 47) % 90) - 45;
+      const randomTx = (((index * 73) % 160) - 80) * 1.5;
+      const randomTy = (((index * 31) % 160) - 80) * 1.5;
+      const delayMs = ((col + row) * 45) + ((index % 3) * 25);
+
+      return {
+        index,
+        col,
+        row,
+        posX,
+        posY,
+        randomAngle,
+        randomTx,
+        randomTy,
+        delayMs,
+      };
+    });
+  }, []);
 
   const safeIndex =
     shuffledProducts.length > 0 ? currentIndex % shuffledProducts.length : 0;
   const activeProduct = shuffledProducts[safeIndex];
   const imgUrl = activeProduct ? getFullImageUrl(activeProduct.image_url) : '';
+  const prevImgUrl = prevProduct ? getFullImageUrl(prevProduct.image_url) : '';
+
   const basePrice = Number(activeProduct?.price_pi || 0);
   const effectivePrice = activeProduct ? getEffectivePricePi(activeProduct) : 0;
   const isPromo = effectivePrice > 0 && effectivePrice < basePrice;
@@ -77,12 +128,25 @@ export default function HeroProductShowcase({
 
   const handlePrev = () => {
     if (shuffledProducts.length === 0) return;
-    setCurrentIndex((prev) => (prev - 1 + shuffledProducts.length) % shuffledProducts.length);
+    triggerSlideChange((safeIndex - 1 + shuffledProducts.length) % shuffledProducts.length);
   };
 
   const handleNext = () => {
     if (shuffledProducts.length === 0) return;
-    setCurrentIndex((prev) => (prev + 1) % shuffledProducts.length);
+    triggerSlideChange((safeIndex + 1) % shuffledProducts.length);
+  };
+
+  const getTileAnimationClass = () => {
+    switch (transitionMode) {
+      case 'wave':
+        return 'animate-tile-wave';
+      case 'pop':
+        return 'animate-tile-pop';
+      case 'slice':
+        return 'animate-tile-slice';
+      default:
+        return 'animate-tile-shatter';
+    }
   };
 
   return (
@@ -91,11 +155,22 @@ export default function HeroProductShowcase({
       onMouseLeave={() => setIsPaused(false)}
       className="relative overflow-hidden bg-gradient-to-r from-amber-800 via-amber-900 to-purple-950 text-white rounded-3xl shadow-xl h-[260px] sm:h-[340px] md:h-[400px] flex flex-col justify-between"
     >
-      {/* Background Video-Style Full Gambar Produk Acak */}
-      {activeProduct && imgUrl && (
+      {/* Lapisan Gambar Sebelumnya (Base Layer saat transisi pecah berlangsung) */}
+      {prevProduct && prevImgUrl && (
         <div className="absolute inset-0 z-0 overflow-hidden">
           <img
-            key={activeProduct.id}
+            src={prevImgUrl}
+            alt=""
+            className="w-full h-full object-cover object-center opacity-80"
+          />
+        </div>
+      )}
+
+      {/* Lapisan Utama Gambar Produk Aktif + Efek Ken Burns */}
+      {activeProduct && imgUrl && (
+        <div className="absolute inset-0 z-[1] overflow-hidden">
+          <img
+            key={`base-${activeProduct.id}-${transitionKey}`}
             src={imgUrl}
             alt={activeProduct.name || 'NTT Product'}
             className="w-full h-full object-cover object-center animate-kenburns"
@@ -103,6 +178,36 @@ export default function HeroProductShowcase({
               (e.target as HTMLElement).style.display = 'none';
             }}
           />
+
+          {/* Matriks Kepingan Pecah (24 Tiles) untuk Transisi Interaktif */}
+          <div
+            key={`grid-${activeProduct.id}-${transitionKey}`}
+            className="absolute inset-0 grid pointer-events-none"
+            style={{
+              gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+              gridTemplateRows: `repeat(${ROWS}, 1fr)`,
+            }}
+          >
+            {tiles.map((tile) => (
+              <div
+                key={tile.index}
+                className={`w-full h-full ${getTileAnimationClass()}`}
+                style={
+                  {
+                    backgroundImage: `url("${imgUrl}")`,
+                    backgroundSize: `${COLS * 100}% ${ROWS * 100}%`,
+                    backgroundPosition: `${tile.posX}% ${tile.posY}%`,
+                    animationDelay: `${tile.delayMs}ms`,
+                    '--rot': `${tile.randomAngle}deg`,
+                    '--tx': `${tile.randomTx}px`,
+                    '--ty': `${tile.randomTy}px`,
+                    '--slice-y': tile.col % 2 === 0 ? '-100%' : '100%',
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+
           <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/75" />
         </div>
       )}
@@ -115,7 +220,7 @@ export default function HeroProductShowcase({
               <button
                 key={p.id || idx}
                 type="button"
-                onClick={() => setCurrentIndex(idx)}
+                onClick={() => triggerSlideChange(idx)}
                 aria-label={`Slide ${idx + 1}`}
                 className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden cursor-pointer"
               >
@@ -138,7 +243,7 @@ export default function HeroProductShowcase({
       {activeProduct && (
         <div className="relative z-20 px-4 sm:px-6 pb-4 sm:pb-5 flex items-center justify-between gap-3">
           <Link
-            key={`pill-${activeProduct.id}`}
+            key={`pill-${activeProduct.id}-${transitionKey}`}
             href={`/products/${activeProduct.slug || activeProduct.id}`}
             className="group inline-flex items-center gap-3 bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 rounded-2xl px-3.5 py-2 transition animate-slideUpFade max-w-[78%] sm:max-w-md"
           >
