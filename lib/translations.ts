@@ -151,6 +151,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     checkoutFailedTitle: 'Checkout Failed',
     connectingToPiSdk: 'Connecting to Pi SDK...',
     payNowViaPiBrowser: 'Pay Now via Pi Browser',
+    openOfficialPiBrowserTitle: 'Open in Official Pi Browser',
+    mustOpenInPiBrowserText: 'You must open this application link in the official Pi Network Pi Browser to make transactions.',
+    openInPiBrowserBtn: 'Open in Pi Browser',
+    copyCheckoutLinkBtn: 'Copy Checkout Link',
+    linkCopiedTitle: 'Link Copied!',
+    pasteInPiBrowserHint: 'Please open the official Pi Browser app and paste this checkout link into the address bar.',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'Home',
@@ -390,6 +396,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     checkoutFailedTitle: 'Gagal Checkout',
     connectingToPiSdk: 'Menghubungkan ke Pi SDK...',
     payNowViaPiBrowser: 'Bayar Sekarang via Pi Browser',
+    openOfficialPiBrowserTitle: 'Buka di Pi Browser Resmi',
+    mustOpenInPiBrowserText: 'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
+    openInPiBrowserBtn: 'Buka di Pi Browser',
+    copyCheckoutLinkBtn: 'Salin Link Checkout',
+    linkCopiedTitle: 'Link Berhasil Disalin!',
+    pasteInPiBrowserHint: 'Silakan buka aplikasi Pi Browser resmi lalu tempel (paste) link checkout ini.',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'Rumah',
@@ -629,6 +641,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     checkoutFailedTitle: '结账失败',
     connectingToPiSdk: '正在连接 Pi SDK...',
     payNowViaPiBrowser: '立即通过 Pi 浏览器支付',
+    openOfficialPiBrowserTitle: '请在官方 Pi 浏览器中打开',
+    mustOpenInPiBrowserText: '您必须在 Pi Network 官方 Pi 浏览器中打开此应用链接才能进行交易。',
+    openInPiBrowserBtn: '在 Pi 浏览器中打开',
+    copyCheckoutLinkBtn: '复制结账链接',
+    linkCopiedTitle: '链接已复制！',
+    pasteInPiBrowserHint: '请打开官方 Pi 浏览器应用，并将此结账链接粘贴到地址栏中。',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: '家',
@@ -868,6 +886,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     checkoutFailedTitle: 'チェックアウト失敗',
     connectingToPiSdk: 'Pi SDK に接続中...',
     payNowViaPiBrowser: 'Pi ブラウザで今すぐ支払う',
+    openOfficialPiBrowserTitle: '公式 Pi ブラウザで開く',
+    mustOpenInPiBrowserText: '取引を行うには、Pi Network 公式の Pi ブラウザでこのアプリリンクを開く必要があります。',
+    openInPiBrowserBtn: 'Pi ブラウザで開く',
+    copyCheckoutLinkBtn: '決済リンクをコピー',
+    linkCopiedTitle: 'リンクをコピーしました！',
+    pasteInPiBrowserHint: '公式 Pi ブラウザアプリを開き、アドレスバーにこの決済リンクを貼り付けてください。',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: '自宅',
@@ -1107,6 +1131,12 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     checkoutFailedTitle: 'فشل إتمام الطلب',
     connectingToPiSdk: 'جاري الاتصال بـ Pi SDK...',
     payNowViaPiBrowser: 'ادفع الآن عبر متصفح Pi',
+    openOfficialPiBrowserTitle: 'افتح في متصفح Pi الرسمي',
+    mustOpenInPiBrowserText: 'يجب عليك فتح رابط هذا التطبيق في متصفح Pi الرسمي التابع لشبكة Pi لإجراء المعاملات.',
+    openInPiBrowserBtn: 'افتح في متصفح Pi',
+    copyCheckoutLinkBtn: 'نسخ رابط الدفع',
+    linkCopiedTitle: 'تم نسخ الرابط!',
+    pasteInPiBrowserHint: 'يرجى فتح تطبيق متصفح Pi الرسمي ثم لصق رابط الدفع هذا في شريط العنوان.',
 
     // Addresses Page (Biteship Maps & CRUD)
     defaultAddressLabel: 'المنزل',
