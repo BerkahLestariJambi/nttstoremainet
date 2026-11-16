@@ -7,6 +7,7 @@ import { useLanguage } from '@/context/LanguageContext';
 import { productService } from '@/services/productService';
 import FlashSaleBanner from '@/components/FlashSaleBanner';
 
+
 export default function HomePage() {
   const { t } = useLanguage();
   const [showcaseProducts, setShowcaseProducts] = useState<any[]>([]);
