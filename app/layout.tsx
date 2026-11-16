@@ -4,6 +4,7 @@ import Navbar from '@/components/layout/Navbar';
 import BottomNav from '@/components/BottomNav';
 import { CartProvider } from '@/context/CartContext';
 import { LanguageProvider } from '@/context/LanguageContext';
+import logoNtt from './logonttstorepi.ico';
 
 export const metadata = {
   title: 'NTTStorePi - Toko Online Khas NTT',
