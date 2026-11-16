@@ -33,29 +33,19 @@ export default function CheckoutButton({ checkoutData }: CheckoutButtonProps) {
     const piDeepLink = currentUrl.replace(/^https?:\/\//i, 'pi://');
 
     const result = await Swal.fire({
-      title: 'Buka di Pi Browser Resmi',
-      text: 'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
+      title: t('openOfficialPiBrowserTitle') || 'Buka di Pi Browser Resmi',
+      text:
+        t('mustOpenInPiBrowserText') ||
+        'Anda harus buka link Aplikasi ini di Pi Browser resmi Pi Network Untuk bertransaksi.',
       icon: 'warning',
       showCancelButton: true,
-      showDenyButton: true,
-      confirmButtonText: 'Buka di Pi Browser',
-      denyButtonText: 'Salin Link Checkout',
+      confirmButtonText: t('openInPiBrowserBtn') || 'Buka di Pi Browser',
       cancelButtonText: t('cancel') || 'Batal',
       confirmButtonColor: '#f59e0b',
-      denyButtonColor: '#7c3aed',
     });
 
     if (result.isConfirmed) {
       window.location.href = piDeepLink;
-    } else if (result.isDenied && navigator.clipboard) {
-      await navigator.clipboard.writeText(currentUrl);
-      await Swal.fire({
-        title: 'Link Berhasil Disalin!',
-        text: 'Silakan buka aplikasi Pi Browser resmi lalu tempel (paste) link checkout ini.',
-        icon: 'success',
-        timer: 2500,
-        showConfirmButton: false,
-      });
     }
   };
 
