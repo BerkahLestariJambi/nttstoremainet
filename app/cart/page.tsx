@@ -6,11 +6,13 @@ import { useRouter } from 'next/navigation';
 import { cartService, CartItemData } from '@/services/cartService';
 import { getEffectivePricePi } from '@/services/productService';
 import { useLanguage } from '@/context/LanguageContext';
+import { useCart } from '@/context/CartContext';
 import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckSquare, Square, Zap } from 'lucide-react';
 
 export default function CartPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { fetchCart: syncGlobalCart } = useCart();
   const [cartItems, setCartItems] = useState<CartItemData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -19,9 +21,11 @@ export default function CartPage() {
       const res: any = await cartService.getCart();
       const list = Array.isArray(res) ? res : (res?.data || []);
       setCartItems(list);
+      await syncGlobalCart();
     } catch (err) {
       console.error('Gagal memuat keranjang:', err);
       setCartItems([]);
+      await syncGlobalCart();
     } finally {
       setLoading(false);
     }
@@ -29,12 +33,13 @@ export default function CartPage() {
 
   useEffect(() => {
     fetchCart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleToggleSelect = async (item: CartItemData) => {
     try {
       await cartService.updateCartItem(item.id, { selected: !item.selected });
-      fetchCart();
+      await fetchCart();
     } catch (err) {
       console.error('Gagal update status pilihan:', err);
     }
@@ -45,7 +50,7 @@ export default function CartPage() {
     if (newQty < 1) return;
     try {
       await cartService.updateCartItem(item.id, { quantity: newQty });
-      fetchCart();
+      await fetchCart();
     } catch (err) {
       console.error('Gagal ubah quantity:', err);
     }
@@ -54,7 +59,7 @@ export default function CartPage() {
   const handleRemove = async (id: number) => {
     try {
       await cartService.removeFromCart(id);
-      fetchCart();
+      await fetchCart();
     } catch (err) {
       console.error('Gagal menghapus item:', err);
     }
