@@ -48,19 +48,16 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-20">
           
           {/* Logo NTTStorePi */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <img
-    src="/logonttstorepi.ico"
-    alt="Logo NTTStorePi"
+        <Link href="/" className="flex items-center gap-2.5">
+  <img
+    src={logoNtt.src}
+    alt="NTTStorePi Logo"
     className="w-9 h-9 rounded-xl object-contain"
   />
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 to-purple-700 flex items-center justify-center text-white font-extrabold text-xl shadow-md group-hover:scale-105 transition transform">
-              π
-            </div>
-            <span className="text-xl font-black text-gray-900 tracking-tight">
-              NTTStore<span className="text-amber-600">Pi</span>
-            </span>
-          </Link>
+  <span className="text-xl font-black tracking-tight text-amber-700">
+    NTTStorePi
+  </span>
+</Link>
 
           {/* Navigasi Desktop & Quick Links */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
