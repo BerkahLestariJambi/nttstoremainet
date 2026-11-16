@@ -10,7 +10,7 @@ export const metadata = {
   title: 'NTTStorePi - Toko Online Khas NTT',
   description: 'Belanja Tenun Ikat & Kopi Flores dengan Pi Coin',
   icons: {
-    icon: '/logonttstorepi.ico',
+    icon: 'logonttstorepi.ico',
     shortcut: '//logonttstorepi.ico',
     apple: '//logonttstorepi.ico',
   },
