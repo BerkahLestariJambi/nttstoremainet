@@ -16,6 +16,7 @@ import {
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import logoNtt from '@/app/logonttstorepi.ico';
 
 export default function Navbar() {
   const router = useRouter();
@@ -54,14 +55,16 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
         
         {/* Brand Logo */}
-        <Link href="/" className="text-xl sm:text-2xl font-extrabold text-amber-700 shrink-0">
-          <img
-    src="/logonttstorepi.ico"
-    alt="Logo NTTStorePi"
+       <Link href="/" className="flex items-center gap-2.5">
+  <img
+    src={logoNtt.src}
+    alt="NTTStorePi Logo"
     className="w-9 h-9 rounded-xl object-contain"
   />
-          NTTStore<span className="text-purple-600">Pi</span>
-        </Link>
+  <span className="text-xl font-black tracking-tight text-amber-700">
+    NTTStorePi
+  </span>
+</Link>
 
         {/* Action Area (Kanan Atas: User Status + Pemilih 5 Bahasa) */}
         <div className="flex items-center gap-2 sm:gap-3">
