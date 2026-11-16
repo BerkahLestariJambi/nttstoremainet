@@ -1,18 +1,18 @@
 'use client';
 
-
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { getEffectivePricePi } from '@/services/productService';
 import { useLanguage } from '@/context/LanguageContext';
 import { Sparkles, Zap, ChevronLeft, ChevronRight, ArrowUpRight } from 'lucide-react';
 
 interface HeroProductShowcaseProps {
-  products: any[];
-  children: React.ReactNode;
+  products?: any[];
 }
 
-export default function HeroProductShowcase({ products, children }: HeroProductShowcaseProps) {
+export default function HeroProductShowcase({
+  products = [],
+}: HeroProductShowcaseProps) {
   const { t } = useLanguage();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -41,13 +41,19 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
   // Acak urutan produk secara dinamis (maksimal 8 produk untuk reel)
   const shuffledProducts = useMemo(() => {
     if (!Array.isArray(products) || products.length === 0) return [];
-    const copy = [...products].filter((p) => p?.image_url);
+    const withImages = products.filter((p) => p?.image_url);
+    const source = withImages.length > 0 ? withImages : products;
+    const copy = [...source];
     for (let i = copy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [copy[i], copy[j]] = [copy[j], copy[i]];
     }
     return copy.slice(0, 8);
   }, [products]);
+
+  useEffect(() => {
+    setCurrentIndex(0);
+  }, [shuffledProducts.length]);
 
   // Transisi otomatis setiap 4.5 detik seperti video
   useEffect(() => {
@@ -58,7 +64,9 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
     return () => clearInterval(timer);
   }, [shuffledProducts.length, isPaused]);
 
-  const activeProduct = shuffledProducts[currentIndex];
+  const safeIndex =
+    shuffledProducts.length > 0 ? currentIndex % shuffledProducts.length : 0;
+  const activeProduct = shuffledProducts[safeIndex];
   const imgUrl = activeProduct ? getFullImageUrl(activeProduct.image_url) : '';
   const basePrice = Number(activeProduct?.price_pi || 0);
   const effectivePrice = activeProduct ? getEffectivePricePi(activeProduct) : 0;
@@ -68,10 +76,12 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
     (isPromo ? Math.round(((basePrice - effectivePrice) / basePrice) * 100) : 0);
 
   const handlePrev = () => {
+    if (shuffledProducts.length === 0) return;
     setCurrentIndex((prev) => (prev - 1 + shuffledProducts.length) % shuffledProducts.length);
   };
 
   const handleNext = () => {
+    if (shuffledProducts.length === 0) return;
     setCurrentIndex((prev) => (prev + 1) % shuffledProducts.length);
   };
 
@@ -79,7 +89,7 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
     <section
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      className="relative overflow-hidden bg-gradient-to-r from-amber-800 via-amber-900 to-purple-950 text-white rounded-3xl shadow-xl min-h-[360px] md:min-h-[420px] flex flex-col justify-between"
+      className="relative overflow-hidden bg-gradient-to-r from-amber-800 via-amber-900 to-purple-950 text-white rounded-3xl shadow-xl h-[260px] sm:h-[340px] md:h-[400px] flex flex-col justify-between"
     >
       {/* Background Video-Style Full Gambar Produk Acak */}
       {activeProduct && imgUrl && (
@@ -87,58 +97,59 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
           <img
             key={activeProduct.id}
             src={imgUrl}
-            alt={activeProduct.name}
-            className="w-full h-full object-cover object-center animate-kenburns opacity-65"
+            alt={activeProduct.name || 'NTT Product'}
+            className="w-full h-full object-cover object-center animate-kenburns"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
           />
-          {/* Overlay Gradien Gelap & Hangat supaya teks Hero tetap kontras & terbaca jelas */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-amber-950/70 to-purple-950/55" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/75" />
         </div>
       )}
 
-      {/* Progress Bar Story di Bagian Paling Atas Hero */}
-      {shuffledProducts.length > 1 && (
-        <div className="relative z-20 flex items-center gap-1.5 px-6 pt-4">
-          {shuffledProducts.map((p, idx) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setCurrentIndex(idx)}
-              aria-label={`Slide ${idx + 1}`}
-              className="h-1 flex-1 rounded-full bg-white/25 overflow-hidden cursor-pointer"
-            >
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  idx === currentIndex
-                    ? 'bg-yellow-400 w-full'
-                    : idx < currentIndex
-                    ? 'bg-white/75 w-full'
-                    : 'w-0'
-                }`}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Konten Utama Hero (Teks Welcome & Tombol Auth/Explore) */}
-      <div className="relative z-10 p-6 sm:p-8 md:p-12 flex-1 flex flex-col justify-center">
-        {children}
+      {/* Bagian Atas: Progress Bar Story */}
+      <div className="relative z-20 px-4 sm:px-6 pt-3.5">
+        {shuffledProducts.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            {shuffledProducts.map((p, idx) => (
+              <button
+                key={p.id || idx}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                aria-label={`Slide ${idx + 1}`}
+                className="h-1 flex-1 rounded-full bg-white/30 overflow-hidden cursor-pointer"
+              >
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    idx === safeIndex
+                      ? 'bg-yellow-400 w-full'
+                      : idx < safeIndex
+                      ? 'bg-white/80 w-full'
+                      : 'w-0'
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Kartu Mini Info Produk Aktif & Kontrol Slide di Bagian Bawah Hero */}
+      {/* Bagian Bawah: Info Produk Aktif & Tombol Navigasi Slide */}
       {activeProduct && (
-        <div className="relative z-20 px-6 sm:px-8 md:px-12 pb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative z-20 px-4 sm:px-6 pb-4 sm:pb-5 flex items-center justify-between gap-3">
           <Link
             key={`pill-${activeProduct.id}`}
             href={`/products/${activeProduct.slug || activeProduct.id}`}
-            className="group inline-flex items-center gap-3 bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/20 rounded-2xl px-3.5 py-2 transition animate-slideUpFade max-w-full sm:max-w-md"
+            className="group inline-flex items-center gap-3 bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/20 rounded-2xl px-3.5 py-2 transition animate-slideUpFade max-w-[78%] sm:max-w-md"
           >
             {imgUrl && (
               <img
                 src={imgUrl}
-                alt={activeProduct.name}
+                alt={activeProduct.name || 'Product'}
                 className="w-10 h-10 rounded-xl object-cover border border-white/25 shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
               />
             )}
             <div className="min-w-0">
@@ -151,14 +162,14 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
                 ) : (
                   <span className="inline-flex items-center gap-0.5 bg-yellow-400 text-gray-950 text-[9px] font-black px-1.5 py-0.5 rounded">
                     <Sparkles className="w-2.5 h-2.5" />
-                    FEATURED
+                    NTT STORE
                   </span>
                 )}
                 <span className="text-[10px] text-amber-200 truncate">
                   {activeProduct.seller?.store_name || t('defaultSellerName')}
                 </span>
               </div>
-              <p className="text-xs font-bold text-white truncate mt-0.5">
+              <p className="text-xs sm:text-sm font-bold text-white truncate mt-0.5">
                 {activeProduct.name}{' '}
                 <span className="text-yellow-300 font-extrabold ml-1">
                   π {effectivePrice}
@@ -170,12 +181,12 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
 
           {/* Tombol Geser Slide Kiri / Kanan */}
           {shuffledProducts.length > 1 && (
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={handlePrev}
                 aria-label="Previous slide"
-                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
+                className="w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -183,7 +194,7 @@ export default function HeroProductShowcase({ products, children }: HeroProductS
                 type="button"
                 onClick={handleNext}
                 aria-label="Next slide"
-                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
+                className="w-8 h-8 rounded-full bg-black/45 hover:bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
