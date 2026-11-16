@@ -3,17 +3,19 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import ProductGrid from '@/components/product/ProductGrid';
+import HeroProductShowcase from '@/components/HeroProductShowcase';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { Wallet, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
+import { productService } from '@/services/productService';
 import FlashSaleBanner from '@/components/FlashSaleBanner';
+
 declare global {
   interface Window {
     Pi: any;
   }
 }
-
 
 const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
 
@@ -22,6 +24,20 @@ export default function HomePage() {
   const { t } = useLanguage();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [showcaseProducts, setShowcaseProducts] = useState<any[]>([]);
+
+  // Ambil daftar produk untuk animasi showcase acak di Hero Banner
+  useEffect(() => {
+    productService
+      .getProducts()
+      .then((res: any) => {
+        const productList = res?.data?.data || res?.data || res;
+        setShowcaseProducts(Array.isArray(productList) ? productList : []);
+      })
+      .catch((err) => {
+        console.error('Gagal memuat produk untuk Hero Showcase:', err);
+      });
+  }, []);
 
   // Inisialisasi Native SDK jika dibuka di dalam aplikasi Pi Browser
   useEffect(() => {
@@ -55,7 +71,7 @@ export default function HomePage() {
         };
 
         const auth = await window.Pi.authenticate(scopes, onIncompletePaymentFound);
-        
+
         // 1. Simpan data Pi di Client State
         setPiUser({
           username: auth.user.username,
@@ -72,7 +88,6 @@ export default function HomePage() {
         } catch (backendErr: any) {
           console.warn('Gagal sync token ke backend Laravel:', backendErr.message);
         }
-
       } catch (error: any) {
         alert(`Autentikasi Pi Browser gagal: ${error.message}`);
       } finally {
@@ -84,9 +99,10 @@ export default function HomePage() {
     // ALUR 2: Jika dibuka di Chrome/Safari/Browser Luar (Standard OAuth Implicit Flow)
     try {
       // 1. Generate CSRF State acak & Simpan di sessionStorage
-      const state = typeof crypto !== 'undefined' && crypto.randomUUID 
-        ? crypto.randomUUID() 
-        : Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const state =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
       sessionStorage.setItem('pi_oauth_state', state);
 
@@ -121,49 +137,70 @@ export default function HomePage() {
   return (
     <div className="space-y-8">
       {/* Hero Banner */}
-      <section className="bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-8 md:p-12 shadow-lg">
-        <div className="max-w-3xl space-y-4">
-          <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {isPiBrowser ? t('piBrowserNative') : t('piOauthMode')}
-          </span>
+      <section className="relative overflow-hidden bg-gradient-to-r from-amber-700 via-amber-800 to-purple-900 text-white rounded-3xl p-6 sm:p-8 md:p-12 shadow-lg">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* Kolom Kiri: Teks Sambutan & Tombol Auth */}
+          <div className="lg:col-span-7 space-y-4">
+            <span className="inline-block bg-yellow-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+              {isPiBrowser ? t('piBrowserNative') : t('piOauthMode')}
+            </span>
 
-          <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
-            {t('welcomeTitle')}<span className="text-yellow-400">Pi TestNet</span>
-          </h1>
+            <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">
+              {t('welcomeTitle')}
+              <span className="text-yellow-400">Pi TestNet</span>
+            </h1>
 
-          <p className="text-lg opacity-90 leading-relaxed">
-            {t('heroSubtitle')}
-          </p>
+            <p className="text-base sm:text-lg opacity-90 leading-relaxed">
+              {t('heroSubtitle')}
+            </p>
 
-          <div className="pt-4 flex flex-wrap gap-4 items-center">
-            {piUser ? (
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-3 rounded-2xl font-medium">
-                <CheckCircle2 className="w-5 h-5 text-green-400" />
-                <span>{t('connectedAs')} <strong>@{piUser.username}</strong></span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleAuthenticate}
-                disabled={loading}
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
+            <div className="pt-4 flex flex-wrap gap-4 items-center">
+              {piUser ? (
+                <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-3 rounded-2xl font-medium">
+                  <CheckCircle2 className="w-5 h-5 text-green-400" />
+                  <span>
+                    {t('connectedAs')} <strong>@{piUser.username}</strong>
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAuthenticate}
+                  disabled={loading}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-3.5 rounded-2xl transition shadow-md flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isPiBrowser ? (
+                    <Wallet className="w-5 h-5" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-yellow-300" />
+                  )}
+                  {loading
+                    ? t('redirecting')
+                    : isPiBrowser
+                    ? t('connectPiWallet')
+                    : t('signInWithPi')}
+                </button>
+              )}
+
+              <Link
+                href="/products"
+                className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
               >
-                {isPiBrowser ? <Wallet className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5 text-yellow-300" />}
-                {loading ? t('redirecting') : isPiBrowser ? t('connectPiWallet') : t('signInWithPi')}
-              </button>
-            )}
+                {t('exploreProducts')}
+              </Link>
+            </div>
 
-            <Link
-              href="/products"
-              className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 font-bold px-6 py-3.5 rounded-2xl transition shadow-md inline-block"
-            >
-              {t('exploreProducts')}
-            </Link>
+            {!isPiBrowser && !piUser && (
+              <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> {t('externalBrowserHint')}
+              </div>
+            )}
           </div>
 
-          {!isPiBrowser && !piUser && (
-            <div className="mt-2 text-xs text-yellow-200/80 flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4" /> {t('externalBrowserHint')}
+          {/* Kolom Kanan: Animasi Etalase Produk Acak Interaktif Seperti Video */}
+          {showcaseProducts.length > 0 && (
+            <div className="lg:col-span-5">
+              <HeroProductShowcase products={showcaseProducts} />
             </div>
           )}
         </div>
@@ -171,10 +208,9 @@ export default function HomePage() {
 
       {/* Katalog Produk Unggulan */}
       <section>
-        <FlashSaleBanner />
+        <FlashSaleBanner initialProducts={showcaseProducts} />
         <h2 className="text-2xl font-bold mb-6 text-gray-900">{t('featuredProducts')}</h2>
         <ProductGrid />
-        
       </section>
     </div>
   );
