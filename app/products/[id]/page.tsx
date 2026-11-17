@@ -269,7 +269,11 @@ export default function ProductDetailPage({
               {/* Area Daftar Review dengan Scroll Vertikal */}
               {showReviews && (
                 <div className="mt-3 max-h-[380px] overflow-y-auto pr-1 rounded-2xl border border-gray-100 bg-gray-50/40 p-2 [&>div]:mt-0 [&>div]:p-4 [&>div]:shadow-none">
-                  <ProductReviewsSection productId={product.id} />
+                 {/* <ProductReviewsSection productId={product.id} */}
+                  <ProductReviewsSection
+  productId={product.id}
+  sellerUserId={product.user_id ?? product.seller?.user_id}
+/>
                 </div>
               )}
             </div>
