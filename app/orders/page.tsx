@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { orderService } from '@/services/orderService';
 import { useLanguage } from '@/context/LanguageContext';
@@ -14,7 +14,39 @@ import {
   ShoppingBag,
   Star,
   Crown,
+  Store,
+  Reply,
+  Send,
+  Loader2,
+  CornerDownRight,
+  X,
+  MessageSquare,
 } from 'lucide-react';
+
+interface ReplyNode {
+  id: number;
+  review_id: number;
+  user_id: number;
+  parent_id: number | null;
+  comment: string;
+  is_seller: boolean;
+  created_at: string;
+  user?: {
+    name: string;
+    username?: string;
+  };
+  children?: ReplyNode[];
+}
+
+interface ItemReview {
+  id: number;
+  user_id: number;
+  rating: number;
+  comment: string | null;
+  seller_reply?: string | null;
+  created_at: string;
+  replies?: ReplyNode[];
+}
 
 interface OrderItem {
   id: number;
@@ -22,6 +54,7 @@ interface OrderItem {
   quantity: number;
   price_pi: string;
   is_reviewed?: boolean;
+  review?: ItemReview | null;
   product?: {
     id: number;
     name: string;
@@ -31,6 +64,7 @@ interface OrderItem {
 
 interface Order {
   id: number;
+  user_id?: number;
   order_number: string;
   total_amount_pi: string;
   status: 'pending' | 'processing' | 'paid' | 'completed' | 'cancelled';
@@ -64,10 +98,19 @@ export default function BuyerOrdersPage() {
   } | null>(null);
   const [reviewedKeys, setReviewedKeys] = useState<string[]>([]);
 
-  // Cek apakah user sudah menggunakan kuota uji coba 1x ulasan
+  // State untuk membalas komentar dari Seller langsung di halaman Orders
+  const [replyBox, setReplyBox] = useState<{
+    reviewId: number;
+    parentId: number | null;
+    targetName: string;
+    buyerUserId?: number;
+  } | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
+  const [submittingReply, setSubmittingReply] = useState<boolean>(false);
+
   const hasUsedTrialReview =
     reviewedKeys.length > 0 ||
-    orders.some((o) => o.items?.some((it) => Boolean(it.is_reviewed)));
+    orders.some((o) => o.items?.some((it) => Boolean(it.is_reviewed || it.review)));
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
@@ -86,7 +129,7 @@ export default function BuyerOrdersPage() {
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  useEffect(() => {
+  const loadOrders = useCallback(() => {
     orderService
       .getBuyerOrders()
       .then((res) => {
@@ -99,6 +142,82 @@ export default function BuyerOrdersPage() {
       })
       .finally(() => setLoading(false));
   }, [t]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  // Deteksi username / user_id pembeli dari storage
+  const getBuyerSession = () => {
+    if (typeof window === 'undefined') return {};
+    const info: { id?: number; username?: string; pi_uid?: string; token?: string } = {};
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      const val = window.localStorage.getItem(key);
+      if (!val || val === 'null' || val === 'undefined') continue;
+      const clean = val.trim();
+
+      if (/^\d+\|[A-Za-z0-9]{20,}$/.test(clean) || clean.startsWith('eyJ')) {
+        info.token = clean.replace(/^Bearer\s+/i, '');
+      }
+      if (clean.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(clean);
+          const u = parsed?.user || parsed?.data?.user || parsed;
+          if (u?.id) info.id = Number(u.id);
+          if (u?.username) info.username = String(u.username).replace(/^@/, '');
+          if (u?.pi_uid || u?.uid) info.pi_uid = String(u.pi_uid || u.uid);
+        } catch {
+          // abaikan
+        }
+      }
+    }
+    return info;
+  };
+
+  const handleSendReplyToSeller = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyBox || !replyText.trim()) return;
+
+    setSubmittingReply(true);
+    try {
+      const session = getBuyerSession();
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      };
+      if (session.token) {
+        headers['Authorization'] = `Bearer ${session.token}`;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/reviews/${replyBox.reviewId}/reply`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          comment: replyText.trim(),
+          parent_id: replyBox.parentId,
+          user_id: session.id || replyBox.buyerUserId || null,
+          username: session.username || null,
+          pi_uid: session.pi_uid || null,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || 'Gagal mengirim balasan.');
+      }
+
+      setReplyText('');
+      setReplyBox(null);
+      loadOrders();
+    } catch (err: any) {
+      Swal.fire('Gagal', err?.message || 'Tidak dapat mengirim balasan.', 'error');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
 
   const handlePremiumPrompt = () => {
     Swal.fire({
@@ -116,6 +235,109 @@ export default function BuyerOrdersPage() {
       confirmButtonColor: '#7e22ce',
       showCancelButton: true,
       cancelButtonText: 'Tutup',
+    });
+  };
+
+  // Render rekursif percakapan balasan antara Seller & Buyer di kartu pesanan
+  const renderOrderReplyNodes = (
+    nodes: ReplyNode[],
+    reviewId: number,
+    buyerUserId?: number,
+    depth = 1
+  ) => {
+    return nodes.map((node) => {
+      const authorName = node.user?.name || node.user?.username || 'Pengguna';
+      const isSeller = Boolean(node.is_seller);
+
+      return (
+        <div
+          key={node.id}
+          className={`mt-2 ${depth > 1 ? 'ml-3.5' : 'ml-2'} pl-2.5 border-l-2 ${
+            isSeller ? 'border-purple-300' : 'border-amber-300'
+          }`}
+        >
+          <div
+            className={`p-2.5 rounded-xl text-[11px] space-y-1 ${
+              isSeller
+                ? 'bg-purple-50 border border-purple-100'
+                : 'bg-white border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <CornerDownRight className="w-3 h-3 text-gray-400" />
+                <span className="font-bold text-gray-900">{authorName}</span>
+                {isSeller && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-purple-800 bg-purple-100 px-1.5 py-0.5 rounded-full">
+                    <Store className="w-2.5 h-2.5" /> Penjual
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {new Date(node.created_at).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+              </span>
+            </div>
+
+            <p className="text-gray-700 leading-relaxed">{node.comment}</p>
+
+            {depth < 4 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyBox({
+                    reviewId,
+                    parentId: node.id,
+                    targetName: authorName,
+                    buyerUserId,
+                  });
+                  setReplyText('');
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 hover:text-purple-900 pt-0.5 cursor-pointer"
+              >
+                <Reply className="w-3 h-3" /> Balas
+              </button>
+            )}
+          </div>
+
+          {replyBox?.reviewId === reviewId && replyBox?.parentId === node.id && (
+            <form onSubmit={handleSendReplyToSeller} className="mt-1.5 flex items-center gap-1.5">
+              <input
+                type="text"
+                autoFocus
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={`Balas ${replyBox.targetName}...`}
+                className="flex-1 px-2.5 py-1.5 bg-white border border-purple-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              <button
+                type="submit"
+                disabled={submittingReply || !replyText.trim()}
+                className="p-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white disabled:opacity-50 cursor-pointer"
+              >
+                {submittingReply ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setReplyBox(null)}
+                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          )}
+
+          {Array.isArray(node.children) &&
+            node.children.length > 0 &&
+            renderOrderReplyNodes(node.children, reviewId, buyerUserId, depth + 1)}
+        </div>
+      );
     });
   };
 
@@ -219,81 +441,156 @@ export default function BuyerOrdersPage() {
                   {getStatusBadge(order.status)}
                 </div>
 
-                {/* Daftar Items + Tombol Beri Ulasan & Upload Foto/Video */}
+                {/* Daftar Items + Tombol Ulasan & Diskusi Balasan Seller */}
                 <div className="space-y-3">
                   {order.items?.map((item) => {
                     const resolvedProductId = item.product?.id ?? item.product_id;
                     const reviewKey = `${order.id}-${resolvedProductId}`;
                     const alreadyReviewed =
-                      reviewedKeys.includes(reviewKey) || Boolean(item.is_reviewed);
+                      reviewedKeys.includes(reviewKey) ||
+                      Boolean(item.is_reviewed || item.review);
                     const itemImgUrl = getFullImageUrl(item.product?.image_url);
+                    const reviewObj = item.review;
+                    const buyerUserId = reviewObj?.user_id ?? order.user_id;
 
                     return (
                       <div
                         key={item.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-50 last:border-b-0 last:pb-0"
+                        className="pb-3 border-b border-gray-50 last:border-b-0 last:pb-0 space-y-2.5"
                       >
-                        <div className="flex items-center gap-3">
-                          {itemImgUrl ? (
-                            <img
-                              src={itemImgUrl}
-                              alt={item.product?.name || 'Produk'}
-                              className="w-11 h-11 rounded-xl object-cover border border-gray-100 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-                              <Package className="w-4 h-4 text-gray-400" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            {itemImgUrl ? (
+                              <img
+                                src={itemImgUrl}
+                                alt={item.product?.name || 'Produk'}
+                                className="w-11 h-11 rounded-xl object-cover border border-gray-100 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                                <Package className="w-4 h-4 text-gray-400" />
+                              </div>
+                            )}
+
+                            <div>
+                              <p className="text-sm text-gray-800 font-semibold">
+                                {item.product?.name || `${t('productFallbackLabel')} #${item.id}`}{' '}
+                                <span className="text-gray-400 text-xs font-normal">
+                                  x{item.quantity}
+                                </span>
+                              </p>
+                              <span className="text-xs font-bold text-amber-600">
+                                π {item.price_pi}
+                              </span>
+                            </div>
+                          </div>
+
+                          {canReviewOrder && resolvedProductId && (
+                            <div className="self-end sm:self-center">
+                              {alreadyReviewed ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Diulas
+                                </span>
+                              ) : hasUsedTrialReview ? (
+                                <button
+                                  type="button"
+                                  onClick={handlePremiumPrompt}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold border border-purple-200 transition cursor-pointer"
+                                >
+                                  <Crown className="w-3.5 h-3.5 text-purple-700" />
+                                  <span>Uji Coba 1x Selesai • Aktivasi Premium</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setReviewTarget({
+                                      orderId: order.id,
+                                      productId: resolvedProductId,
+                                      productName:
+                                        item.product?.name ||
+                                        `${t('productFallbackLabel')} #${resolvedProductId}`,
+                                      productImage: itemImgUrl,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                                >
+                                  <Star className="w-3.5 h-3.5 fill-white" />
+                                  <span>Beri Ulasan + Foto/Video</span>
+                                </button>
+                              )}
                             </div>
                           )}
-
-                          <div>
-                            <p className="text-sm text-gray-800 font-semibold">
-                              {item.product?.name || `${t('productFallbackLabel')} #${item.id}`}{' '}
-                              <span className="text-gray-400 text-xs font-normal">
-                                x{item.quantity}
-                              </span>
-                            </p>
-                            <span className="text-xs font-bold text-amber-600">
-                              π {item.price_pi}
-                            </span>
-                          </div>
                         </div>
 
-                        {/* Tombol Ulasan hanya muncul jika pesanan sudah Paid / Completed */}
-                        {canReviewOrder && resolvedProductId && (
-                          <div className="self-end sm:self-center">
-                            {alreadyReviewed ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Diulas
+                        {/* Kotak Ulasan Pembeli + Balasan Bersarang dari Seller di Halaman Orders */}
+                        {reviewObj && (
+                          <div className="ml-2 sm:ml-4 p-3 rounded-2xl bg-amber-50/40 border border-amber-100/80 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-800">
+                                <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
+                                Ulasan Anda ({reviewObj.rating} ★)
                               </span>
-                            ) : hasUsedTrialReview ? (
                               <button
                                 type="button"
-                                onClick={handlePremiumPrompt}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold border border-purple-200 transition cursor-pointer"
+                                onClick={() => {
+                                  setReplyBox({
+                                    reviewId: reviewObj.id,
+                                    parentId: null,
+                                    targetName: 'Diskusi Ulasan',
+                                    buyerUserId,
+                                  });
+                                  setReplyText('');
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 hover:text-purple-900 cursor-pointer"
                               >
-                                <Crown className="w-3.5 h-3.5 text-purple-700" />
-                                <span>Uji Coba 1x Selesai • Aktivasi Premium</span>
+                                <Reply className="w-3 h-3" /> Tambah Balasan
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setReviewTarget({
-                                    orderId: order.id,
-                                    productId: resolvedProductId,
-                                    productName:
-                                      item.product?.name ||
-                                      `${t('productFallbackLabel')} #${resolvedProductId}`,
-                                    productImage: itemImgUrl,
-                                  })
-                                }
-                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition cursor-pointer"
-                              >
-                                <Star className="w-3.5 h-3.5 fill-white" />
-                                <span>Beri Ulasan + Foto/Video</span>
-                              </button>
+                            </div>
+
+                            {reviewObj.comment && (
+                              <p className="text-xs text-gray-700">{reviewObj.comment}</p>
                             )}
+
+                            {/* Form tambah balasan tingkat pertama */}
+                            {replyBox?.reviewId === reviewObj.id && replyBox?.parentId === null && (
+                              <form
+                                onSubmit={handleSendReplyToSeller}
+                                className="mt-1.5 flex items-center gap-1.5"
+                              >
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={replyText}
+                                  onChange={(e) => setReplyText(e.target.value)}
+                                  placeholder="Tulis balasan lanjutan ke penjual..."
+                                  className="flex-1 px-2.5 py-1.5 bg-white border border-purple-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={submittingReply || !replyText.trim()}
+                                  className="p-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white disabled:opacity-50 cursor-pointer"
+                                >
+                                  {submittingReply ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setReplyBox(null)}
+                                  className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </form>
+                            )}
+
+                            {/* Pohon Balasan Seller & Pembeli (Nested Replies) */}
+                            {Array.isArray(reviewObj.replies) &&
+                              reviewObj.replies.length > 0 &&
+                              renderOrderReplyNodes(reviewObj.replies, reviewObj.id, buyerUserId, 1)}
                           </div>
                         )}
                       </div>
@@ -339,6 +636,7 @@ export default function BuyerOrdersPage() {
               ...prev,
               `${reviewTarget.orderId}-${reviewTarget.productId}`,
             ]);
+            loadOrders();
           }}
         />
       )}
