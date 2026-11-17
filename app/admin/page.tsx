@@ -31,6 +31,7 @@ interface AdminUser {
   email?: string;
   phone?: string;
   role: UserRole;
+  roles?: UserRole[];
   pi_balance?: number;
   created_at?: string;
   seller?: {
@@ -82,10 +83,9 @@ interface FinanceHistoryItem {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>('users');
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Data States
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -96,14 +96,12 @@ export default function AdminDashboardPage() {
     total_revenue: 0,
   });
 
-  // Filter & Search States
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [productSearch, setProductSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
   const [financeSellerSearch, setFinanceSellerSearch] = useState('');
 
-  // Loading aksi per baris
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
@@ -118,6 +116,12 @@ export default function AdminDashboardPage() {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
+  };
+
+  // Helper ambil array roles milik user
+  const getUserRoles = (u: AdminUser): UserRole[] => {
+    if (Array.isArray(u.roles) && u.roles.length > 0) return u.roles;
+    return u.role ? [u.role] : ['customer'];
   };
 
   const fetchAllAdminData = async () => {
@@ -163,29 +167,26 @@ export default function AdminDashboardPage() {
     fetchAllAdminData();
   }, []);
 
-  // --- HANDLER UBAH ROLE PENGGUNA (customer / seller / admin) ---
-  const handleRoleChange = async (user: AdminUser, newRole: UserRole) => {
-    if (user.role === newRole) return;
+  // --- HANDLER TOGGLE MULTI-ROLE UNTUK 1 USER ID ---
+  const handleToggleUserRole = async (user: AdminUser, targetRole: UserRole) => {
+    const currentRoles = getUserRoles(user);
+    const exists = currentRoles.includes(targetRole);
 
-    const confirm = await Swal.fire({
-      title: 'Ubah Role Pengguna?',
-      html: `Ubah role <b>${user.name}</b> dari <span class="uppercase font-bold">${user.role}</span> menjadi <span class="uppercase font-bold text-purple-700">${newRole}</span>?`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#7e22ce',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Ubah Role',
-      cancelButtonText: 'Batal',
-    });
+    if (exists && currentRoles.length === 1) {
+      Swal.fire('Tidak Bisa Kosong', 'Setiap pengguna minimal harus memiliki 1 role.', 'warning');
+      return;
+    }
 
-    if (!confirm.isConfirmed) return;
+    const updatedRoles: UserRole[] = exists
+      ? currentRoles.filter((r) => r !== targetRole)
+      : [...currentRoles, targetRole];
 
     setUpdatingRoleId(user.id);
     try {
       const res = await fetch(`${API_BASE_URL}/admin/users/${user.id}/role`, {
         method: 'PUT',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify({ roles: updatedRoles }),
       });
 
       const json = await res.json();
@@ -194,16 +195,17 @@ export default function AdminDashboardPage() {
       }
 
       setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, ...(json.data || {}), role: newRole } : u))
+        prev.map((u) =>
+          u.id === user.id
+            ? {
+                ...u,
+                ...(json.data || {}),
+                roles: updatedRoles,
+                role: json.data?.role || u.role,
+              }
+            : u
+        )
       );
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Role Diperbarui',
-        text: json.message || `Role berhasil diubah menjadi ${newRole}.`,
-        timer: 1800,
-        showConfirmButton: false,
-      });
     } catch (err: any) {
       Swal.fire('Gagal', err.message || 'Terjadi kesalahan saat mengubah role.', 'error');
     } finally {
@@ -211,7 +213,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- HANDLER HAPUS PRODUK OLEH ADMIN ---
+  // --- HANDLER HAPUS PRODUK ---
   const handleDeleteProduct = async (product: AdminProduct) => {
     const confirm = await Swal.fire({
       title: 'Hapus Produk?',
@@ -243,7 +245,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- HANDLER UBAH STATUS ORDER OLEH ADMIN ---
+  // --- HANDLER UBAH STATUS ORDER ---
   const handleOrderStatusChange = async (orderId: number, newStatus: string) => {
     setUpdatingOrderId(orderId);
     try {
@@ -277,7 +279,8 @@ export default function AdminDashboardPage() {
 
   // Filter Data
   const filteredUsers = users.filter((u) => {
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
+    const userRoles = getUserRoles(u);
+    const matchRole = roleFilter === 'all' || userRoles.includes(roleFilter);
     const keyword = userSearch.toLowerCase();
     const matchSearch =
       u.name?.toLowerCase().includes(keyword) ||
@@ -301,21 +304,9 @@ export default function AdminDashboardPage() {
     f.seller_name?.toLowerCase().includes(financeSellerSearch.toLowerCase())
   );
 
-  // Hitung statistik role
-  const totalAdmins = users.filter((u) => u.role === 'admin').length;
-  const totalSellers = users.filter((u) => u.role === 'seller').length;
-  const totalCustomers = users.filter((u) => u.role === 'customer' || !u.role).length;
-
-  const getRoleBadgeStyle = (role?: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'seller':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
-      default:
-        return 'bg-sky-100 text-sky-800 border-sky-200';
-    }
-  };
+  const totalAdmins = users.filter((u) => getUserRoles(u).includes('admin')).length;
+  const totalSellers = users.filter((u) => getUserRoles(u).includes('seller')).length;
+  const totalCustomers = users.filter((u) => getUserRoles(u).includes('customer')).length;
 
   const getOrderStatusBadge = (status: string) => {
     switch (status) {
@@ -351,16 +342,14 @@ export default function AdminDashboardPage() {
               <ShieldCheck className="w-8 h-8 text-amber-300" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 bg-amber-400 text-purple-950 text-[10px] font-black uppercase rounded-full tracking-wider">
-                  Super Admin Access
-                </span>
-              </div>
+              <span className="px-2.5 py-0.5 bg-amber-400 text-purple-950 text-[10px] font-black uppercase rounded-full tracking-wider">
+                Super Admin Access
+              </span>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight mt-1">
                 Admin Control Center
               </h1>
               <p className="text-xs sm:text-sm text-purple-200 mt-0.5">
-                Kelola seluruh menu marketplace, hak akses pengguna (Customer, Seller, Admin), produk, dan transaksi.
+                Kelola seluruh menu dan atur multi-role pengguna (Customer, Seller, Admin) langsung dari tabel.
               </p>
             </div>
           </div>
@@ -375,7 +364,7 @@ export default function AdminDashboardPage() {
           </button>
         </div>
 
-        {/* Navigasi Semua Menu Admin */}
+        {/* Navigasi Semua Menu */}
         <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-1.5 overflow-x-auto">
           {menuItems.map((item) => {
             const isActive = activeTab === item.id;
@@ -412,97 +401,72 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <>
-            {/* ========================================================= */}
-            {/* TAB 1: RINGKASAN STATISTIK                                */}
-            {/* ========================================================= */}
+            {/* TAB 1: RINGKASAN */}
             {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pengguna</span>
-                      <Users className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 mt-2">{users.length}</h3>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      {totalCustomers} Customer • {totalSellers} Seller • {totalAdmins} Admin
-                    </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Total Pengguna</span>
+                    <Users className="w-5 h-5 text-purple-600" />
                   </div>
-
-                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
-                      <Package className="w-5 h-5 text-amber-500" />
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 mt-2">{products.length}</h3>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      {products.filter((p) => p.is_flash_sale).length} produk aktif di Flash Sale
-                    </p>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pesanan</span>
-                      <ShoppingBag className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <h3 className="text-2xl font-black text-gray-900 mt-2">{orders.length}</h3>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      {orders.filter((o) => o.status === 'paid' || o.status === 'completed').length}{' '}
-                      transaksi terbayar
-                    </p>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Omzet Pi</span>
-                      <Coins className="w-5 h-5 text-purple-700" />
-                    </div>
-                    <h3 className="text-2xl font-black text-purple-700 mt-2">
-                      π {Number(financeSummary.total_revenue || 0).toFixed(2)}
-                    </h3>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      Produk: π {Number(financeSummary.total_product || 0).toFixed(2)}
-                    </p>
-                  </div>
+                  <h3 className="text-2xl font-black text-gray-900 mt-2">{users.length}</h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {totalCustomers} Customer • {totalSellers} Seller • {totalAdmins} Admin
+                  </p>
                 </div>
 
-                {/* Pintasan Cepat ke Tabel Role Pengguna */}
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base">
-                      Pengaturan Role Pengguna Marketplace
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Tetapkan atau ubah hak akses pengguna menjadi Customer, Seller, atau Admin langsung di dalam tabel.
-                    </p>
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
+                    <Package className="w-5 h-5 text-amber-500" />
                   </div>
-                  <button
-                    onClick={() => setActiveTab('users')}
-                    className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition"
-                  >
-                    Kelola Role Pengguna →
-                  </button>
+                  <h3 className="text-2xl font-black text-gray-900 mt-2">{products.length}</h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {products.filter((p) => p.is_flash_sale).length} produk aktif di Flash Sale
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Total Pesanan</span>
+                    <ShoppingBag className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <h3 className="text-2xl font-black text-gray-900 mt-2">{orders.length}</h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {orders.filter((o) => o.status === 'paid' || o.status === 'completed').length}{' '}
+                    transaksi terbayar
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-400 uppercase">Total Omzet Pi</span>
+                    <Coins className="w-5 h-5 text-purple-700" />
+                  </div>
+                  <h3 className="text-2xl font-black text-purple-700 mt-2">
+                    π {Number(financeSummary.total_revenue || 0).toFixed(2)}
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Produk: π {Number(financeSummary.total_product || 0).toFixed(2)}
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* ========================================================= */}
-            {/* TAB 2: TABEL PENGGUNA & PENGATURAN ROLE                   */}
-            {/* ========================================================= */}
+            {/* TAB 2: MANAJEMEN PENGGUNA & MULTI-ROLE */}
             {activeTab === 'users' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                      <Users className="w-5 h-5 text-purple-700" /> Manajemen Pengguna & Role
+                      <Users className="w-5 h-5 text-purple-700" /> Manajemen Pengguna & Multi-Role
                     </h2>
                     <p className="text-xs text-gray-500">
-                      Ubah role pengguna langsung pada kolom <b>Atur Role</b> (Customer, Seller, atau Admin).
+                      Klik tombol role di kolom kanan untuk mengaktifkan/menonaktifkan role (1 user bisa memiliki 3 role sekaligus).
                     </p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    {/* Filter Role */}
                     <select
                       value={roleFilter}
                       onChange={(e) => setRoleFilter(e.target.value as 'all' | UserRole)}
@@ -514,7 +478,6 @@ export default function AdminDashboardPage() {
                       <option value="admin">Admin ({totalAdmins})</option>
                     </select>
 
-                    {/* Cari Pengguna */}
                     <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -534,85 +497,99 @@ export default function AdminDashboardPage() {
                       <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
                         <th className="p-4 pl-6">Pengguna</th>
                         <th className="p-4">Info Toko / Kontak</th>
-                        <th className="p-4">Saldo Pi</th>
-                        <th className="p-4">Status Role</th>
-                        <th className="p-4 pr-6 text-right">Atur Role</th>
+                        <th className="p-4">Role Aktif</th>
+                        <th className="p-4 pr-6 text-right">Atur Multi-Role</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {filteredUsers.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="p-10 text-center text-gray-400">
-                            Tidak ada pengguna yang sesuai filter.
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredUsers.map((u) => {
-                          const currentRole: UserRole = (u.role as UserRole) || 'customer';
-                          return (
-                            <tr key={u.id} className="hover:bg-gray-50/50 transition">
-                              <td className="p-4 pl-6">
-                                <div className="font-bold text-gray-900">{u.name}</div>
-                                <div className="text-[11px] text-gray-400">
-                                  @{u.username || `user_${u.id}`} {u.email ? `• ${u.email}` : ''}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                {u.seller?.store_name ? (
-                                  <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
-                                    <Store className="w-3.5 h-3.5" /> {u.seller.store_name}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400">{u.phone || '-'}</span>
-                                )}
-                              </td>
-                              <td className="p-4 font-bold text-purple-700">
-                                π {Number(u.pi_balance || 0).toFixed(2)}
-                              </td>
-                              <td className="p-4">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase border ${getRoleBadgeStyle(
-                                    currentRole
-                                  )}`}
-                                >
-                                  {currentRole === 'admin' && <Crown className="w-3 h-3" />}
-                                  {currentRole === 'seller' && <Store className="w-3 h-3" />}
-                                  {currentRole === 'customer' && <UserCheck className="w-3 h-3" />}
-                                  {currentRole}
+                      {filteredUsers.map((u) => {
+                        const userRoles = getUserRoles(u);
+
+                        return (
+                          <tr key={u.id} className="hover:bg-gray-50/50 transition">
+                            <td className="p-4 pl-6">
+                              <div className="font-bold text-gray-900">
+                                {u.name}{' '}
+                                <span className="text-[10px] text-gray-400 font-normal">
+                                  (ID: {u.id})
                                 </span>
-                              </td>
-                              <td className="p-4 pr-6 text-right">
-                                <div className="inline-flex items-center gap-2">
-                                  {updatingRoleId === u.id && (
-                                    <Loader2 className="w-4 h-4 animate-spin text-purple-700" />
-                                  )}
-                                  <select
-                                    value={currentRole}
-                                    disabled={updatingRoleId === u.id}
-                                    onChange={(e) =>
-                                      handleRoleChange(u, e.target.value as UserRole)
-                                    }
-                                    className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer disabled:opacity-50"
+                              </div>
+                              <div className="text-[11px] text-gray-400">
+                                @{u.username || `user_${u.id}`} {u.email ? `• ${u.email}` : ''}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              {u.seller?.store_name ? (
+                                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                                  <Store className="w-3.5 h-3.5" /> {u.seller.store_name}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">{u.phone || '-'}</span>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {userRoles.map((r) => (
+                                  <span
+                                    key={r}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                      r === 'admin'
+                                        ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                        : r === 'seller'
+                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                        : 'bg-sky-100 text-sky-800 border-sky-200'
+                                    }`}
                                   >
-                                    <option value="customer">Customer</option>
-                                    <option value="seller">Seller</option>
-                                    <option value="admin">Admin</option>
-                                  </select>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
+                                    {r === 'admin' && <Crown className="w-2.5 h-2.5" />}
+                                    {r === 'seller' && <Store className="w-2.5 h-2.5" />}
+                                    {r === 'customer' && <UserCheck className="w-2.5 h-2.5" />}
+                                    {r}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="p-4 pr-6 text-right">
+                              <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                {updatingRoleId === u.id && (
+                                  <Loader2 className="w-4 h-4 animate-spin text-purple-700 mr-1" />
+                                )}
+
+                                {(['customer', 'seller', 'admin'] as UserRole[]).map((roleOption) => {
+                                  const isChecked = userRoles.includes(roleOption);
+                                  const activeColors: Record<UserRole, string> = {
+                                    customer: 'bg-sky-600 text-white border-sky-600',
+                                    seller: 'bg-amber-500 text-white border-amber-500',
+                                    admin: 'bg-purple-700 text-white border-purple-700',
+                                  };
+
+                                  return (
+                                    <button
+                                      key={roleOption}
+                                      type="button"
+                                      disabled={updatingRoleId === u.id}
+                                      onClick={() => handleToggleUserRole(u, roleOption)}
+                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase border transition cursor-pointer disabled:opacity-50 ${
+                                        isChecked
+                                          ? activeColors[roleOption]
+                                          : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-600'
+                                      }`}
+                                    >
+                                      {isChecked ? `✓ ${roleOption}` : roleOption}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* ========================================================= */}
-            {/* TAB 3: SEMUA PRODUK MARKETPLACE                           */}
-            {/* ========================================================= */}
+            {/* TAB 3: SEMUA PRODUK */}
             {activeTab === 'products' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -719,9 +696,7 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {/* ========================================================= */}
-            {/* TAB 4: SEMUA PESANAN & STATUS TRANSAKSI                   */}
-            {/* ========================================================= */}
+            {/* TAB 4: SEMUA PESANAN */}
             {activeTab === 'orders' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -810,9 +785,7 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {/* ========================================================= */}
-            {/* TAB 5: LAPORAN KEUANGAN                                   */}
-            {/* ========================================================= */}
+            {/* TAB 5: LAPORAN KEUANGAN */}
             {activeTab === 'finance' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
