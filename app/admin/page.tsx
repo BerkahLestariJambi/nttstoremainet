@@ -19,12 +19,17 @@ import {
   Crown,
   Truck,
   AlertCircle,
+  Tags,
+  Plus,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { apiClient } from '@/lib/apiClient';
 import { useLanguage } from '@/context/LanguageContext';
 
-type AdminTab = 'overview' | 'users' | 'products' | 'orders' | 'finance';
+type AdminTab = 'overview' | 'users' | 'categories' | 'products' | 'orders' | 'finance';
 type UserRole = 'customer' | 'seller' | 'admin';
 
 interface AdminUser {
@@ -41,6 +46,15 @@ interface AdminUser {
     id: number;
     store_name: string;
   } | null;
+}
+
+interface AdminCategory {
+  id: number;
+  name: string;
+  slug?: string;
+  description?: string | null;
+  icon?: string | null;
+  products_count?: number;
 }
 
 interface AdminProduct {
@@ -92,6 +106,7 @@ export default function AdminDashboardPage() {
 
   // Data States
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [financeHistory, setFinanceHistory] = useState<FinanceHistoryItem[]>([]);
@@ -101,7 +116,15 @@ export default function AdminDashboardPage() {
     total_revenue: 0,
   });
 
-  // Filter & Search States
+  // Form State Tambah / Edit Kategori
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryDescription, setCategoryDescription] = useState('');
+  const [categoryIcon, setCategoryIcon] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [savingCategory, setSavingCategory] = useState<boolean>(false);
+  const [categorySearch, setCategorySearch] = useState('');
+
+  // Filter & Search States lainnya
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [productSearch, setProductSearch] = useState('');
@@ -112,7 +135,6 @@ export default function AdminDashboardPage() {
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
-  // Helper ambil array roles milik user
   const getUserRoles = (u: AdminUser): UserRole[] => {
     if (Array.isArray(u.roles) && u.roles.length > 0) return u.roles;
     if (typeof u.roles === 'string') {
@@ -120,13 +142,12 @@ export default function AdminDashboardPage() {
         const parsed = JSON.parse(u.roles);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch {
-        // Fallback ke kolom role tunggal
+        // Fallback
       }
     }
     return u.role ? [u.role] : ['customer'];
   };
 
-  // Label role terjemahan
   const getRoleLabel = (role: UserRole): string => {
     if (role === 'admin') return t('roleAdmin');
     if (role === 'seller') return t('roleSeller');
@@ -137,30 +158,26 @@ export default function AdminDashboardPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const [usersJson, productsJson, ordersJson, financeJson]: any[] = await Promise.all([
-        apiClient('/admin/users'),
-        apiClient('/admin/products'),
-        apiClient('/admin/orders'),
-        apiClient('/admin/finance'),
-      ]);
+      const [usersJson, categoriesJson, productsJson, ordersJson, financeJson]: any[] =
+        await Promise.all([
+          apiClient('/admin/users'),
+          apiClient('/admin/categories').catch(() => ({ success: false, data: [] })),
+          apiClient('/admin/products'),
+          apiClient('/admin/orders'),
+          apiClient('/admin/finance'),
+        ]);
 
-      if (usersJson?.success) {
-        setUsers(usersJson.data || []);
-      } else if (Array.isArray(usersJson)) {
-        setUsers(usersJson);
-      }
+      if (usersJson?.success) setUsers(usersJson.data || []);
+      else if (Array.isArray(usersJson)) setUsers(usersJson);
 
-      if (productsJson?.success) {
-        setProducts(productsJson.data || []);
-      } else if (Array.isArray(productsJson)) {
-        setProducts(productsJson);
-      }
+      if (categoriesJson?.success) setCategories(categoriesJson.data || []);
+      else if (Array.isArray(categoriesJson)) setCategories(categoriesJson);
 
-      if (ordersJson?.success) {
-        setOrders(ordersJson.data || []);
-      } else if (Array.isArray(ordersJson)) {
-        setOrders(ordersJson);
-      }
+      if (productsJson?.success) setProducts(productsJson.data || []);
+      else if (Array.isArray(productsJson)) setProducts(productsJson);
+
+      if (ordersJson?.success) setOrders(ordersJson.data || []);
+      else if (Array.isArray(ordersJson)) setOrders(ordersJson);
 
       if (financeJson?.success && financeJson.data) {
         setFinanceHistory(financeJson.data.history || []);
@@ -184,7 +201,109 @@ export default function AdminDashboardPage() {
     fetchAllAdminData();
   }, []);
 
-  // --- HANDLER TOGGLE MULTI-ROLE UNTUK 1 USER ID (Customer, Seller, Admin) ---
+  // --- HANDLER TAMBAH / EDIT KATEGORI ---
+  const resetCategoryForm = () => {
+    setCategoryName('');
+    setCategoryDescription('');
+    setCategoryIcon('');
+    setEditingCategoryId(null);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!categoryName.trim()) return;
+
+    setSavingCategory(true);
+    try {
+      const payload = {
+        name: categoryName.trim(),
+        description: categoryDescription.trim() || null,
+        icon: categoryIcon.trim() || null,
+      };
+
+      const json: any = editingCategoryId
+        ? await apiClient(`/admin/categories/${editingCategoryId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          })
+        : await apiClient('/admin/categories', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+      if (json && json.success === false) {
+        throw new Error(json.message || 'Gagal menyimpan kategori.');
+      }
+
+      if (editingCategoryId) {
+        setCategories((prev) =>
+          prev.map((c) => (c.id === editingCategoryId ? { ...c, ...(json.data || payload) } : c))
+        );
+      } else if (json?.data) {
+        setCategories((prev) => [...prev, json.data].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+
+      resetCategoryForm();
+      Swal.fire({
+        icon: 'success',
+        title: t('successTitle'),
+        text: json?.message || 'Kategori berhasil disimpan!',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire(t('failedTitle'), err?.message || 'Gagal menyimpan kategori.', 'error');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleEditCategoryClick = (cat: AdminCategory) => {
+    setEditingCategoryId(cat.id);
+    setCategoryName(cat.name);
+    setCategoryDescription(cat.description || '');
+    setCategoryIcon(cat.icon || '');
+  };
+
+  const handleDeleteCategory = async (cat: AdminCategory) => {
+    const confirm = await Swal.fire({
+      title: 'Hapus Kategori?',
+      text: `Kategori "${cat.name}" akan dihapus permanen.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: t('deleteProduct'),
+      cancelButtonText: t('cancel'),
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const json: any = await apiClient(`/admin/categories/${cat.id}`, {
+        method: 'DELETE',
+      });
+
+      if (json && json.success === false) {
+        throw new Error(json.message || 'Gagal menghapus kategori.');
+      }
+
+      setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+      if (editingCategoryId === cat.id) resetCategoryForm();
+
+      Swal.fire({
+        icon: 'success',
+        title: t('successTitle'),
+        text: 'Kategori berhasil dihapus.',
+        timer: 1400,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire(t('failedTitle'), err?.message || 'Kategori tidak dapat dihapus.', 'error');
+    }
+  };
+
+  // --- HANDLER TOGGLE MULTI-ROLE UNTUK 1 USER ID ---
   const handleToggleUserRole = async (user: AdminUser, targetRole: UserRole) => {
     const currentRoles = getUserRoles(user);
     const exists = currentRoles.includes(targetRole);
@@ -311,6 +430,10 @@ export default function AdminDashboardPage() {
     return matchRole && matchSearch;
   });
 
+  const filteredCategories = categories.filter((c) =>
+    c.name?.toLowerCase().includes(categorySearch.toLowerCase())
+  );
+
   const filteredProducts = products.filter((p) =>
     p.name?.toLowerCase().includes(productSearch.toLowerCase())
   );
@@ -325,7 +448,6 @@ export default function AdminDashboardPage() {
     f.seller_name?.toLowerCase().includes(financeSellerSearch.toLowerCase())
   );
 
-  // Hitung statistik role
   const totalAdmins = users.filter((u) => getUserRoles(u).includes('admin')).length;
   const totalSellers = users.filter((u) => getUserRoles(u).includes('seller')).length;
   const totalCustomers = users.filter((u) => getUserRoles(u).includes('customer')).length;
@@ -349,6 +471,7 @@ export default function AdminDashboardPage() {
   const menuItems: { id: AdminTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'overview', label: t('adminTabOverview'), icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'users', label: t('adminTabUsers'), icon: <Users className="w-4 h-4" />, badge: users.length },
+    { id: 'categories', label: 'Kategori', icon: <Tags className="w-4 h-4" />, badge: categories.length },
     { id: 'products', label: t('adminTabProducts'), icon: <Package className="w-4 h-4" />, badge: products.length },
     { id: 'orders', label: t('adminTabOrders'), icon: <ShoppingBag className="w-4 h-4" />, badge: orders.length },
     { id: 'finance', label: t('adminTabFinance'), icon: <Coins className="w-4 h-4" /> },
@@ -499,20 +622,39 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* Pintasan Cepat ke Tabel Role Pengguna */}
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-base">
-                      {t('multiRoleShortcutTitle')}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">{t('multiRoleShortcutDesc')}</p>
+                {/* Pintasan Cepat */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base">
+                        {t('multiRoleShortcutTitle')}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">{t('multiRoleShortcutDesc')}</p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('users')}
+                      className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer"
+                    >
+                      {t('manageUserRolesBtn')}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setActiveTab('users')}
-                    className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition cursor-pointer"
-                  >
-                    {t('manageUserRolesBtn')}
-                  </button>
+
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base">
+                        Kategori Produk Marketplace ({categories.length})
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Tambahkan kategori baru seperti Tenun Ikat, Kopi Flores, Madu Hutan, dll.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('categories')}
+                      className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer"
+                    >
+                      + Tambah Kategori →
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -666,6 +808,189 @@ export default function AdminDashboardPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TAB BARU: TAMBAH & KELOLA KATEGORI PRODUK                 */}
+            {/* ========================================================= */}
+            {activeTab === 'categories' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Form Tambah / Edit Kategori */}
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 h-fit">
+                  <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                    <Tags className="w-5 h-5 text-purple-700" />
+                    {editingCategoryId ? 'Edit Kategori Produk' : 'Tambah Kategori Baru'}
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Kategori yang ditambahkan akan langsung muncul di filter katalog & form produk seller.
+                  </p>
+
+                  <form onSubmit={handleSaveCategory} className="space-y-4 mt-5">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                        Nama Kategori <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Contoh: Tenun Ikat, Kopi Flores, Madu Hutan..."
+                        value={categoryName}
+                        onChange={(e) => setCategoryName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                        Ikon / Emoji (Opsional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: 🧶 atau ☕ atau 🍯"
+                        value={categoryIcon}
+                        onChange={(e) => setCategoryIcon(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                        Deskripsi Singkat (Opsional)
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="Keterangan singkat jenis produk pada kategori ini..."
+                        value={categoryDescription}
+                        onChange={(e) => setCategoryDescription(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="submit"
+                        disabled={savingCategory || !categoryName.trim()}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {savingCategory ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : editingCategoryId ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Plus className="w-4 h-4" />
+                        )}
+                        <span>{editingCategoryId ? 'Simpan Perubahan' : 'Tambah Kategori'}</span>
+                      </button>
+
+                      {editingCategoryId && (
+                        <button
+                          type="button"
+                          onClick={resetCategoryForm}
+                          className="inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-3 rounded-xl text-xs transition cursor-pointer"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>{t('cancel')}</span>
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                {/* Daftar Kategori Tersimpan */}
+                <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base">
+                        Daftar Kategori Aktif ({categories.length})
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Kategori yang sedang digunakan produk tidak dapat dihapus sebelum produk dipindahkan.
+                      </p>
+                    </div>
+
+                    <div className="relative w-full sm:w-56">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari kategori..."
+                        value={categorySearch}
+                        onChange={(e) => setCategorySearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                          <th className="p-4 pl-6">Nama Kategori</th>
+                          <th className="p-4">Slug / Deskripsi</th>
+                          <th className="p-4">Jumlah Produk</th>
+                          <th className="p-4 pr-6 text-right">{t('colAction')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-xs">
+                        {filteredCategories.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="p-10 text-center text-gray-400">
+                              Belum ada kategori yang tersimpan. Silakan tambahkan di form sebelah kiri.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCategories.map((cat) => (
+                            <tr key={cat.id} className="hover:bg-gray-50/50 transition">
+                              <td className="p-4 pl-6">
+                                <div className="font-bold text-gray-900 flex items-center gap-2">
+                                  {cat.icon && <span className="text-base">{cat.icon}</span>}
+                                  <span>{cat.name}</span>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                {cat.slug && (
+                                  <span className="text-[11px] font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                                    {cat.slug}
+                                  </span>
+                                )}
+                                {cat.description && (
+                                  <p className="text-[11px] text-gray-400 mt-1 line-clamp-1">
+                                    {cat.description}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700">
+                                  {cat.products_count ?? 0} produk
+                                </span>
+                              </td>
+                              <td className="p-4 pr-6 text-right">
+                                <div className="inline-flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditCategoryClick(cat)}
+                                    className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition cursor-pointer"
+                                    title="Edit Kategori"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCategory(cat)}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                    title="Hapus Kategori"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
