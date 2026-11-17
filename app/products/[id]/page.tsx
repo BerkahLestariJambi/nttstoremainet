@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -65,25 +65,27 @@ export default function ProductDetailPage({
   }, [productId]);
 
   // 2. Ambil Rata-Rata Bintang & Jumlah Ulasan Asli dari Tabel product_reviews
-  useEffect(() => {
+  const fetchReviewStats = useCallback(async () => {
     if (!product?.id) return;
-
-    fetch(`${API_BASE_URL}/products/${product.id}/reviews`, {
-      headers: { Accept: 'application/json' },
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json?.success && json.data) {
-          setReviewStats({
-            averageRating: Number(json.data.average_rating || 0),
-            totalReviews: Number(json.data.total_reviews || 0),
-          });
-        }
-      })
-      .catch((err) => {
-        console.error('Gagal mengambil statistik ulasan:', err);
+    try {
+      const res = await fetch(`${API_BASE_URL}/products/${product.id}/reviews`, {
+        headers: { Accept: 'application/json' },
       });
+      const json = await res.json();
+      if (json?.success && json.data) {
+        setReviewStats({
+          averageRating: Number(json.data.average_rating || 0),
+          totalReviews: Number(json.data.total_reviews || 0),
+        });
+      }
+    } catch (err) {
+      console.error('Gagal mengambil statistik ulasan:', err);
+    }
   }, [product?.id, API_BASE_URL]);
+
+  useEffect(() => {
+    fetchReviewStats();
+  }, [fetchReviewStats]);
 
   // 3. Tambahkan Produk ke Keranjang DB via API Laravel
   const handleAddToCart = async () => {
@@ -103,7 +105,7 @@ export default function ProductDetailPage({
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-16 text-center text-gray-500 flex flex-col items-center gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-amber-500"/>
         <p className="text-xs">{t('loadingProductDetail')}</p>
       </div>
     );
@@ -114,10 +116,7 @@ export default function ProductDetailPage({
       <div className="max-w-md mx-auto my-12 p-8 bg-white border border-gray-100 rounded-3xl shadow-sm text-center">
         <h2 className="text-lg font-bold text-gray-900 mb-2">{t('productNotFound')}</h2>
         <p className="text-xs text-gray-500 mb-6">{t('productNotFoundDesc')}</p>
-        <Link
-          href="/"
-          className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition"
-        >
+        <Link className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl text-xs transition" href="/">
           {t('backToCatalog')}
         </Link>
       </div>
@@ -127,13 +126,13 @@ export default function ProductDetailPage({
   const displayRating =
     reviewStats.totalReviews > 0 ? reviewStats.averageRating.toFixed(1) : '0.0';
 
+  const resolvedSellerUserId =
+    product.user_id ?? product.seller?.user_id ?? product.seller_id ?? null;
+
   return (
     <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-amber-700 mb-6 font-medium text-sm transition"
-      >
-        <ArrowLeft className="w-4 h-4" /> {t('backToCatalog')}
+      <Link className="inline-flex items-center gap-2 text-gray-600 hover:text-amber-700 mb-6 font-medium text-sm transition" href="/">
+        <ArrowLeft className="w-4 h-4"/> {t('backToCatalog')}
       </Link>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-sm items-start">
@@ -150,7 +149,7 @@ export default function ProductDetailPage({
           />
         </div>
 
-        {/* Kolom Kanan: Info Produk, Aksi, & Toggle Show/Hide Review */}
+        {/* Kolom Kanan: Info Produk, Aksi, & Toggle Show/Hide Review + Reply Seller */}
         <div className="flex flex-col justify-between">
           <div>
             <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1 rounded-full">
@@ -163,9 +162,7 @@ export default function ProductDetailPage({
             {/* Rating Bintang & Jumlah Ulasan Dinamis dari Tabel product_reviews */}
             <div className="flex flex-wrap items-center gap-2 mt-2">
               <div className="inline-flex items-center gap-1">
-                <Star
-                  className={`w-4 h-4 ${
-                    reviewStats.totalReviews > 0
+                <Star ${ className="{`w-4" h-4 reviewStats.totalReviews> 0
                       ? 'fill-amber-500 text-amber-500'
                       : 'text-gray-300'
                   }`}
@@ -235,11 +232,11 @@ export default function ProductDetailPage({
             >
               {adding ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> {t('savingToDb')}
+                  <Loader2 className="w-4 h-4 animate-spin"/> {t('savingToDb')}
                 </>
               ) : (
                 <>
-                  <ShoppingBag className="w-4 h-4" /> + {t('addToCart')}
+                  <ShoppingBag className="w-4 h-4"/> + {t('addToCart')}
                 </>
               )}
             </button>
@@ -252,7 +249,7 @@ export default function ProductDetailPage({
                 className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 hover:bg-amber-50/70 border border-gray-200 hover:border-amber-200 text-xs font-bold text-gray-800 transition cursor-pointer"
               >
                 <span className="inline-flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-amber-500" />
+                  <MessageSquare className="w-4 h-4 text-amber-500"/>
                   <span>
                     {showReviews
                       ? `Sembunyikan Ulasan (${reviewStats.totalReviews})`
@@ -260,30 +257,26 @@ export default function ProductDetailPage({
                   </span>
                 </span>
                 {showReviews ? (
-                  <ChevronUp className="w-4 h-4 text-amber-600" />
+                  <ChevronUp className="w-4 h-4 text-amber-600"/>
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                  <ChevronDown className="w-4 h-4 text-gray-500"/>
                 )}
               </button>
 
-              {/* Area Daftar Review dengan Scroll Vertikal */}
+              {/* Area Daftar Review dengan Scroll Vertikal + Form Reply Seller */}
               {showReviews && (
-                <div className="mt-3 max-h-[380px] overflow-y-auto pr-1 rounded-2xl border border-gray-100 bg-gray-50/40 p-2 [&>div]:mt-0 [&>div]:p-4 [&>div]:shadow-none">
-                 {/* <ProductReviewsSection productId={product.id} */}
-                  <ProductReviewsSection
-  productId={product.id}
-  sellerUserId={product.user_id ?? product.seller?.user_id}
-/>
+                <div className="mt-3 max-h-[420px] overflow-y-auto pr-1 rounded-2xl border border-gray-100 bg-gray-50/40 p-2 [&>div]:mt-0 [&>div]:p-4 [&>div]:shadow-none">
+                  <ProductReviewsSection productId="{product.id}" sellerUserId="{resolvedSellerUserId}"/>
                 </div>
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-2 text-xs text-gray-500">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-green-600" /> {t('securePiSdk')}
+                <ShieldCheck className="w-4 h-4 text-green-600"/> {t('securePiSdk')}
               </div>
               <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-blue-600" /> {t('shippedFromNtt')}
+                <Truck className="w-4 h-4 text-blue-600"/> {t('shippedFromNtt')}
               </div>
             </div>
           </div>
