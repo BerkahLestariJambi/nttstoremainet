@@ -7,7 +7,7 @@ import { ShoppingBag, ArrowLeft, ShieldCheck, Truck, Star, Loader2 } from 'lucid
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
 import { useLanguage } from '@/context/LanguageContext';
-
+import ProductReviewsSection from '@/components/ProductReviewsSection';
 export default function ProductDetailPage({
   params,
 }: {
@@ -174,7 +174,7 @@ export default function ProductDetailPage({
                 </>
               )}
             </button>
-
+<ProductReviewsSection productId={product.id} />
             <div className="grid grid-cols-2 gap-4 mt-6 text-xs text-gray-500">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-green-600" /> {t('securePiSdk')}
