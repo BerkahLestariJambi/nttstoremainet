@@ -53,44 +53,83 @@ export default function ReviewModal({
 
   if (!isOpen) return null;
 
+  // Memindai seluruh localStorage, sessionStorage, & cookie untuk token Sanctum / Pi
   const getAuthToken = (): string | null => {
     if (typeof window === 'undefined') return null;
 
-    const possibleKeys = [
-      'auth_token',
-      'access_token',
-      'token',
-      'pi_token',
-      'pi_access_token',
-      'sanctum_token',
-      'nttstore_token',
-    ];
+    const storages = [window.localStorage, window.sessionStorage];
+    for (const store of storages) {
+      for (let i = 0; i < store.length; i++) {
+        const key = store.key(i);
+        if (!key) continue;
+        const val = store.getItem(key);
+        if (!val) continue;
 
-    for (const key of possibleKeys) {
-      const val = localStorage.getItem(key) || sessionStorage.getItem(key);
-      if (val && val !== 'undefined' && val !== 'null' && val.trim() !== '') {
-        return val.replace(/^Bearer\s+/i, '').trim();
-      }
-    }
+        // Pola token Sanctum (misal: "15|aBcDeFg...") atau JWT ("eyJ...")
+        if (/^\d+\|[A-Za-z0-9]{20,}$/.test(val.trim()) || val.trim().startsWith('eyJ')) {
+          return val.replace(/^Bearer\s+/i, '').trim();
+        }
 
-    const userKeys = ['user', 'pi_user', 'auth_user'];
-    for (const uKey of userKeys) {
-      const raw = localStorage.getItem(uKey);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          const nestedToken =
-            parsed?.token || parsed?.access_token || parsed?.api_token;
-          if (nestedToken) {
-            return String(nestedToken).replace(/^Bearer\s+/i, '').trim();
+        // Jika tersimpan sebagai JSON object (user / auth / pi_auth)
+        if (val.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(val);
+            const candidate =
+              parsed?.token ||
+              parsed?.access_token ||
+              parsed?.api_token ||
+              parsed?.sanctum_token ||
+              parsed?.data?.token ||
+              parsed?.data?.access_token;
+            if (typeof candidate === 'string' && candidate.trim().length > 10) {
+              return candidate.replace(/^Bearer\s+/i, '').trim();
+            }
+          } catch {
+            // Abaikan jika bukan JSON valid
           }
-        } catch {
-          // Abaikan jika bukan JSON valid
         }
       }
     }
 
+    // Fallback cek cookie
+    if (typeof document !== 'undefined' && document.cookie) {
+      const match = document.cookie.match(
+        /(?:^|;\s*)(?:token|auth_token|access_token|pi_token)=([^;]+)/
+      );
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]).replace(/^Bearer\s+/i, '').trim();
+      }
+    }
+
     return null;
+  };
+
+  // Mengambil pi_uid & username dari storage sebagai fallback sesi Pi
+  const getPiUserMeta = (): { pi_uid?: string; username?: string } => {
+    if (typeof window === 'undefined') return {};
+    const meta: { pi_uid?: string; username?: string } = {};
+
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      const val = window.localStorage.getItem(key);
+      if (!val) continue;
+
+      if (key.toLowerCase().includes('uid')) meta.pi_uid = val;
+      if (key.toLowerCase().includes('username')) meta.username = val;
+
+      if (val.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(val);
+          const u = parsed?.user || parsed;
+          if (u?.pi_uid || u?.uid) meta.pi_uid = String(u.pi_uid || u.uid);
+          if (u?.username) meta.username = String(u.username);
+        } catch {
+          // Abaikan
+        }
+      }
+    }
+    return meta;
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,12 +182,7 @@ export default function ReviewModal({
 
     try {
       const token = getAuthToken();
-
-      if (!token) {
-        throw new Error(
-          'Sesi login tidak ditemukan. Silakan login ulang melalui Pi Browser terlebih dahulu.'
-        );
-      }
+      const userMeta = getPiUserMeta();
 
       const formData = new FormData();
       formData.append('order_id', String(orderId));
@@ -157,24 +191,35 @@ export default function ReviewModal({
       if (comment.trim()) {
         formData.append('comment', comment.trim());
       }
+      if (userMeta.pi_uid) {
+        formData.append('pi_uid', userMeta.pi_uid);
+      }
+      if (userMeta.username) {
+        formData.append('username', userMeta.username);
+      }
 
       mediaFiles.forEach((item) => {
         formData.append('media[]', item.file);
       });
 
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`${API_BASE_URL}/reviews`, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
+        credentials: 'include',
         body: formData,
       });
 
       const json = await res.json();
 
       // Jika kuota uji coba 1x per user sudah habis -> tampilkan prompt aktivasi Premium
-      if (json?.trial_expired || res.status === 403) {
+      if (json?.trial_expired || (res.status === 403 && json?.trial_expired !== undefined)) {
         onClose();
         await Swal.fire({
           icon: 'warning',
