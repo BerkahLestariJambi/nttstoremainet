@@ -61,7 +61,9 @@ export default function BuyerOrdersPage() {
     productImage?: string;
   } | null>(null);
   const [reviewedKeys, setReviewedKeys] = useState<string[]>([]);
-
+const hasUsedTrialReview =
+  reviewedKeys.length > 0 ||
+  orders.some((o) => o.items?.some((it) => Boolean(it.is_reviewed)));
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
   const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
