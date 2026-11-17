@@ -15,13 +15,16 @@ import {
   ChevronRight,
   ShieldCheck,
   Sparkles,
+  Crown,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { authService } from '@/services/authService';
+import { apiClient } from '@/lib/apiClient';
 import BottomNav from '@/components/BottomNav';
 
 const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
+type UserRole = 'customer' | 'seller' | 'admin';
 
 export default function AccountPage() {
   const router = useRouter();
@@ -29,6 +32,45 @@ export default function AccountPage() {
   const { t } = useLanguage();
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [userRoles, setUserRoles] = useState<UserRole[]>(['customer']);
+
+  // Helper normalisasi array roles dari response user backend
+  const extractRoles = (userData: any): UserRole[] => {
+    if (!userData) return ['customer'];
+
+    if (Array.isArray(userData.roles) && userData.roles.length > 0) {
+      return userData.roles;
+    }
+    if (typeof userData.roles === 'string') {
+      try {
+        const parsed = JSON.parse(userData.roles);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // fallback ke role tunggal
+      }
+    }
+    if (userData.role) {
+      return [userData.role as UserRole];
+    }
+    return ['customer'];
+  };
+
+  // Sinkronisasi roles terbaru dari backend (/auth/me)
+  const fetchCurrentUserRoles = useCallback(async () => {
+    try {
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('nttstorepi_token') : null;
+      if (!token && !piUser) return;
+
+      const meRes: any = await apiClient('/auth/me');
+      const userObj = meRes?.data || meRes?.user || meRes;
+      if (userObj) {
+        setUserRoles(extractRoles(userObj));
+      }
+    } catch (err) {
+      console.warn('Gagal memuat roles user terbaru:', err);
+    }
+  }, [piUser]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -45,6 +87,10 @@ export default function AccountPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    fetchCurrentUserRoles();
+  }, [fetchCurrentUserRoles]);
 
   const handleAuthenticate = useCallback(async () => {
     setLoading(true);
@@ -66,9 +112,14 @@ export default function AccountPage() {
         });
 
         try {
-          const apiRes = await authService.loginWithPi(auth.accessToken);
-          if (apiRes.access_token) {
+          const apiRes: any = await authService.loginWithPi(auth.accessToken);
+          if (apiRes?.access_token) {
             localStorage.setItem('nttstorepi_token', apiRes.access_token);
+          }
+          if (apiRes?.user) {
+            setUserRoles(extractRoles(apiRes.user));
+          } else {
+            await fetchCurrentUserRoles();
           }
         } catch (backendErr: any) {
           console.warn('Gagal sync token ke backend Laravel:', backendErr.message);
@@ -110,13 +161,18 @@ export default function AccountPage() {
       alert(`Gagal menginisiasi Pi Sign-in: ${err.message}`);
       setLoading(false);
     }
-  }, [setPiUser]);
+  }, [setPiUser, fetchCurrentUserRoles]);
 
   const handleLogout = () => {
     localStorage.removeItem('nttstorepi_token');
     setPiUser(null);
+    setUserRoles(['customer']);
     router.push('/');
   };
+
+  // Cek hak akses berdasarkan array roles terbaru
+  const isSeller = userRoles.includes('seller');
+  const isAdmin = userRoles.includes('admin');
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24">
@@ -128,15 +184,23 @@ export default function AccountPage() {
               <UserCheck className="w-7 h-7 text-yellow-300" />
             </div>
             <div className="min-w-0 flex-1">
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-yellow-400 text-gray-900 px-2.5 py-0.5 rounded-full">
-                <Sparkles className="w-3 h-3" /> {t('connectedAs')}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider bg-yellow-400 text-gray-900 px-2.5 py-0.5 rounded-full">
+                  <Sparkles className="w-3 h-3" /> {t('connectedAs')}
+                </span>
+                {userRoles.map((r) => (
+                  <span
+                    key={r}
+                    className="text-[10px] font-extrabold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full"
+                  >
+                    {r}
+                  </span>
+                ))}
+              </div>
               <h1 className="text-xl sm:text-2xl font-extrabold truncate mt-1">
                 @{piUser.username}
               </h1>
-              <p className="text-xs text-white/80 mt-0.5">
-                NTTStorePi Ecosystem
-              </p>
+              <p className="text-xs text-white/80 mt-0.5">NTTStorePi Ecosystem</p>
             </div>
           </div>
         ) : (
@@ -166,9 +230,9 @@ export default function AccountPage() {
         )}
       </div>
 
-      {/* Daftar Menu Akun */}
+      {/* Daftar Menu Akun Sesuai Roles */}
       <div className="space-y-3">
-        {/* 1. Menu Chat */}
+        {/* 1. Menu Chat (Customer / Semua Role) */}
         <Link
           href="/chat"
           className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
@@ -185,7 +249,7 @@ export default function AccountPage() {
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
-        {/* 2. Riwayat Pesanan */}
+        {/* 2. Riwayat Pesanan (Customer / Semua Role) */}
         <Link
           href="/orders"
           className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
@@ -202,7 +266,7 @@ export default function AccountPage() {
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
-        {/* 3. Alamat Pengiriman */}
+        {/* 3. Alamat Pengiriman (Customer / Semua Role) */}
         <Link
           href="/addresses"
           className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
@@ -219,39 +283,63 @@ export default function AccountPage() {
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </Link>
 
-        {/* 4. Dashboard Seller */}
-        <Link
-          href="/seller/dashboard"
-          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-              <LayoutDashboard className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900">{t('sellerDashboard')}</p>
-              <p className="text-xs text-gray-500">{t('manageMyStore')}</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-        </Link>
+        {/* 4 & 5. Menu Khusus Role Seller */}
+        {isSeller && (
+          <>
+            <Link
+              href="/seller/dashboard"
+              className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <LayoutDashboard className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{t('sellerDashboard')}</p>
+                  <p className="text-xs text-gray-500">{t('manageMyStore')}</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </Link>
 
-        {/* 5. Buka / Daftar Toko */}
-        <Link
-          href="/seller/register"
-          className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
-              <Store className="w-5 h-5" />
+            <Link
+              href="/seller/register"
+              className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">{t('registerStoreBtn')}</p>
+                  <p className="text-xs text-gray-500">{t('registerStoreTitle')}</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </Link>
+          </>
+        )}
+
+        {/* 6. Menu Khusus Role Admin */}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-indigo-50 hover:from-purple-100 hover:to-indigo-100 rounded-2xl border border-purple-200 shadow-sm transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-700 text-amber-300 flex items-center justify-center">
+                <Crown className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-purple-950">Admin Control Center</p>
+                <p className="text-xs text-purple-700">
+                  Kelola pengguna, multi-role, produk & keuangan
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-gray-900">{t('registerStoreBtn')}</p>
-              <p className="text-xs text-gray-500">{t('registerStoreTitle')}</p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-        </Link>
+            <ChevronRight className="w-4 h-4 text-purple-700" />
+          </Link>
+        )}
       </div>
 
       {/* Tombol Logout */}
