@@ -1,11 +1,38 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Star, CheckCircle2, MessageSquare, PlayCircle, X } from 'lucide-react';
+import {
+  Star,
+  CheckCircle2,
+  MessageSquare,
+  PlayCircle,
+  X,
+  Store,
+  Reply,
+  Send,
+  Loader2,
+  CornerDownRight,
+} from 'lucide-react';
+import Swal from 'sweetalert2';
 
 interface ReviewMedia {
   type: 'image' | 'video';
   url: string;
+}
+
+interface ReplyNode {
+  id: number;
+  review_id: number;
+  user_id: number;
+  parent_id: number | null;
+  comment: string;
+  is_seller: boolean;
+  created_at: string;
+  user?: {
+    name: string;
+    username?: string;
+  };
+  children?: ReplyNode[];
 }
 
 interface ReviewItem {
@@ -13,20 +40,41 @@ interface ReviewItem {
   rating: number;
   comment: string | null;
   media?: ReviewMedia[];
+  seller_reply?: string | null;
+  replied_at?: string | null;
   is_verified_purchase: boolean;
   created_at: string;
   user?: {
     name: string;
     username?: string;
   };
+  replies?: ReplyNode[];
 }
 
-export default function ProductReviewsSection({ productId }: { productId: number }) {
+export interface ProductReviewsSectionProps {
+  productId: number;
+  sellerUserId?: number | null;
+}
+
+export default function ProductReviewsSection({
+  productId,
+  sellerUserId,
+}: ProductReviewsSectionProps) {
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [averageRating, setAverageRating] = useState<number>(0);
   const [totalReviews, setTotalReviews] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [lightboxMedia, setLightboxMedia] = useState<ReviewMedia | null>(null);
+
+  // State untuk form balasan bersarang
+  const [currentUser, setCurrentUser] = useState<{ id: number; name: string } | null>(null);
+  const [activeReplyBox, setActiveReplyBox] = useState<{
+    reviewId: number;
+    parentId: number | null;
+    targetName: string;
+  } | null>(null);
+  const [replyText, setReplyText] = useState<string>('');
+  const [submittingReply, setSubmittingReply] = useState<boolean>(false);
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
@@ -39,22 +87,192 @@ export default function ProductReviewsSection({ productId }: { productId: number
     return `${DOMAIN_BASE_URL}${clean.startsWith('/public') ? clean : `/public${clean}`}`;
   };
 
+  // Deteksi user yang sedang login
   useEffect(() => {
-    if (!productId) return;
-    fetch(`${API_BASE_URL}/products/${productId}/reviews`, {
-      headers: { Accept: 'application/json' },
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json?.success && json.data) {
-          setReviews(json.data.reviews || []);
-          setAverageRating(json.data.average_rating || 0);
-          setTotalReviews(json.data.total_reviews || 0);
+    if (typeof window === 'undefined') return;
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      const val = window.localStorage.getItem(key);
+      if (!val || !val.trim().startsWith('{')) continue;
+      try {
+        const parsed = JSON.parse(val);
+        const u = parsed?.user || parsed;
+        if (u?.id) {
+          setCurrentUser({ id: Number(u.id), name: u.name || u.username || 'Pengguna' });
+          break;
         }
-      })
-      .catch((err) => console.error('Gagal memuat ulasan:', err))
-      .finally(() => setLoading(false));
-  }, [productId, API_BASE_URL]);
+      } catch {
+        // abaikan
+      }
+    }
+  }, []);
+
+  const fetchReviews = async () => {
+    if (!productId) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/reviews`, {
+        headers: { Accept: 'application/json' },
+      });
+      const json = await res.json();
+      if (json?.success && json.data) {
+        setReviews(json.data.reviews || []);
+        setAverageRating(json.data.average_rating || 0);
+        setTotalReviews(json.data.total_reviews || 0);
+      }
+    } catch (err) {
+      console.error('Gagal memuat ulasan:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReviews();
+  }, [productId]);
+
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeReplyBox || !replyText.trim()) return;
+
+    if (!currentUser?.id) {
+      Swal.fire('Login Diperlukan', 'Silakan login terlebih dahulu untuk membalas.', 'warning');
+      return;
+    }
+
+    setSubmittingReply(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/reviews/${activeReplyBox.reviewId}/reply`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          comment: replyText.trim(),
+          parent_id: activeReplyBox.parentId,
+          user_id: currentUser.id,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || 'Gagal mengirim balasan.');
+      }
+
+      setReplyText('');
+      setActiveReplyBox(null);
+      await fetchReviews();
+    } catch (err: any) {
+      Swal.fire('Gagal', err?.message || 'Terjadi kesalahan saat membalas.', 'error');
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  // Render Rekursif untuk Balasan Bersarang (Nested Replies)
+  const renderReplyNodes = (nodes: ReplyNode[], reviewId: number, depth = 1) => {
+    return nodes.map((node) => {
+      const authorName = node.user?.name || node.user?.username || 'Pengguna';
+      const isSellerBadge =
+        node.is_seller || (sellerUserId && Number(node.user_id) === Number(sellerUserId));
+
+      return (
+        <div
+          key={node.id}
+          className={`mt-2.5 ${depth > 1 ? 'ml-4 sm:ml-6' : 'ml-3 sm:ml-5'} pl-3 border-l-2 ${
+            isSellerBadge ? 'border-purple-300' : 'border-gray-200'
+          }`}
+        >
+          <div
+            className={`p-3 rounded-2xl text-xs space-y-1 ${
+              isSellerBadge
+                ? 'bg-purple-50/80 border border-purple-100'
+                : 'bg-gray-50 border border-gray-100'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <CornerDownRight className="w-3 h-3 text-gray-400" />
+                <span className="font-bold text-gray-900">{authorName}</span>
+                {isSellerBadge && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-full">
+                    <Store className="w-2.5 h-2.5" /> Penjual
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-gray-400">
+                {new Date(node.created_at).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                })}
+              </span>
+            </div>
+
+            <p className="text-gray-700 leading-relaxed">{node.comment}</p>
+
+            {/* Tombol Balas di tiap level komentar */}
+            {depth < 4 && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveReplyBox({
+                      reviewId,
+                      parentId: node.id,
+                      targetName: authorName,
+                    });
+                    setReplyText('');
+                  }}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-900 cursor-pointer"
+                >
+                  <Reply className="w-3 h-3" /> Balas
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Form Input jika membalas tepat di komentar ini */}
+          {activeReplyBox?.reviewId === reviewId && activeReplyBox?.parentId === node.id && (
+            <form onSubmit={handleSendReply} className="mt-2 ml-3 flex items-center gap-2">
+              <input
+                type="text"
+                autoFocus
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={`Balas ${activeReplyBox.targetName}...`}
+                className="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <button
+                type="submit"
+                disabled={submittingReply || !replyText.trim()}
+                className="p-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 cursor-pointer"
+              >
+                {submittingReply ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveReplyBox(null)}
+                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          )}
+
+          {/* Rekursif untuk anak balasan berikutnya */}
+          {Array.isArray(node.children) &&
+            node.children.length > 0 &&
+            renderReplyNodes(node.children, reviewId, depth + 1)}
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mt-8 space-y-6">
@@ -66,7 +284,7 @@ export default function ProductReviewsSection({ productId }: { productId: number
             Ulasan & Testimoni Pembeli ({totalReviews})
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Ulasan asli dari pembeli yang telah menyelesaikan transaksi produk ini.
+            Ulasan asli dari pembeli beserta diskusi balasan penjual.
           </p>
         </div>
 
@@ -92,88 +310,147 @@ export default function ProductReviewsSection({ productId }: { productId: number
         </div>
       </div>
 
-      {/* Daftar Ulasan */}
+      {/* Daftar Ulasan Utama + Thread Balasan Bersarang */}
       {loading ? (
         <p className="text-xs text-gray-400 py-6 text-center">Memuat ulasan pembeli...</p>
       ) : reviews.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-xs">
-          Belum ada ulasan untuk produk ini. Jadilah pembeli pertama yang memberikan testimoni!
+          Belum ada ulasan untuk produk ini.
         </div>
       ) : (
         <div className="divide-y divide-gray-100 space-y-5">
-          {reviews.map((rev) => (
-            <div key={rev.id} className="pt-5 first:pt-0 space-y-2.5">
-              <div className="flex items-center justify-between">
+          {reviews.map((rev) => {
+            const reviewerName = rev.user?.name || rev.user?.username || 'Pembeli NTTStorePi';
+
+            return (
+              <div key={rev.id} className="pt-5 first:pt-0 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-gray-900">{reviewerName}</span>
+                      {rev.is_verified_purchase && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" /> Pembelian Terverifikasi
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 mt-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3.5 h-3.5 ${
+                            s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] text-gray-400">
+                    {new Date(rev.created_at).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+
+                {rev.comment && (
+                  <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{rev.comment}</p>
+                )}
+
+                {/* Galeri Foto & Video Bukti Ulasan */}
+                {Array.isArray(rev.media) && rev.media.length > 0 && (
+                  <div className="flex items-center gap-2.5 flex-wrap pt-1">
+                    {rev.media.map((m, idx) => {
+                      const fullUrl = resolveMediaUrl(m.url);
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setLightboxMedia({ type: m.type, url: fullUrl })}
+                          className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 bg-black group cursor-pointer"
+                        >
+                          {m.type === 'video' ? (
+                            <>
+                              <video src={fullUrl} className="w-full h-full object-cover opacity-80" />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <PlayCircle className="w-7 h-7 text-white drop-shadow" />
+                              </div>
+                            </>
+                          ) : (
+                            <img
+                              src={fullUrl}
+                              alt="Bukti ulasan"
+                              className="w-full h-full object-cover group-hover:scale-105 transition"
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Tombol Balas Ulasan Utama */}
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-gray-900">
-                      {rev.user?.name || rev.user?.username || 'Pembeli NTTStorePi'}
-                    </span>
-                    {rev.is_verified_purchase && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <CheckCircle2 className="w-3 h-3" /> Pembelian Terverifikasi
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1 mt-1">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-3.5 h-3.5 ${
-                          s <= rev.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveReplyBox({
+                        reviewId: rev.id,
+                        parentId: null,
+                        targetName: reviewerName,
+                      });
+                      setReplyText('');
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-900 cursor-pointer"
+                  >
+                    <Reply className="w-3.5 h-3.5" />
+                    <span>Balas Ulasan</span>
+                  </button>
                 </div>
 
-                <span className="text-[11px] text-gray-400">
-                  {new Date(rev.created_at).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </span>
+                {/* Form Input Balasan Tingkat Pertama */}
+                {activeReplyBox?.reviewId === rev.id && activeReplyBox?.parentId === null && (
+                  <form onSubmit={handleSendReply} className="mt-2 ml-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder={`Tulis balasan untuk ${activeReplyBox.targetName}...`}
+                      className="flex-1 px-3 py-2 bg-gray-50 border border-purple-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={submittingReply || !replyText.trim()}
+                      className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                    >
+                      {submittingReply ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5" />
+                      )}
+                      <span>Kirim</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveReplyBox(null)}
+                      className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
+                )}
+
+                {/* Tampilkan Seluruh Pohon Balasan Bersarang (Nested Replies) */}
+                {Array.isArray(rev.replies) &&
+                  rev.replies.length > 0 &&
+                  renderReplyNodes(rev.replies, rev.id, 1)}
               </div>
-
-              {rev.comment && (
-                <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{rev.comment}</p>
-              )}
-
-              {/* Galeri Foto & Video Bukti Ulasan */}
-              {Array.isArray(rev.media) && rev.media.length > 0 && (
-                <div className="flex items-center gap-2.5 flex-wrap pt-1">
-                  {rev.media.map((m, idx) => {
-                    const fullUrl = resolveMediaUrl(m.url);
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setLightboxMedia({ type: m.type, url: fullUrl })}
-                        className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 bg-black group cursor-pointer"
-                      >
-                        {m.type === 'video' ? (
-                          <>
-                            <video src={fullUrl} className="w-full h-full object-cover opacity-80" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                              <PlayCircle className="w-7 h-7 text-white drop-shadow" />
-                            </div>
-                          </>
-                        ) : (
-                          <img
-                            src={fullUrl}
-                            alt="Bukti ulasan"
-                            className="w-full h-full object-cover group-hover:scale-105 transition"
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
