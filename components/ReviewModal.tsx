@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Star, UploadCloud, X, Loader2, Film, Image as ImageIcon, CheckCircle2 } from 'lucide-react';
+import {
+  Star,
+  UploadCloud,
+  X,
+  Loader2,
+  Film,
+  Image as ImageIcon,
+  CheckCircle2,
+  Crown,
+  AlertTriangle,
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useLanguage } from '@/context/LanguageContext';
 
@@ -43,19 +53,67 @@ export default function ReviewModal({
 
   if (!isOpen) return null;
 
+  const getAuthToken = (): string | null => {
+    if (typeof window === 'undefined') return null;
+
+    const possibleKeys = [
+      'auth_token',
+      'access_token',
+      'token',
+      'pi_token',
+      'pi_access_token',
+      'sanctum_token',
+      'nttstore_token',
+    ];
+
+    for (const key of possibleKeys) {
+      const val = localStorage.getItem(key) || sessionStorage.getItem(key);
+      if (val && val !== 'undefined' && val !== 'null' && val.trim() !== '') {
+        return val.replace(/^Bearer\s+/i, '').trim();
+      }
+    }
+
+    const userKeys = ['user', 'pi_user', 'auth_user'];
+    for (const uKey of userKeys) {
+      const raw = localStorage.getItem(uKey);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          const nestedToken =
+            parsed?.token || parsed?.access_token || parsed?.api_token;
+          if (nestedToken) {
+            return String(nestedToken).replace(/^Bearer\s+/i, '').trim();
+          }
+        } catch {
+          // Abaikan jika bukan JSON valid
+        }
+      }
+    }
+
+    return null;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
     if (selected.length === 0) return;
 
     if (mediaFiles.length + selected.length > 5) {
-      Swal.fire('Maksimal 5 File', 'Anda hanya dapat mengunggah maksimal 5 foto/video.', 'warning');
+      Swal.fire(
+        'Maksimal 5 File',
+        'Anda hanya dapat mengunggah maksimal 5 foto/video.',
+        'warning'
+      );
       return;
     }
 
     const validPreviews: PreviewFile[] = [];
     for (const file of selected) {
       if (file.size > 25 * 1024 * 1024) {
-        Swal.fire('Ukuran Terlalu Besar', `File "${file.name}" melebihi batas 25MB.`, 'warning');
+        Swal.fire(
+          'Ukuran Terlalu Besar',
+          `File "${file.name}" melebihi batas 25MB.`,
+          'warning'
+        );
         continue;
       }
 
@@ -84,6 +142,14 @@ export default function ReviewModal({
     setSubmitting(true);
 
     try {
+      const token = getAuthToken();
+
+      if (!token) {
+        throw new Error(
+          'Sesi login tidak ditemukan. Silakan login ulang melalui Pi Browser terlebih dahulu.'
+        );
+      }
+
       const formData = new FormData();
       formData.append('order_id', String(orderId));
       formData.append('product_id', String(productId));
@@ -96,21 +162,39 @@ export default function ReviewModal({
         formData.append('media[]', item.file);
       });
 
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('pi_access_token') || localStorage.getItem('token')
-          : null;
-
       const res = await fetch(`${API_BASE_URL}/reviews`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       });
 
       const json = await res.json();
+
+      // Jika kuota uji coba 1x per user sudah habis -> tampilkan prompt aktivasi Premium
+      if (json?.trial_expired || res.status === 403) {
+        onClose();
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Batas Uji Coba Tercapai (1x per User)',
+          html: `
+            <p class="text-sm text-gray-600">
+              Fitur ini <strong>hanya uji coba dan hanya dapat digunakan 1 kali saja</strong> per akun.
+            </p>
+            <p class="text-sm text-gray-800 font-semibold mt-2">
+              Untuk menggunakan fitur ulasan & upload foto/video seterusnya, silakan aktivasi yang <strong>Premium</strong>.
+            </p>
+          `,
+          confirmButtonText: 'Aktivasi Premium',
+          confirmButtonColor: '#7e22ce',
+          showCancelButton: true,
+          cancelButtonText: 'Tutup',
+        });
+        return;
+      }
+
       if (!res.ok || json.success === false) {
         throw new Error(json.message || 'Gagal mengirim ulasan.');
       }
@@ -118,12 +202,13 @@ export default function ReviewModal({
       Swal.fire({
         icon: 'success',
         title: t('successTitle'),
-        text: json.message || 'Ulasan produk berhasil dikirim!',
-        timer: 1600,
+        text:
+          json.message ||
+          'Ulasan produk berhasil dikirim! (Kuota uji coba 1x per akun telah digunakan)',
+        timer: 2000,
         showConfirmButton: false,
       });
 
-      // Bersihkan state
       mediaFiles.forEach((m) => URL.revokeObjectURL(m.previewUrl));
       setMediaFiles([]);
       setComment('');
@@ -132,7 +217,11 @@ export default function ReviewModal({
       onSuccess(json.data);
       onClose();
     } catch (err: any) {
-      Swal.fire(t('failedTitle'), err?.message || 'Terjadi kesalahan saat mengirim ulasan.', 'error');
+      Swal.fire(
+        t('failedTitle'),
+        err?.message || 'Terjadi kesalahan saat mengirim ulasan.',
+        'error'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -147,8 +236,8 @@ export default function ReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 pb-24 sm:pb-6 overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[82vh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-gray-100 relative my-auto">
         {/* Tombol Tutup */}
         <button
           type="button"
@@ -159,27 +248,49 @@ export default function ReviewModal({
         </button>
 
         {/* Header Produk */}
-        <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+        <div className="flex items-center gap-3 pb-3.5 border-b border-gray-100">
           {productImage && (
             <img
               src={productImage}
               alt={productName}
-              className="w-14 h-14 rounded-2xl object-cover border border-gray-100 shrink-0"
+              className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shrink-0"
             />
           )}
-          <div className="pr-6">
+          <div className="pr-8">
             <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
               <CheckCircle2 className="w-3 h-3" /> Pembelian Terverifikasi
             </span>
-            <h3 className="font-bold text-gray-900 text-base line-clamp-1 mt-1">{productName}</h3>
+            <h3 className="font-bold text-gray-900 text-sm sm:text-base line-clamp-1 mt-1">
+              {productName}
+            </h3>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        {/* Banner Informasi Batas Uji Coba 1x Per User & Aktivasi Premium */}
+        <div className="mt-3.5 p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-start gap-2.5">
+          <div className="p-1.5 rounded-xl bg-purple-700 text-white shrink-0 mt-0.5">
+            <Crown className="w-3.5 h-3.5 text-amber-300" />
+          </div>
+          <div className="text-[11px] leading-relaxed text-purple-950">
+            <p className="font-extrabold flex items-center gap-1 text-purple-900">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>Mode Uji Coba (Maksimal 1 Kali per User)</span>
+            </p>
+            <p className="mt-0.5 text-purple-800">
+              Fitur ini <strong>hanya uji coba dan hanya dapat digunakan 1 kali saja</strong> per
+              akun. Untuk menggunakan fitur ini seterusnya, silakan aktivasi versi{' '}
+              <strong className="text-purple-950 underline">Premium</strong>.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3.5 mt-3.5">
           {/* Input Rating Bintang */}
-          <div className="text-center bg-amber-50/60 p-4 rounded-2xl border border-amber-100">
-            <p className="text-xs font-bold text-gray-700 mb-2">Bagaimana kualitas produk ini?</p>
-            <div className="flex items-center justify-center gap-2">
+          <div className="text-center bg-amber-50/60 p-3.5 rounded-2xl border border-amber-100">
+            <p className="text-xs font-bold text-gray-700 mb-1.5">
+              Bagaimana kualitas produk ini?
+            </p>
+            <div className="flex items-center justify-center gap-1.5">
               {[1, 2, 3, 4, 5].map((star) => {
                 const active = (hoverRating || rating) >= star;
                 return (
@@ -192,7 +303,7 @@ export default function ReviewModal({
                     className="p-1 transition-transform hover:scale-110 cursor-pointer"
                   >
                     <Star
-                      className={`w-8 h-8 ${
+                      className={`w-7 h-7 ${
                         active ? 'fill-amber-400 text-amber-400' : 'text-gray-300'
                       }`}
                     />
@@ -200,14 +311,14 @@ export default function ReviewModal({
                 );
               })}
             </div>
-            <p className="text-xs font-bold text-amber-700 mt-1.5">
+            <p className="text-xs font-bold text-amber-700 mt-1">
               {ratingLabels[hoverRating || rating]}
             </p>
           </div>
 
           {/* Input Ulasan Teks */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+            <label className="block text-xs font-bold text-gray-700 mb-1">
               Tulis Ulasan / Testimoni Produk
             </label>
             <textarea
@@ -215,22 +326,22 @@ export default function ReviewModal({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Ceritakan pengalaman Anda: apakah kualitas produk bagus, kemasan aman, atau ada bagian yang rusak..."
-              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
           {/* Upload Foto / Video Bukti */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">
+            <label className="block text-xs font-bold text-gray-700 mb-1">
               Upload Foto atau Video Produk (Maks. 5 file, @25MB)
             </label>
 
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 hover:border-amber-500 bg-gray-50/70 hover:bg-amber-50/30 rounded-2xl p-4 cursor-pointer transition">
-              <UploadCloud className="w-6 h-6 text-amber-600 mb-1" />
+            <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 hover:border-amber-500 bg-gray-50/70 hover:bg-amber-50/30 rounded-2xl p-3.5 cursor-pointer transition">
+              <UploadCloud className="w-5 h-5 text-amber-600 mb-1" />
               <span className="text-xs font-bold text-gray-700">
                 Pilih Foto (JPG/PNG) atau Video (MP4/MOV)
               </span>
-              <span className="text-[10px] text-gray-400 mt-0.5">
+              <span className="text-[10px] text-gray-400 mt-0.5 text-center">
                 Lampirkan bukti video unboxing jika produk rusak atau testimoni kualitas produk
               </span>
               <input
@@ -244,11 +355,11 @@ export default function ReviewModal({
 
             {/* Preview Foto & Video Terpilih */}
             {mediaFiles.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-3">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2.5">
                 {mediaFiles.map((item, idx) => (
                   <div
                     key={idx}
-                    className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-black group"
+                    className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-black"
                   >
                     {item.type === 'video' ? (
                       <video
