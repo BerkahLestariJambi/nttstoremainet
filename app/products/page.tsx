@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -48,12 +47,19 @@ interface Product {
   };
 }
 
+interface CategoryItem {
+  id: number;
+  name: string;
+  icon?: string | null;
+}
+
 export default function ProductsPage() {
   const router = useRouter();
   const { addToCart: addToLocalCart } = useCart();
   const { t } = useLanguage();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [apiCategories, setApiCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +74,7 @@ export default function ProductsPage() {
   const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
   useEffect(() => {
+    // 1. Ambil daftar produk publik
     productService
       .getProducts()
       .then((res: any) => {
@@ -81,7 +88,29 @@ export default function ProductsPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [t]);
+
+    // 2. Ambil seluruh kategori publik dari tabel categories
+    fetch(`${API_BASE_URL}/categories`, {
+      headers: { Accept: 'application/json' },
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        const list = json?.data || json;
+        if (Array.isArray(list)) {
+          const normalized: CategoryItem[] = list
+            .map((c: any, idx: number) =>
+              typeof c === 'object'
+                ? { id: c.id ?? idx, name: String(c.name || '').trim(), icon: c.icon || null }
+                : { id: idx, name: String(c).trim(), icon: null }
+            )
+            .filter((c) => c.name !== '');
+          setApiCategories(normalized);
+        }
+      })
+      .catch((err) => {
+        console.warn('Gagal memuat kategori publik dari API:', err);
+      });
+  }, [t, API_BASE_URL]);
 
   const getFullImageUrl = (url: string | null) => {
     if (!url || typeof url !== 'string' || url.trim() === '') return '';
@@ -106,18 +135,31 @@ export default function ProductsPage() {
     return `${DOMAIN_BASE_URL}${cleanUrl}`;
   };
 
-  // Ekstrak daftar kategori unik dari data produk
+  // Gabungkan seluruh kategori dari tabel database + kategori yang menempel pada produk
   const categories = useMemo(() => {
-    const setCat = new Set<string>();
-    products.forEach((p) => {
+    const mapCat = new Map<string, CategoryItem>();
+
+    apiCategories.forEach((cat) => {
+      mapCat.set(cat.name.toLowerCase(), cat);
+    });
+
+    products.forEach((p, idx) => {
       const catName =
         typeof p.category === 'object' ? p.category?.name : p.category;
       if (catName && catName.trim() !== '') {
-        setCat.add(catName.trim());
+        const trimmed = catName.trim();
+        if (!mapCat.has(trimmed.toLowerCase())) {
+          mapCat.set(trimmed.toLowerCase(), {
+            id: typeof p.category === 'object' && p.category?.id ? p.category.id : 10000 + idx,
+            name: trimmed,
+            icon: null,
+          });
+        }
       }
     });
-    return Array.from(setCat);
-  }, [products]);
+
+    return Array.from(mapCat.values());
+  }, [apiCategories, products]);
 
   // Filter produk berdasarkan pencarian & kategori
   const filteredProducts = useMemo(() => {
@@ -125,7 +167,8 @@ export default function ProductsPage() {
       const catName =
         typeof p.category === 'object' ? p.category?.name : p.category;
       const matchesCategory =
-        selectedCategory === 'ALL' || catName === selectedCategory;
+        selectedCategory === 'ALL' ||
+        catName?.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
 
       const q = searchQuery.toLowerCase().trim();
       const matchesQuery =
@@ -220,7 +263,6 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Tombol Melayang Flash Sale (di luar kondisi loading agar tidak error JSX) */}
       <FlashSaleBanner />
 
       {/* Header & Tombol Kembali */}
@@ -258,7 +300,7 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setSelectedCategory('ALL')}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                 selectedCategory === 'ALL'
                   ? 'bg-amber-600 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -268,16 +310,17 @@ export default function ProductsPage() {
             </button>
             {categories.map((cat) => (
               <button
-                key={cat}
+                key={cat.name}
                 type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
-                  selectedCategory === cat
+                onClick={() => setSelectedCategory(cat.name)}
+                className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                  selectedCategory.toLowerCase() === cat.name.toLowerCase()
                     ? 'bg-amber-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {cat}
+                {cat.icon && <span>{cat.icon}</span>}
+                <span>{cat.name}</span>
               </button>
             ))}
           </div>
