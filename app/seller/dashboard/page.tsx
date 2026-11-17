@@ -14,6 +14,10 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   X,
+  Zap,
+  Tag,
+  Clock,
+  Layers,
 } from 'lucide-react';
 import { productService } from '@/services/productService';
 import Swal from 'sweetalert2';
@@ -24,11 +28,28 @@ interface SellerProduct {
   slug: string;
   description: string;
   price_pi: string | number;
+  discount_price_pi?: string | number | null;
+  is_flash_sale?: boolean;
+  flash_sale_ends_at?: string | null;
+  flash_sale_quota?: number | null;
   stock: number;
+  sisa_stock?: number;
+  sold?: number;
   image_url: string;
   category_id?: number;
   category?: { id?: number; name: string };
 }
+
+// Helper format datetime dari API ke format input datetime-local (YYYY-MM-DDTHH:mm)
+const toDateTimeLocal = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+};
 
 export default function SellerDashboard() {
   const [products, setProducts] = useState<SellerProduct[]>([]);
@@ -44,24 +65,28 @@ export default function SellerDashboard() {
     name: '',
     description: '',
     price_pi: '',
+    discount_price_pi: '',
+    is_flash_sale: false,
+    flash_sale_ends_at: '',
+    flash_sale_quota: '',
     stock: '',
     category_id: '1',
     image: null as File | null,
   });
 
-const loadSellerProducts = async () => {
-  try {
-    setLoading(true);
-    const res: any = await productService.getSellerProducts();
-    const productList = res?.data?.data || res?.data || res || [];
-    setProducts(Array.isArray(productList) ? productList : []);
-  } catch (err) {
-    console.error('Gagal memuat produk seller:', err);
-    setProducts([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  const loadSellerProducts = async () => {
+    try {
+      setLoading(true);
+      const res: any = await productService.getSellerProducts();
+      const productList = res?.data?.data || res?.data || res || [];
+      setProducts(Array.isArray(productList) ? productList : []);
+    } catch (err) {
+      console.error('Gagal memuat produk seller:', err);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadSellerProducts();
@@ -74,6 +99,10 @@ const loadSellerProducts = async () => {
       name: '',
       description: '',
       price_pi: '',
+      discount_price_pi: '',
+      is_flash_sale: false,
+      flash_sale_ends_at: '',
+      flash_sale_quota: '',
       stock: '',
       category_id: '1',
       image: null,
@@ -81,18 +110,37 @@ const loadSellerProducts = async () => {
     setIsModalOpen(true);
   };
 
-  // Buka Modal Mode Edit (Mengisi form dengan data produk yang dipilih)
+  // Buka Modal Mode Edit (Mengisi form dengan data produk + promo/flash sale yang dipilih)
   const openEditModal = (product: SellerProduct) => {
     setEditingProduct(product);
     setFormData({
       name: product.name || '',
       description: product.description || '',
       price_pi: String(product.price_pi || ''),
+      discount_price_pi:
+        product.discount_price_pi && Number(product.discount_price_pi) > 0
+          ? String(product.discount_price_pi)
+          : '',
+      is_flash_sale: Boolean(product.is_flash_sale),
+      flash_sale_ends_at: toDateTimeLocal(product.flash_sale_ends_at),
+      flash_sale_quota:
+        product.flash_sale_quota !== null && product.flash_sale_quota !== undefined
+          ? String(product.flash_sale_quota)
+          : '',
       stock: String(product.stock ?? 0),
       category_id: String(product.category_id || product.category?.id || '1'),
       image: null,
     });
     setIsModalOpen(true);
+  };
+
+  const handleToggleFlashSale = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      is_flash_sale: checked,
+      flash_sale_ends_at: checked ? prev.flash_sale_ends_at : '',
+      flash_sale_quota: checked ? prev.flash_sale_quota : '',
+    }));
   };
 
   // Handler Hapus Produk
@@ -119,9 +167,45 @@ const loadSellerProducts = async () => {
     }
   };
 
+  // Kalkulasi preview diskon di modal
+  const normalPrice = parseFloat(formData.price_pi) || 0;
+  const discountPrice = parseFloat(formData.discount_price_pi) || 0;
+  const hasValidDiscount = discountPrice > 0 && discountPrice < normalPrice;
+  const discountPercentage = hasValidDiscount
+    ? Math.round(((normalPrice - discountPrice) / normalPrice) * 100)
+    : 0;
+
   // Handler Submit (Tambah Baru ATAU Update Produk)
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.discount_price_pi && discountPrice >= normalPrice) {
+      Swal.fire('Validasi Gagal', 'Harga diskon harus lebih kecil dari harga normal.', 'warning');
+      return;
+    }
+
+    if (formData.is_flash_sale && (!formData.discount_price_pi || discountPrice <= 0)) {
+      Swal.fire(
+        'Validasi Gagal',
+        'Isi Harga Flash Sale terlebih dahulu jika mengaktifkan Flash Sale.',
+        'warning'
+      );
+      return;
+    }
+
+    if (
+      formData.is_flash_sale &&
+      formData.flash_sale_quota &&
+      parseInt(formData.flash_sale_quota, 10) > parseInt(formData.stock || '0', 10)
+    ) {
+      Swal.fire(
+        'Validasi Gagal',
+        'Kuota Flash Sale tidak boleh melebihi total stok produk.',
+        'warning'
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -132,17 +216,30 @@ const loadSellerProducts = async () => {
       data.append('stock', formData.stock);
       data.append('category_id', formData.category_id);
 
+      // Kirim field Promo & Flash Sale (kirim string kosong jika dihapus saat edit agar backend meng-null-kan)
+      data.append(
+        'discount_price_pi',
+        formData.discount_price_pi && discountPrice > 0 ? formData.discount_price_pi : ''
+      );
+      data.append('is_flash_sale', formData.is_flash_sale ? '1' : '0');
+      data.append(
+        'flash_sale_ends_at',
+        formData.is_flash_sale && formData.flash_sale_ends_at ? formData.flash_sale_ends_at : ''
+      );
+      data.append(
+        'flash_sale_quota',
+        formData.is_flash_sale && formData.flash_sale_quota ? formData.flash_sale_quota : ''
+      );
+
       if (formData.image) {
         data.append('image', formData.image);
       }
 
       if (editingProduct) {
-        // Mode Update Produk
-        data.append('_method', 'PUT'); // Penting untuk Laravel agar menerima FormData/File saat update
+        data.append('_method', 'PUT');
         await productService.updateProduct(editingProduct.id, data);
         Swal.fire('Berhasil!', 'Data produk berhasil diperbarui.', 'success');
       } else {
-        // Mode Tambah Produk Baru
         await productService.createProduct(data);
         Swal.fire('Berhasil!', 'Produk baru telah ditambahkan.', 'success');
       }
@@ -166,11 +263,20 @@ const loadSellerProducts = async () => {
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalStock = products.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-  const totalValuePi = products.reduce(
-    (sum, p) => sum + (parseFloat(String(p.price_pi)) || 0) * (Number(p.stock) || 0),
-    0
-  );
+  // Helper hitung sisa stok aktual per produk
+  const getRemainingStock = (p: SellerProduct) =>
+    p.sisa_stock !== undefined && p.sisa_stock !== null
+      ? Number(p.sisa_stock)
+      : Math.max(0, (Number(p.stock) || 0) - (Number(p.sold) || 0));
+
+  const totalStock = products.reduce((sum, p) => sum + getRemainingStock(p), 0);
+  const totalValuePi = products.reduce((sum, p) => {
+    const activePrice =
+      p.discount_price_pi && Number(p.discount_price_pi) > 0
+        ? parseFloat(String(p.discount_price_pi))
+        : parseFloat(String(p.price_pi)) || 0;
+    return sum + activePrice * getRemainingStock(p);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-4 sm:p-6 lg:p-8">
@@ -182,7 +288,7 @@ const loadSellerProducts = async () => {
               Dashboard Penjual NTTStorePi
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Kelola katalog produk, stok barang, dan pendapatan Pi Network Anda.
+              Kelola katalog produk, promo flash sale, stok barang, dan pendapatan Pi Network Anda.
             </p>
           </div>
           <button
@@ -214,7 +320,7 @@ const loadSellerProducts = async () => {
             </div>
             <div>
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Nilai Pi Katalog
+                Nilai Pi Sisa Stok
               </span>
               <h3 className="text-2xl font-extrabold text-amber-600">
                 π {totalValuePi.toFixed(2)}
@@ -228,7 +334,7 @@ const loadSellerProducts = async () => {
             </div>
             <div>
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Total Unit Stok
+                Total Sisa Stok
               </span>
               <h3 className="text-2xl font-extrabold text-gray-900">{totalStock} Unit</h3>
             </div>
@@ -271,71 +377,108 @@ const loadSellerProducts = async () => {
                   <tr className="bg-gray-50/50 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
                     <th className="p-4 pl-6">Produk</th>
                     <th className="p-4">Harga (Pi)</th>
-                    <th className="p-4">Stok</th>
+                    <th className="p-4">Stok & Terjual</th>
                     <th className="p-4">Kategori</th>
                     <th className="p-4 pr-6 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
-                  {filteredProducts.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50/50 transition">
-                      <td className="p-4 pl-6 flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 flex items-center justify-center">
-                          {p.image_url ? (
-                            <img
-                              src={p.image_url}
-                              alt={p.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <ImageIcon className="w-5 h-5 text-gray-400" />
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-gray-900 line-clamp-1">{p.name}</h4>
-                          <p className="text-[11px] text-gray-400 line-clamp-1">
-                            {p.description || '-'}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="p-4 font-bold text-amber-600">π {p.price_pi}</td>
-                      <td className="p-4">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            Number(p.stock) > 0
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-red-50 text-red-700'
-                          }`}
-                        >
-                          {p.stock} Unit
-                        </span>
-                      </td>
-                      <td className="p-4 text-gray-500 font-medium">
-                        {p.category?.name || 'Umum'}
-                      </td>
-                      <td className="p-4 pr-6 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          {/* Tombol Edit Produk */}
-                          <button
-                            onClick={() => openEditModal(p)}
-                            className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition"
-                            title="Edit Produk"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
+                  {filteredProducts.map((p) => {
+                    const sisa = getRemainingStock(p);
+                    const hasPromo =
+                      p.discount_price_pi !== null &&
+                      p.discount_price_pi !== undefined &&
+                      Number(p.discount_price_pi) > 0 &&
+                      Number(p.discount_price_pi) < Number(p.price_pi);
 
-                          {/* Tombol Hapus Produk */}
-                          <button
-                            onClick={() => handleDeleteProduct(p.id)}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
-                            title="Hapus Produk"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50/50 transition">
+                        <td className="p-4 pl-6 flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 flex items-center justify-center">
+                            {p.image_url ? (
+                              <img
+                                src={p.image_url}
+                                alt={p.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <ImageIcon className="w-5 h-5 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-bold text-gray-900 line-clamp-1">{p.name}</h4>
+                              {p.is_flash_sale && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-700">
+                                  <Zap className="w-2.5 h-2.5" /> Flash Sale
+                                </span>
+                              )}
+                              {!p.is_flash_sale && hasPromo && (
+                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600">
+                                  Promo
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-400 line-clamp-1">
+                              {p.description || '-'}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          {hasPromo ? (
+                            <div className="flex flex-col">
+                              <span className="font-extrabold text-orange-600">
+                                π {p.discount_price_pi}
+                              </span>
+                              <span className="text-[10px] text-gray-400 line-through">
+                                π {p.price_pi}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="font-bold text-amber-600">π {p.price_pi}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-block w-fit px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                sisa > 0
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-red-50 text-red-700'
+                              }`}
+                            >
+                              Sisa: {sisa} / {p.stock}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Terjual: {Number(p.sold ?? 0)} Unit
+                            </span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-gray-500 font-medium">
+                          {p.category?.name || 'Umum'}
+                        </td>
+                        <td className="p-4 pr-6 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => openEditModal(p)}
+                              className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition"
+                              title="Edit Produk & Flash Sale"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteProduct(p.id)}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                              title="Hapus Produk"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -345,13 +488,13 @@ const loadSellerProducts = async () => {
 
       {/* MODAL TAMBAH / EDIT PRODUK */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl border border-gray-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl border border-gray-100 my-8 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 {editingProduct ? (
                   <>
-                    <Edit className="w-5 h-5 text-amber-500" /> Edit Produk
+                    <Edit className="w-5 h-5 text-amber-500" /> Edit Produk & Promo
                   </>
                 ) : (
                   <>
@@ -382,10 +525,10 @@ const loadSellerProducts = async () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Harga (π Pi)</label>
+                  <label className="block font-bold text-gray-700 mb-1">Harga Normal (π Pi)</label>
                   <input
                     type="number"
-                    step="0.00000001"
+                    step="any"
                     required
                     placeholder="0.00"
                     value={formData.price_pi}
@@ -394,16 +537,116 @@ const loadSellerProducts = async () => {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">Stok Jumlah</label>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Total Stok Awal
+                    {editingProduct && (
+                      <span className="font-normal text-gray-400 ml-1">
+                        (Terjual: {Number(editingProduct.sold ?? 0)})
+                      </span>
+                    )}
+                  </label>
                   <input
                     type="number"
                     required
+                    min={editingProduct ? Number(editingProduct.sold ?? 0) : 0}
                     placeholder="10"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+              </div>
+
+              {/* Pengaturan Promo & Flash Sale */}
+              <div className="border border-amber-200 bg-amber-50/50 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-100 text-amber-600 rounded-lg">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-xs">Promo & Flash Sale</h4>
+                      <p className="text-[11px] text-gray-500">
+                        Atur harga diskon atau etalase Flash Sale
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_flash_sale}
+                      onChange={(e) => handleToggleFlashSale(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="relative w-10 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
+                    <span className="text-[11px] font-bold text-gray-700">
+                      {formData.is_flash_sale ? 'Aktif' : 'Off'}
+                    </span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="flex items-center justify-between font-bold text-gray-700 mb-1">
+                    <span className="inline-flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5 text-orange-600" />
+                      {formData.is_flash_sale ? 'Harga Flash Sale (π Pi) *' : 'Harga Diskon (π Pi)'}
+                    </span>
+                    {hasValidDiscount && (
+                      <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-extrabold rounded-full">
+                        -{discountPercentage}%
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required={formData.is_flash_sale}
+                    placeholder="Kosongkan jika tidak ada promo"
+                    value={formData.discount_price_pi}
+                    onChange={(e) =>
+                      setFormData({ ...formData, discount_price_pi: e.target.value })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 font-bold text-orange-700"
+                  />
+                </div>
+
+                {formData.is_flash_sale && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/70">
+                    <div>
+                      <label className="flex items-center gap-1 font-bold text-gray-700 mb-1">
+                        <Clock className="w-3.5 h-3.5 text-orange-600" />
+                        Berakhir Pada
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={formData.flash_sale_ends_at}
+                        onChange={(e) =>
+                          setFormData({ ...formData, flash_sale_ends_at: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-1 font-bold text-gray-700 mb-1">
+                        <Layers className="w-3.5 h-3.5 text-orange-600" />
+                        Kuota Flash Sale
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={formData.stock || undefined}
+                        placeholder="Opsional"
+                        value={formData.flash_sale_quota}
+                        onChange={(e) =>
+                          setFormData({ ...formData, flash_sale_quota: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-amber-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -419,7 +662,12 @@ const loadSellerProducts = async () => {
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">
-                  Foto Produk {editingProduct && <span className="font-normal text-gray-400">(Kosongkan jika tidak ingin mengubah foto)</span>}
+                  Foto Produk{' '}
+                  {editingProduct && (
+                    <span className="font-normal text-gray-400">
+                      (Kosongkan jika tidak ingin mengubah foto)
+                    </span>
+                  )}
                 </label>
                 <input
                   type="file"
