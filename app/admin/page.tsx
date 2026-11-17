@@ -21,6 +21,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { apiClient } from '@/lib/apiClient';
 
 type AdminTab = 'overview' | 'users' | 'products' | 'orders' | 'finance';
 type UserRole = 'customer' | 'seller' | 'admin';
@@ -81,41 +82,6 @@ interface FinanceHistoryItem {
   shipping_fee: number;
 }
 
-// Normalisasi Base URL agar selalu berakhir dengan /api
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nttstorepi.mejatika.com/api';
-const API_BASE_URL = rawApiUrl.endsWith('/api')
-  ? rawApiUrl
-  : `${rawApiUrl.replace(/\/$/, '')}/api`;
-
-// Deteksi otomatis token dari berbagai kemungkinan key di localStorage
-const getStoredToken = (): string | null => {
-  if (typeof window === 'undefined') return null;
-
-  const directKeys = ['token', 'access_token', 'pi_token', 'auth_token', 'sanctum_token'];
-  for (const key of directKeys) {
-    const val = localStorage.getItem(key);
-    if (val && val !== 'undefined' && val !== 'null') {
-      return val.replace(/^"|"$/g, '');
-    }
-  }
-
-  // Cek jika token tersimpan di dalam objek JSON (misal: user / auth)
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key) || '');
-      if (parsed?.token) return parsed.token;
-      if (parsed?.access_token) return parsed.access_token;
-      if (parsed?.data?.token) return parsed.data.token;
-    } catch {
-      // Abaikan jika bukan format JSON
-    }
-  }
-
-  return null;
-};
-
 export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState<boolean>(true);
@@ -143,15 +109,6 @@ export default function AdminDashboardPage() {
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
-  const getAuthHeaders = () => {
-    const token = getStoredToken();
-    return {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-  };
-
   // Helper ambil array roles milik user
   const getUserRoles = (u: AdminUser): UserRole[] => {
     if (Array.isArray(u.roles) && u.roles.length > 0) return u.roles;
@@ -170,43 +127,31 @@ export default function AdminDashboardPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const headers = getAuthHeaders();
-
-      const [usersRes, productsRes, ordersRes, financeRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin/users`, { headers }),
-        fetch(`${API_BASE_URL}/admin/products`, { headers }),
-        fetch(`${API_BASE_URL}/admin/orders`, { headers }),
-        fetch(`${API_BASE_URL}/admin/finance`, { headers }),
-      ]);
-
-      if (usersRes.status === 401) {
-        setFetchError(
-          'Sesi login tidak terdeteksi (401 Unauthenticated). Silakan login ulang via Pi Browser.'
-        );
-        return;
-      }
-      if (usersRes.status === 404) {
-        setFetchError(
-          `Endpoint tidak ditemukan (404) di ${API_BASE_URL}/admin/users. Pastikan routes/api.php sudah di-upload ke server dan jalankan php artisan route:clear.`
-        );
-        return;
-      }
-
-      const [usersJson, productsJson, ordersJson, financeJson] = await Promise.all([
-        usersRes.json().catch(() => ({})),
-        productsRes.json().catch(() => ({})),
-        ordersRes.json().catch(() => ({})),
-        financeRes.json().catch(() => ({})),
+      const [usersJson, productsJson, ordersJson, financeJson]: any[] = await Promise.all([
+        apiClient('/admin/users'),
+        apiClient('/admin/products'),
+        apiClient('/admin/orders'),
+        apiClient('/admin/finance'),
       ]);
 
       if (usersJson?.success) {
         setUsers(usersJson.data || []);
-      } else if (usersJson?.message) {
-        setFetchError(`Users API: ${usersJson.message}`);
+      } else if (Array.isArray(usersJson)) {
+        setUsers(usersJson);
       }
 
-      if (productsJson?.success) setProducts(productsJson.data || []);
-      if (ordersJson?.success) setOrders(ordersJson.data || []);
+      if (productsJson?.success) {
+        setProducts(productsJson.data || []);
+      } else if (Array.isArray(productsJson)) {
+        setProducts(productsJson);
+      }
+
+      if (ordersJson?.success) {
+        setOrders(ordersJson.data || []);
+      } else if (Array.isArray(ordersJson)) {
+        setOrders(ordersJson);
+      }
+
       if (financeJson?.success && financeJson.data) {
         setFinanceHistory(financeJson.data.history || []);
         setFinanceSummary(
@@ -219,9 +164,7 @@ export default function AdminDashboardPage() {
       }
     } catch (error: any) {
       console.error('Gagal memuat data Admin Dashboard:', error);
-      setFetchError(
-        `Gagal terhubung ke server (${API_BASE_URL}): ${error?.message || 'Network Error'}`
-      );
+      setFetchError(error?.message || 'Gagal memuat data admin dari server.');
     } finally {
       setLoading(false);
     }
@@ -247,14 +190,12 @@ export default function AdminDashboardPage() {
 
     setUpdatingRoleId(user.id);
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/users/${user.id}/role`, {
+      const json: any = await apiClient(`/admin/users/${user.id}/role`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
         body: JSON.stringify({ roles: updatedRoles }),
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
+      if (json && json.success === false) {
         throw new Error(json.message || 'Gagal memperbarui role pengguna.');
       }
 
@@ -263,9 +204,9 @@ export default function AdminDashboardPage() {
           u.id === user.id
             ? {
                 ...u,
-                ...(json.data || {}),
+                ...(json?.data || {}),
                 roles: updatedRoles,
-                role: json.data?.role || u.role,
+                role: json?.data?.role || u.role,
               }
             : u
         )
@@ -274,12 +215,12 @@ export default function AdminDashboardPage() {
       Swal.fire({
         icon: 'success',
         title: 'Role Diperbarui',
-        text: json.message || `Role ${user.name} berhasil diperbarui.`,
+        text: json?.message || `Role ${user.name} berhasil diperbarui.`,
         timer: 1400,
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Terjadi kesalahan saat mengubah role.', 'error');
+      Swal.fire('Gagal', err?.message || 'Terjadi kesalahan saat mengubah role.', 'error');
     } finally {
       setUpdatingRoleId(null);
     }
@@ -301,19 +242,18 @@ export default function AdminDashboardPage() {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/products/${product.id}`, {
+      const json: any = await apiClient(`/admin/products/${product.id}`, {
         method: 'DELETE',
-        headers: getAuthHeaders(),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
+
+      if (json && json.success === false) {
         throw new Error(json.message || 'Gagal menghapus produk.');
       }
 
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
       Swal.fire('Terhapus!', 'Produk berhasil dihapus.', 'success');
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal menghapus produk.', 'error');
+      Swal.fire('Gagal', err?.message || 'Gagal menghapus produk.', 'error');
     }
   };
 
@@ -321,13 +261,12 @@ export default function AdminDashboardPage() {
   const handleOrderStatusChange = async (orderId: number, newStatus: string) => {
     setUpdatingOrderId(orderId);
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/orders/${orderId}/status`, {
+      const json: any = await apiClient(`/admin/orders/${orderId}/status`, {
         method: 'PUT',
-        headers: getAuthHeaders(),
         body: JSON.stringify({ status: newStatus }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
+
+      if (json && json.success === false) {
         throw new Error(json.message || 'Gagal memperbarui status pesanan.');
       }
 
@@ -343,7 +282,7 @@ export default function AdminDashboardPage() {
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire('Gagal', err.message || 'Gagal memperbarui status.', 'error');
+      Swal.fire('Gagal', err?.message || 'Gagal memperbarui status.', 'error');
     } finally {
       setUpdatingOrderId(null);
     }
