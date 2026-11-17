@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
 import { cartService } from '@/services/cartService';
@@ -12,6 +12,7 @@ import {
   X,
   Check,
   Clock,
+  GripHorizontal,
 } from 'lucide-react';
 
 export interface FlashSaleProduct {
@@ -42,7 +43,7 @@ interface FlashSaleBannerProps {
 
 export default function FlashSaleBanner({
   initialProducts,
-  logoUrl = 'https://nttstorepi.mejatika.com/public/products/7ldSzGcQPdUz4HXTKpXuIZ1XwnQ4BwcQiKMZ8acV.jpg', // Sesuaikan dengan path logo NTTStorePi di folder public/ (misal: /logo.png atau /images/logo.png)
+  logoUrl = 'https://nttstorepi.mejatika.com/public/products/7ldSzGcQPdUz4HXTKpXuIZ1XwnQ4BwcQiKMZ8acV.jpg',
 }: FlashSaleBannerProps) {
   const { t } = useLanguage();
 
@@ -60,6 +61,119 @@ export default function FlashSaleBanner({
     totalMs: 0,
   });
   const [tickPulse, setTickPulse] = useState(false);
+
+  // State & Ref untuk posisi Draggable (geser bebas ke mana saja)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const buttonWrapperRef = useRef<HTMLDivElement | null>(null);
+  const dragInfoRef = useRef({
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    hasMoved: false,
+  });
+
+  // Inisialisasi posisi awal di kanan tengah & jaga agar tetap di dalam layar saat resize
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const savedPos = sessionStorage.getItem('ntt_flash_sale_pos');
+    if (savedPos) {
+      try {
+        const parsed = JSON.parse(savedPos);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          setPosition({
+            x: Math.min(Math.max(8, parsed.x), window.innerWidth - 84),
+            y: Math.min(Math.max(8, parsed.y), window.innerHeight - 104),
+          });
+          return;
+        }
+      } catch {
+        // Abaikan jika format tersimpan tidak valid
+      }
+    }
+
+    setPosition({
+      x: Math.max(8, window.innerWidth - 88),
+      y: Math.max(80, Math.round(window.innerHeight / 2 - 45)),
+    });
+
+    const handleResize = () => {
+      setPosition((prev) => {
+        if (!prev) return prev;
+        return {
+          x: Math.min(Math.max(8, prev.x), window.innerWidth - 84),
+          y: Math.min(Math.max(8, prev.y), window.innerHeight - 104),
+        };
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Pointer Event Handlers untuk geser bebas (Mouse + Touch)
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!position) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    dragInfoRef.current = {
+      dragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: position.x,
+      initialY: position.y,
+      hasMoved: false,
+    };
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragInfoRef.current.dragging) return;
+
+    const dx = e.clientX - dragInfoRef.current.startX;
+    const dy = e.clientY - dragInfoRef.current.startY;
+
+    // Tandai sebagai gerakan geser jika melewati ambang 5px
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      dragInfoRef.current.hasMoved = true;
+    }
+
+    const elWidth = buttonWrapperRef.current?.offsetWidth || 76;
+    const elHeight = buttonWrapperRef.current?.offsetHeight || 96;
+    const maxX = Math.max(8, window.innerWidth - elWidth - 8);
+    const maxY = Math.max(8, window.innerHeight - elHeight - 8);
+
+    const nextX = Math.min(Math.max(8, dragInfoRef.current.initialX + dx), maxX);
+    const nextY = Math.min(Math.max(8, dragInfoRef.current.initialY + dy), maxY);
+
+    setPosition({ x: nextX, y: nextY });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragInfoRef.current.dragging) return;
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Abaikan jika pointer capture sudah dilepas
+    }
+
+    const wasDragged = dragInfoRef.current.hasMoved;
+    dragInfoRef.current.dragging = false;
+    setIsDragging(false);
+
+    if (position) {
+      sessionStorage.setItem('ntt_flash_sale_pos', JSON.stringify(position));
+    }
+
+    // Buka modal hanya jika pengguna mengetuk/klik tanpa menggeser
+    if (!wasDragged) {
+      setIsOpen(true);
+    }
+  };
 
   useEffect(() => {
     if (initialProducts && initialProducts.length > 0) {
@@ -154,7 +268,7 @@ export default function FlashSaleBanner({
     }
   };
 
-  if (loading || activeProducts.length === 0) return null;
+  if (loading || activeProducts.length === 0 || !position) return null;
 
   const pad = (n: number) => String(n).padStart(2, '0');
   const isUrgent = timeLeft.totalMs > 0 && timeLeft.totalMs < 15 * 60 * 1000;
@@ -168,17 +282,33 @@ export default function FlashSaleBanner({
 
   return (
     <>
-      {/* 1. TOMBOL MELINGKAR MELAYANG DI KANAN TENGAH DENGAN BACKGROUND LOGO NTTSTOREPI */}
-      <div className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center">
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          aria-label="Flash Sale NTTStorePi"
+      {/* 1. TOMBOL MELINGKAR MELAYANG YANG BISA DIGESER KE MANA SAJA */}
+      <div
+        ref={buttonWrapperRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          touchAction: 'none',
+        }}
+        className={`fixed z-50 flex flex-col items-center select-none ${
+          isDragging ? 'cursor-grabbing scale-105' : 'cursor-grab'
+        } transition-transform duration-150`}
+      >
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Flash Sale NTTStorePi (Geser untuk memindahkan)"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') setIsOpen(true);
+          }}
           className="group relative flex flex-col items-center justify-center focus:outline-none"
         >
           {/* Efek Cincin Cahaya Berdenyut (Pulse Halo) */}
           <span
-            className={`absolute inset-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full blur-md opacity-75 transition-opacity group-hover:opacity-100 animate-pulse ${
+            className={`absolute inset-0 w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full blur-md opacity-75 transition-opacity group-hover:opacity-100 animate-pulse pointer-events-none ${
               isUrgent
                 ? 'bg-gradient-to-tr from-red-600 via-orange-500 to-yellow-400'
                 : 'bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600'
@@ -187,40 +317,48 @@ export default function FlashSaleBanner({
 
           {/* Lingkaran Utama dengan Background Logo NTTStorePi */}
           <div
-            className={`relative w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full overflow-hidden border-[3px] shadow-2xl transition-transform duration-300 group-hover:scale-110 group-active:scale-95 bg-white flex items-center justify-center ${
+            className={`relative w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-full overflow-hidden border-[3px] shadow-2xl transition-transform duration-300 group-hover:scale-105 bg-white flex items-center justify-center ${
               isUrgent ? 'border-red-500' : 'border-amber-400'
             }`}
           >
-            {/* Gambar Logo NTTStorePi */}
             {!logoError ? (
               <img
                 src={logoUrl}
                 alt="NTTStorePi Flash Sale"
+                draggable={false}
                 onError={() => setLogoError(true)}
-                className="w-full h-full object-cover p-1 group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover p-1 pointer-events-none"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 flex items-center justify-center text-white font-black text-xs">
+              <div className="w-full h-full bg-gradient-to-br from-amber-500 via-orange-600 to-red-600 flex items-center justify-center text-white font-black text-xs pointer-events-none">
                 NTT π
               </div>
             )}
 
             {/* Overlay Gradien Tipis + Ikon Petir di Sudut Bawah */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-            <span className="absolute bottom-1 flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-yellow-300 drop-shadow">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+            <span className="absolute bottom-1 flex items-center gap-0.5 text-[9px] font-black uppercase tracking-wider text-yellow-300 drop-shadow pointer-events-none">
               <Zap className="w-2.5 h-2.5 fill-yellow-300 text-yellow-300 animate-bounce" />
               FLASH
             </span>
           </div>
 
           {/* Badge Jumlah Produk Promo di Pojok Kiri Atas Lingkaran */}
-          <span className="absolute -top-1 -left-1 flex h-5 min-w-5 items-center justify-center px-1.5 rounded-full bg-red-600 text-white text-[10px] font-black border-2 border-white shadow-md">
+          <span className="absolute -top-1 -left-1 flex h-5 min-w-5 items-center justify-center px-1.5 rounded-full bg-red-600 text-white text-[10px] font-black border-2 border-white shadow-md pointer-events-none">
             {activeProducts.length}
+          </span>
+
+          {/* Ikon Handle Geser Kecil di Pojok Kanan Atas */}
+          <span
+            title="Geser untuk memindahkan"
+            className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/80 text-white border border-white/80 shadow pointer-events-none"
+          >
+            <GripHorizontal className="w-2.5 h-2.5" />
           </span>
 
           {/* Pill Live Countdown Timer Menempel di Bawah Lingkaran */}
           <div
-            className={`-mt-2 relative z-10 flex items-center gap-0.5 px-2 py-0.5 rounded-full font-mono font-black text-[10px] sm:text-[11px] text-white shadow-lg border border-yellow-300/80 ${
+            className={`-mt-2 relative z-10 flex items-center gap-0.5 px-2 py-0.5 rounded-full font-mono font-black text-[10px] sm:text-[11px] text-white shadow-lg border border-yellow-300/80 pointer-events-none ${
               isUrgent
                 ? 'bg-red-700 animate-pulse'
                 : 'bg-gradient-to-r from-amber-600 via-orange-600 to-red-600'
@@ -238,7 +376,7 @@ export default function FlashSaleBanner({
               {pad(timeLeft.seconds)}
             </span>
           </div>
-        </button>
+        </div>
       </div>
 
       {/* 2. POP-UP DRAWER / MODAL DAFTAR PRODUK FLASH SALE SAAT TOMBOL DIKLIK */}
