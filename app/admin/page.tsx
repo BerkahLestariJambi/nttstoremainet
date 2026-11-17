@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { apiClient } from '@/lib/apiClient';
+import { useLanguage } from '@/context/LanguageContext';
 
 type AdminTab = 'overview' | 'users' | 'products' | 'orders' | 'finance';
 type UserRole = 'customer' | 'seller' | 'admin';
@@ -83,6 +84,8 @@ interface FinanceHistoryItem {
 }
 
 export default function AdminDashboardPage() {
+  const { t } = useLanguage();
+
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -121,6 +124,13 @@ export default function AdminDashboardPage() {
       }
     }
     return u.role ? [u.role] : ['customer'];
+  };
+
+  // Label role terjemahan
+  const getRoleLabel = (role: UserRole): string => {
+    if (role === 'admin') return t('roleAdmin');
+    if (role === 'seller') return t('roleSeller');
+    return t('roleCustomer');
   };
 
   const fetchAllAdminData = async () => {
@@ -164,7 +174,7 @@ export default function AdminDashboardPage() {
       }
     } catch (error: any) {
       console.error('Gagal memuat data Admin Dashboard:', error);
-      setFetchError(error?.message || 'Gagal memuat data admin dari server.');
+      setFetchError(error?.message || t('serverLoadErrorTitle'));
     } finally {
       setLoading(false);
     }
@@ -180,7 +190,7 @@ export default function AdminDashboardPage() {
     const exists = currentRoles.includes(targetRole);
 
     if (exists && currentRoles.length === 1) {
-      Swal.fire('Tidak Bisa Kosong', 'Setiap pengguna minimal harus memiliki 1 role.', 'warning');
+      Swal.fire(t('roleCannotBeEmptyTitle'), t('roleCannotBeEmptyText'), 'warning');
       return;
     }
 
@@ -196,7 +206,7 @@ export default function AdminDashboardPage() {
       });
 
       if (json && json.success === false) {
-        throw new Error(json.message || 'Gagal memperbarui role pengguna.');
+        throw new Error(json.message || t('failedTitle'));
       }
 
       setUsers((prev) =>
@@ -214,13 +224,13 @@ export default function AdminDashboardPage() {
 
       Swal.fire({
         icon: 'success',
-        title: 'Role Diperbarui',
-        text: json?.message || `Role ${user.name} berhasil diperbarui.`,
+        title: t('roleUpdatedTitle'),
+        text: json?.message || `${user.name}: ${updatedRoles.map(getRoleLabel).join(', ')}`,
         timer: 1400,
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire('Gagal', err?.message || 'Terjadi kesalahan saat mengubah role.', 'error');
+      Swal.fire(t('failedTitle'), err?.message || t('failedTitle'), 'error');
     } finally {
       setUpdatingRoleId(null);
     }
@@ -229,14 +239,14 @@ export default function AdminDashboardPage() {
   // --- HANDLER HAPUS PRODUK OLEH ADMIN ---
   const handleDeleteProduct = async (product: AdminProduct) => {
     const confirm = await Swal.fire({
-      title: 'Hapus Produk?',
-      text: `Produk "${product.name}" akan dihapus permanen dari marketplace.`,
+      title: t('confirmDeleteProductTitle'),
+      text: `${product.name} - ${t('confirmDeleteProductText')}`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus',
-      cancelButtonText: 'Batal',
+      confirmButtonText: t('deleteProduct'),
+      cancelButtonText: t('cancel'),
     });
 
     if (!confirm.isConfirmed) return;
@@ -247,13 +257,13 @@ export default function AdminDashboardPage() {
       });
 
       if (json && json.success === false) {
-        throw new Error(json.message || 'Gagal menghapus produk.');
+        throw new Error(json.message || t('failedTitle'));
       }
 
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
-      Swal.fire('Terhapus!', 'Produk berhasil dihapus.', 'success');
+      Swal.fire(t('successTitle'), t('productDeletedSuccess'), 'success');
     } catch (err: any) {
-      Swal.fire('Gagal', err?.message || 'Gagal menghapus produk.', 'error');
+      Swal.fire(t('failedTitle'), err?.message || t('failedTitle'), 'error');
     }
   };
 
@@ -267,7 +277,7 @@ export default function AdminDashboardPage() {
       });
 
       if (json && json.success === false) {
-        throw new Error(json.message || 'Gagal memperbarui status pesanan.');
+        throw new Error(json.message || t('failedTitle'));
       }
 
       setOrders((prev) =>
@@ -276,13 +286,13 @@ export default function AdminDashboardPage() {
 
       Swal.fire({
         icon: 'success',
-        title: 'Status Diperbarui',
-        text: `Status pesanan diubah menjadi ${newStatus}.`,
+        title: t('statusUpdatedTitle'),
+        text: `${t('orderStatusUpdated')} (${newStatus})`,
         timer: 1400,
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire('Gagal', err?.message || 'Gagal memperbarui status.', 'error');
+      Swal.fire(t('failedTitle'), err?.message || t('failedTitle'), 'error');
     } finally {
       setUpdatingOrderId(null);
     }
@@ -337,11 +347,11 @@ export default function AdminDashboardPage() {
   };
 
   const menuItems: { id: AdminTab; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'overview', label: 'Ringkasan', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'users', label: 'Pengguna & Role', icon: <Users className="w-4 h-4" />, badge: users.length },
-    { id: 'products', label: 'Semua Produk', icon: <Package className="w-4 h-4" />, badge: products.length },
-    { id: 'orders', label: 'Semua Pesanan', icon: <ShoppingBag className="w-4 h-4" />, badge: orders.length },
-    { id: 'finance', label: 'Laporan Keuangan', icon: <Coins className="w-4 h-4" /> },
+    { id: 'overview', label: t('adminTabOverview'), icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'users', label: t('adminTabUsers'), icon: <Users className="w-4 h-4" />, badge: users.length },
+    { id: 'products', label: t('adminTabProducts'), icon: <Package className="w-4 h-4" />, badge: products.length },
+    { id: 'orders', label: t('adminTabOrders'), icon: <ShoppingBag className="w-4 h-4" />, badge: orders.length },
+    { id: 'finance', label: t('adminTabFinance'), icon: <Coins className="w-4 h-4" /> },
   ];
 
   return (
@@ -355,13 +365,13 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <span className="px-2.5 py-0.5 bg-amber-400 text-purple-950 text-[10px] font-black uppercase rounded-full tracking-wider">
-                Super Admin Access
+                {t('superAdminBadge')}
               </span>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight mt-1">
-                Admin Control Center
+                {t('adminControlCenterTitle')}
               </h1>
               <p className="text-xs sm:text-sm text-purple-200 mt-0.5">
-                Kelola seluruh menu dan atur multi-role pengguna (Customer, Seller, Admin) langsung dari tabel.
+                {t('adminControlCenterSubtitle')}
               </p>
             </div>
           </div>
@@ -372,7 +382,7 @@ export default function AdminDashboardPage() {
             className="inline-flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white font-bold px-4 py-2.5 rounded-2xl transition text-xs self-start sm:self-center cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>Refresh Data</span>
+            <span>{t('refreshDataBtn')}</span>
           </button>
         </div>
 
@@ -411,7 +421,7 @@ export default function AdminDashboardPage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-xs flex items-start gap-3">
             <AlertCircle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
             <div>
-              <p className="font-bold">Gagal Memuat Data dari Server</p>
+              <p className="font-bold">{t('serverLoadErrorTitle')}</p>
               <p className="mt-0.5">{fetchError}</p>
             </div>
           </div>
@@ -420,7 +430,7 @@ export default function AdminDashboardPage() {
         {loading ? (
           <div className="bg-white rounded-3xl p-16 border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-3 text-gray-400">
             <Loader2 className="w-9 h-9 animate-spin text-purple-700" />
-            <span className="text-sm font-medium">Memuat seluruh data sistem...</span>
+            <span className="text-sm font-medium">{t('loadingSystemData')}</span>
           </div>
         ) : (
           <>
@@ -432,48 +442,59 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pengguna</span>
+                      <span className="text-xs font-bold text-gray-400 uppercase">
+                        {t('totalUsersCard')}
+                      </span>
                       <Users className="w-5 h-5 text-purple-600" />
                     </div>
                     <h3 className="text-2xl font-black text-gray-900 mt-2">{users.length}</h3>
                     <p className="text-[11px] text-gray-500 mt-1">
-                      {totalCustomers} Customer • {totalSellers} Seller • {totalAdmins} Admin
+                      {totalCustomers} {t('roleCustomer')} • {totalSellers} {t('roleSeller')} •{' '}
+                      {totalAdmins} {t('roleAdmin')}
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
+                      <span className="text-xs font-bold text-gray-400 uppercase">
+                        {t('totalProductsCard')}
+                      </span>
                       <Package className="w-5 h-5 text-amber-500" />
                     </div>
                     <h3 className="text-2xl font-black text-gray-900 mt-2">{products.length}</h3>
                     <p className="text-[11px] text-gray-500 mt-1">
-                      {products.filter((p) => p.is_flash_sale).length} produk aktif di Flash Sale
+                      {products.filter((p) => p.is_flash_sale).length}{' '}
+                      {t('activeFlashSaleCountSuffix')}
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pesanan</span>
+                      <span className="text-xs font-bold text-gray-400 uppercase">
+                        {t('totalOrdersCard')}
+                      </span>
                       <ShoppingBag className="w-5 h-5 text-emerald-600" />
                     </div>
                     <h3 className="text-2xl font-black text-gray-900 mt-2">{orders.length}</h3>
                     <p className="text-[11px] text-gray-500 mt-1">
                       {orders.filter((o) => o.status === 'paid' || o.status === 'completed').length}{' '}
-                      transaksi terbayar
+                      {t('paidTransactionsSuffix')}
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-400 uppercase">Total Omzet Pi</span>
+                      <span className="text-xs font-bold text-gray-400 uppercase">
+                        {t('totalPiRevenueCard')}
+                      </span>
                       <Coins className="w-5 h-5 text-purple-700" />
                     </div>
                     <h3 className="text-2xl font-black text-purple-700 mt-2">
                       π {Number(financeSummary.total_revenue || 0).toFixed(2)}
                     </h3>
                     <p className="text-[11px] text-gray-500 mt-1">
-                      Produk: π {Number(financeSummary.total_product || 0).toFixed(2)}
+                      {t('totalProductRevenueCard')}: π{' '}
+                      {Number(financeSummary.total_product || 0).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -482,17 +503,15 @@ export default function AdminDashboardPage() {
                 <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <h3 className="font-bold text-gray-900 text-base">
-                      Pengaturan Multi-Role Pengguna Marketplace
+                      {t('multiRoleShortcutTitle')}
                     </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Tetapkan atau ubah hak akses pengguna menjadi Customer, Seller, atau Admin secara bersamaan di dalam tabel.
-                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{t('multiRoleShortcutDesc')}</p>
                   </div>
                   <button
                     onClick={() => setActiveTab('users')}
                     className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition cursor-pointer"
                   >
-                    Kelola Role Pengguna →
+                    {t('manageUserRolesBtn')}
                   </button>
                 </div>
               </div>
@@ -506,11 +525,9 @@ export default function AdminDashboardPage() {
                 <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                      <Users className="w-5 h-5 text-purple-700" /> Manajemen Pengguna & Multi-Role
+                      <Users className="w-5 h-5 text-purple-700" /> {t('userManagementHeading')}
                     </h2>
-                    <p className="text-xs text-gray-500">
-                      Klik tombol role di kolom kanan untuk mengaktifkan/menonaktifkan role (1 user bisa memiliki 3 role sekaligus).
-                    </p>
+                    <p className="text-xs text-gray-500">{t('userManagementHint')}</p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -519,17 +536,25 @@ export default function AdminDashboardPage() {
                       onChange={(e) => setRoleFilter(e.target.value as 'all' | UserRole)}
                       className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-600"
                     >
-                      <option value="all">Semua Role ({users.length})</option>
-                      <option value="customer">Customer ({totalCustomers})</option>
-                      <option value="seller">Seller ({totalSellers})</option>
-                      <option value="admin">Admin ({totalAdmins})</option>
+                      <option value="all">
+                        {t('allRolesFilter')} ({users.length})
+                      </option>
+                      <option value="customer">
+                        {t('roleCustomer')} ({totalCustomers})
+                      </option>
+                      <option value="seller">
+                        {t('roleSeller')} ({totalSellers})
+                      </option>
+                      <option value="admin">
+                        {t('roleAdmin')} ({totalAdmins})
+                      </option>
                     </select>
 
                     <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Cari nama, username, toko..."
+                        placeholder={t('searchUserPlaceholder')}
                         value={userSearch}
                         onChange={(e) => setUserSearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -542,17 +567,17 @@ export default function AdminDashboardPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                        <th className="p-4 pl-6">Pengguna</th>
-                        <th className="p-4">Info Toko / Kontak</th>
-                        <th className="p-4">Role Aktif</th>
-                        <th className="p-4 pr-6 text-right">Atur Multi-Role</th>
+                        <th className="p-4 pl-6">{t('colUser')}</th>
+                        <th className="p-4">{t('colStoreContact')}</th>
+                        <th className="p-4">{t('colActiveRoles')}</th>
+                        <th className="p-4 pr-6 text-right">{t('colManageMultiRole')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
                       {filteredUsers.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="p-10 text-center text-gray-400">
-                            Tidak ada data pengguna yang ditampilkan.
+                            {t('noUsersDisplayed')}
                           </td>
                         </tr>
                       ) : (
@@ -597,7 +622,7 @@ export default function AdminDashboardPage() {
                                       {r === 'admin' && <Crown className="w-2.5 h-2.5" />}
                                       {r === 'seller' && <Store className="w-2.5 h-2.5" />}
                                       {r === 'customer' && <UserCheck className="w-2.5 h-2.5" />}
-                                      {r}
+                                      {getRoleLabel(r)}
                                     </span>
                                   ))}
                                 </div>
@@ -615,6 +640,7 @@ export default function AdminDashboardPage() {
                                       seller: 'bg-amber-500 text-white border-amber-500',
                                       admin: 'bg-purple-700 text-white border-purple-700',
                                     };
+                                    const labelText = getRoleLabel(roleOption);
 
                                     return (
                                       <button
@@ -628,7 +654,7 @@ export default function AdminDashboardPage() {
                                             : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-600'
                                         }`}
                                       >
-                                        {isChecked ? `✓ ${roleOption}` : roleOption}
+                                        {isChecked ? `✓ ${labelText}` : labelText}
                                       </button>
                                     );
                                   })}
@@ -651,14 +677,15 @@ export default function AdminDashboardPage() {
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                    <Package className="w-5 h-5 text-amber-500" /> Seluruh Produk Marketplace
+                    <Package className="w-5 h-5 text-amber-500" />{' '}
+                    {t('allMarketplaceProductsHeading')}
                   </h2>
 
                   <div className="relative w-full sm:w-64">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Cari nama produk..."
+                      placeholder={t('searchProductNamePlaceholder')}
                       value={productSearch}
                       onChange={(e) => setProductSearch(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -670,18 +697,18 @@ export default function AdminDashboardPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                        <th className="p-4 pl-6">Produk</th>
-                        <th className="p-4">Toko / Seller</th>
-                        <th className="p-4">Harga (Pi)</th>
-                        <th className="p-4">Sisa Stok</th>
-                        <th className="p-4 pr-6 text-right">Aksi</th>
+                        <th className="p-4 pl-6">{t('colProduct')}</th>
+                        <th className="p-4">{t('colStoreSeller')}</th>
+                        <th className="p-4">{t('colPricePi')}</th>
+                        <th className="p-4">{t('colRemainingStock')}</th>
+                        <th className="p-4 pr-6 text-right">{t('colAction')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
                       {filteredProducts.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="p-10 text-center text-gray-400">
-                            Belum ada produk yang ditampilkan.
+                            {t('noProductsDisplayed')}
                           </td>
                         </tr>
                       ) : (
@@ -710,17 +737,19 @@ export default function AdminDashboardPage() {
                                     <span className="font-bold text-gray-900">{p.name}</span>
                                     {p.is_flash_sale && (
                                       <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-700">
-                                        <Zap className="w-2.5 h-2.5" /> Flash Sale
+                                        <Zap className="w-2.5 h-2.5" /> {t('flashSaleTag')}
                                       </span>
                                     )}
                                   </div>
                                   <span className="text-[11px] text-gray-400">
-                                    {p.category?.name || 'Umum'}
+                                    {p.category?.name || t('allCategories')}
                                   </span>
                                 </div>
                               </td>
                               <td className="p-4 font-medium text-gray-600">
-                                {p.seller?.store_name || p.seller?.user?.name || 'Toko Partner'}
+                                {p.seller?.store_name ||
+                                  p.seller?.user?.name ||
+                                  t('defaultSellerName')}
                               </td>
                               <td className="p-4 font-bold text-amber-600">
                                 {p.discount_price_pi && Number(p.discount_price_pi) > 0 ? (
@@ -739,14 +768,14 @@ export default function AdminDashboardPage() {
                                   {sisa} / {p.stock}
                                 </span>
                                 <span className="block text-[10px] text-gray-400">
-                                  Terjual: {p.sold ?? 0}
+                                  {t('sold')}: {p.sold ?? 0}
                                 </span>
                               </td>
                               <td className="p-4 pr-6 text-right">
                                 <button
                                   onClick={() => handleDeleteProduct(p)}
                                   className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
-                                  title="Hapus Produk"
+                                  title={t('deleteProduct')}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -768,14 +797,15 @@ export default function AdminDashboardPage() {
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                    <ShoppingBag className="w-5 h-5 text-emerald-600" /> Semua Transaksi Pesanan
+                    <ShoppingBag className="w-5 h-5 text-emerald-600" />{' '}
+                    {t('allOrderTransactionsHeading')}
                   </h2>
 
                   <div className="relative w-full sm:w-64">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Cari no. order / penerima..."
+                      placeholder={t('searchOrderRecipientPlaceholder')}
                       value={orderSearch}
                       onChange={(e) => setOrderSearch(e.target.value)}
                       className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -787,19 +817,19 @@ export default function AdminDashboardPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                        <th className="p-4 pl-6">No. Order</th>
-                        <th className="p-4">Pembeli / Penerima</th>
-                        <th className="p-4">Kurir & Resi</th>
-                        <th className="p-4">Total (Pi)</th>
-                        <th className="p-4">Status</th>
-                        <th className="p-4 pr-6 text-right">Ubah Status</th>
+                        <th className="p-4 pl-6">{t('colOrderNo')}</th>
+                        <th className="p-4">{t('colBuyerRecipient')}</th>
+                        <th className="p-4">{t('colCourierTracking')}</th>
+                        <th className="p-4">{t('colTotalPi')}</th>
+                        <th className="p-4">{t('colStatus')}</th>
+                        <th className="p-4 pr-6 text-right">{t('colChangeStatus')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
                       {filteredOrders.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="p-10 text-center text-gray-400">
-                            Belum ada transaksi pesanan.
+                            {t('noOrdersDisplayed')}
                           </td>
                         </tr>
                       ) : (
@@ -809,7 +839,7 @@ export default function AdminDashboardPage() {
                             <td className="p-4">
                               <div className="font-semibold text-gray-800">{o.recipient_name}</div>
                               <div className="text-[11px] text-gray-400">
-                                Akun: {o.user?.name || '-'}
+                                {t('colUser')}: {o.user?.name || '-'}
                               </div>
                             </td>
                             <td className="p-4">
@@ -818,7 +848,7 @@ export default function AdminDashboardPage() {
                                 {o.courier_company || '-'}
                               </span>
                               <span className="block text-[10px] text-gray-400">
-                                Resi: {o.tracking_number || 'Belum ada'}
+                                {o.tracking_number || t('trackingNotAvailable')}
                               </span>
                             </td>
                             <td className="p-4 font-bold text-purple-700">π {o.total_amount_pi}</td>
@@ -867,20 +897,24 @@ export default function AdminDashboardPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
+                    <span className="text-xs font-bold text-gray-400 uppercase">
+                      {t('totalProductRevenueCard')}
+                    </span>
                     <h3 className="text-2xl font-black text-gray-900 mt-1">
                       π {Number(financeSummary.total_product).toFixed(2)}
                     </h3>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Ongkir</span>
+                    <span className="text-xs font-bold text-gray-400 uppercase">
+                      {t('totalShippingRevenueCard')}
+                    </span>
                     <h3 className="text-2xl font-black text-amber-600 mt-1">
                       π {Number(financeSummary.total_shipping).toFixed(2)}
                     </h3>
                   </div>
                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                     <span className="text-xs font-bold text-gray-400 uppercase">
-                      Total Pendapatan
+                      {t('totalNetRevenueCard')}
                     </span>
                     <h3 className="text-2xl font-black text-emerald-600 mt-1">
                       π {Number(financeSummary.total_revenue).toFixed(2)}
@@ -891,14 +925,15 @@ export default function AdminDashboardPage() {
                 <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                      <Coins className="w-5 h-5 text-purple-700" /> Riwayat Keuangan Toko
+                      <Coins className="w-5 h-5 text-purple-700" />{' '}
+                      {t('storeFinanceHistoryHeading')}
                     </h2>
 
                     <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Filter nama toko..."
+                        placeholder={t('filterStoreNamePlaceholder')}
                         value={financeSellerSearch}
                         onChange={(e) => setFinanceSellerSearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -910,17 +945,17 @@ export default function AdminDashboardPage() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                          <th className="p-4 pl-6">No. Order</th>
-                          <th className="p-4">Toko / Seller</th>
-                          <th className="p-4">Nominal Produk</th>
-                          <th className="p-4 pr-6 text-right">Ongkos Kirim</th>
+                          <th className="p-4 pl-6">{t('colOrderNo')}</th>
+                          <th className="p-4">{t('colStoreSeller')}</th>
+                          <th className="p-4">{t('colProductAmount')}</th>
+                          <th className="p-4 pr-6 text-right">{t('colShippingFee')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
                         {filteredFinance.length === 0 ? (
                           <tr>
                             <td colSpan={4} className="p-10 text-center text-gray-400">
-                              Belum ada riwayat keuangan toko.
+                              {t('noFinanceHistoryDisplayed')}
                             </td>
                           </tr>
                         ) : (
