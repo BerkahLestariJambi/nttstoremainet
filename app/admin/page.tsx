@@ -82,7 +82,7 @@ interface FinanceHistoryItem {
 }
 
 // Normalisasi Base URL agar selalu berakhir dengan /api
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://nttstorepi.mejatika.com/api';
 const API_BASE_URL = rawApiUrl.endsWith('/api')
   ? rawApiUrl
   : `${rawApiUrl.replace(/\/$/, '')}/api`;
