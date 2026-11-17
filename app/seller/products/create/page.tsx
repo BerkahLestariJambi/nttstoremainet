@@ -4,7 +4,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { productService } from '@/services/productService';
-import { ArrowLeft, PackagePlus, Upload, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  PackagePlus,
+  Upload,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Zap,
+  Tag,
+  Clock,
+  Layers,
+} from 'lucide-react';
 
 interface Category {
   id: number;
@@ -28,6 +39,10 @@ export default function CreateProductPage() {
     description: '',
     price_pi: '',
     stock: '',
+    discount_price_pi: '',
+    is_flash_sale: false,
+    flash_sale_ends_at: '',
+    flash_sale_quota: '',
   });
 
   useEffect(() => {
@@ -52,6 +67,17 @@ export default function CreateProductPage() {
     if (errorMessage) setErrorMessage(null);
   };
 
+  const handleToggleFlashSale = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      is_flash_sale: checked,
+      // Reset field khusus flash sale jika dimatikan
+      flash_sale_ends_at: checked ? prev.flash_sale_ends_at : '',
+      flash_sale_quota: checked ? prev.flash_sale_quota : '',
+    }));
+    if (errorMessage) setErrorMessage(null);
+  };
+
   // Handler Pilih File Gambar
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,19 +97,63 @@ export default function CreateProductPage() {
     setImagePreview(null);
   };
 
+  // Hitung persentase diskon untuk preview UI
+  const normalPrice = parseFloat(formData.price_pi) || 0;
+  const discountPrice = parseFloat(formData.discount_price_pi) || 0;
+  const hasValidDiscount = discountPrice > 0 && discountPrice < normalPrice;
+  const discountPercentage = hasValidDiscount
+    ? Math.round(((normalPrice - discountPrice) / normalPrice) * 100)
+    : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMessage(null);
 
+    // Validasi Frontend untuk Promo & Flash Sale
+    if (formData.discount_price_pi && discountPrice >= normalPrice) {
+      setErrorMessage('Harga diskon/promo harus lebih kecil dari harga normal.');
+      return;
+    }
+
+    if (formData.is_flash_sale && (!formData.discount_price_pi || discountPrice <= 0)) {
+      setErrorMessage('Isi Harga Flash Sale (harga diskon) terlebih dahulu jika mengaktifkan Flash Sale.');
+      return;
+    }
+
+    if (
+      formData.is_flash_sale &&
+      formData.flash_sale_quota &&
+      parseInt(formData.flash_sale_quota, 10) > parseInt(formData.stock || '0', 10)
+    ) {
+      setErrorMessage('Kuota Flash Sale tidak boleh melebihi total stok produk.');
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      // Bungkus data ke FormData untuk pengiriman file binary
       const bodyFormData = new FormData();
       bodyFormData.append('name', formData.name);
       bodyFormData.append('category_id', formData.category_id);
       bodyFormData.append('description', formData.description);
       bodyFormData.append('price_pi', formData.price_pi);
       bodyFormData.append('stock', formData.stock);
+
+      // Data Promo & Flash Sale
+      if (formData.discount_price_pi && discountPrice > 0) {
+        bodyFormData.append('discount_price_pi', formData.discount_price_pi);
+      }
+
+      bodyFormData.append('is_flash_sale', formData.is_flash_sale ? '1' : '0');
+
+      if (formData.is_flash_sale) {
+        if (formData.flash_sale_ends_at) {
+          bodyFormData.append('flash_sale_ends_at', formData.flash_sale_ends_at);
+        }
+        if (formData.flash_sale_quota) {
+          bodyFormData.append('flash_sale_quota', formData.flash_sale_quota);
+        }
+      }
 
       if (imageFile) {
         bodyFormData.append('image', imageFile);
@@ -192,10 +262,10 @@ export default function CreateProductPage() {
             </div>
           </div>
 
-          {/* Harga Pi Coin */}
+          {/* Harga Normal Pi Coin */}
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-              Harga Produk (π Pi Coin) <span className="text-red-500">*</span>
+              Harga Normal Produk (π Pi Coin) <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-700 font-extrabold text-base">
@@ -212,6 +282,127 @@ export default function CreateProductPage() {
                 className="w-full pl-9 pr-4 py-3.5 border border-purple-200 bg-purple-50/30 rounded-2xl focus:ring-2 focus:ring-purple-600 focus:outline-none font-bold text-purple-900 transition text-sm"
               />
             </div>
+          </div>
+
+          {/* Pengaturan Promo & Flash Sale */}
+          <div className="border border-amber-200 bg-gradient-to-br from-amber-50/70 to-orange-50/40 rounded-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-100 text-amber-600 rounded-xl">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-extrabold text-gray-900">
+                    Promo & Flash Sale (Opsional)
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Berikan harga diskon atau ikutkan produk ke etalase Flash Sale.
+                  </p>
+                </div>
+              </div>
+
+              {/* Switch Toggle Flash Sale */}
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formData.is_flash_sale}
+                  onChange={(e) => handleToggleFlashSale(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                <span className="text-xs font-bold text-gray-700">
+                  {formData.is_flash_sale ? 'Flash Sale Aktif' : 'Flash Sale'}
+                </span>
+              </label>
+            </div>
+
+            {/* Input Harga Promo / Flash Sale */}
+            <div>
+              <label className="flex items-center justify-between text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-orange-600" />
+                  {formData.is_flash_sale ? (
+                    <>
+                      Harga Flash Sale (π Pi Coin) <span className="text-red-500">*</span>
+                    </>
+                  ) : (
+                    'Harga Diskon / Promo Reguler (π Pi Coin)'
+                  )}
+                </span>
+
+                {hasValidDiscount && (
+                  <span className="px-2 py-0.5 bg-red-600 text-white text-[11px] font-extrabold rounded-full">
+                    Hemat -{discountPercentage}%
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-600 font-extrabold text-base">
+                  π
+                </span>
+                <input
+                  type="number"
+                  step="any"
+                  name="discount_price_pi"
+                  required={formData.is_flash_sale}
+                  placeholder={
+                    normalPrice > 0
+                      ? `Lebih kecil dari ${normalPrice}`
+                      : 'Kosongkan jika tidak ada diskon'
+                  }
+                  value={formData.discount_price_pi}
+                  onChange={handleChange}
+                  className="w-full pl-9 pr-4 py-3 border border-amber-200 bg-white rounded-2xl focus:ring-2 focus:ring-orange-500 focus:outline-none font-bold text-orange-700 transition text-sm"
+                />
+              </div>
+              {formData.discount_price_pi && discountPrice >= normalPrice && normalPrice > 0 && (
+                <p className="mt-1.5 text-xs text-red-600 font-medium">
+                  Harga diskon harus lebih rendah dari harga normal (π {normalPrice}).
+                </p>
+              )}
+            </div>
+
+            {/* Detail Durasi & Kuota Khusus saat Flash Sale Aktif */}
+            {formData.is_flash_sale && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-amber-200/70">
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    <Clock className="w-3.5 h-3.5 text-orange-600" />
+                    Berakhir Pada (Opsional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="flash_sale_ends_at"
+                    value={formData.flash_sale_ends_at}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-3 border border-amber-200 bg-white rounded-2xl focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Kosongkan jika flash sale berlangsung sampai kuota habis.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    <Layers className="w-3.5 h-3.5 text-orange-600" />
+                    Kuota Flash Sale (Opsional)
+                  </label>
+                  <input
+                    type="number"
+                    name="flash_sale_quota"
+                    min="1"
+                    max={formData.stock || undefined}
+                    placeholder={formData.stock ? `Maks. ${formData.stock}` : 'Contoh: 5'}
+                    value={formData.flash_sale_quota}
+                    onChange={handleChange}
+                    className="w-full px-3.5 py-3 border border-amber-200 bg-white rounded-2xl focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-500">
+                    Flash sale otomatis berakhir saat jumlah terjual mencapai kuota.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Area Upload File Gambar */}
