@@ -18,6 +18,7 @@ import {
   UserCheck,
   Crown,
   Truck,
+  AlertCircle,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -80,12 +81,47 @@ interface FinanceHistoryItem {
   shipping_fee: number;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://nttstorepi.mejatika.com/api';
+// Normalisasi Base URL agar selalu berakhir dengan /api
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = rawApiUrl.endsWith('/api')
+  ? rawApiUrl
+  : `${rawApiUrl.replace(/\/$/, '')}/api`;
+
+// Deteksi otomatis token dari berbagai kemungkinan key di localStorage
+const getStoredToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  const directKeys = ['token', 'access_token', 'pi_token', 'auth_token', 'sanctum_token'];
+  for (const key of directKeys) {
+    const val = localStorage.getItem(key);
+    if (val && val !== 'undefined' && val !== 'null') {
+      return val.replace(/^"|"$/g, '');
+    }
+  }
+
+  // Cek jika token tersimpan di dalam objek JSON (misal: user / auth)
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '');
+      if (parsed?.token) return parsed.token;
+      if (parsed?.access_token) return parsed.access_token;
+      if (parsed?.data?.token) return parsed.data.token;
+    } catch {
+      // Abaikan jika bukan format JSON
+    }
+  }
+
+  return null;
+};
 
 export default function AdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('users');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Data States
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [products, setProducts] = useState<AdminProduct[]>([]);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -96,21 +132,19 @@ export default function AdminDashboardPage() {
     total_revenue: 0,
   });
 
+  // Filter & Search States
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [productSearch, setProductSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
   const [financeSellerSearch, setFinanceSellerSearch] = useState('');
 
+  // Loading aksi per baris
   const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
 
   const getAuthHeaders = () => {
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('token') || localStorage.getItem('access_token')
-        : null;
-
+    const token = getStoredToken();
     return {
       Accept: 'application/json',
       'Content-Type': 'application/json',
@@ -121,11 +155,20 @@ export default function AdminDashboardPage() {
   // Helper ambil array roles milik user
   const getUserRoles = (u: AdminUser): UserRole[] => {
     if (Array.isArray(u.roles) && u.roles.length > 0) return u.roles;
+    if (typeof u.roles === 'string') {
+      try {
+        const parsed = JSON.parse(u.roles);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {
+        // Fallback ke kolom role tunggal
+      }
+    }
     return u.role ? [u.role] : ['customer'];
   };
 
   const fetchAllAdminData = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const headers = getAuthHeaders();
 
@@ -136,14 +179,32 @@ export default function AdminDashboardPage() {
         fetch(`${API_BASE_URL}/admin/finance`, { headers }),
       ]);
 
+      if (usersRes.status === 401) {
+        setFetchError(
+          'Sesi login tidak terdeteksi (401 Unauthenticated). Silakan login ulang via Pi Browser.'
+        );
+        return;
+      }
+      if (usersRes.status === 404) {
+        setFetchError(
+          `Endpoint tidak ditemukan (404) di ${API_BASE_URL}/admin/users. Pastikan routes/api.php sudah di-upload ke server dan jalankan php artisan route:clear.`
+        );
+        return;
+      }
+
       const [usersJson, productsJson, ordersJson, financeJson] = await Promise.all([
-        usersRes.json(),
-        productsRes.json(),
-        ordersRes.json(),
-        financeRes.json(),
+        usersRes.json().catch(() => ({})),
+        productsRes.json().catch(() => ({})),
+        ordersRes.json().catch(() => ({})),
+        financeRes.json().catch(() => ({})),
       ]);
 
-      if (usersJson?.success) setUsers(usersJson.data || []);
+      if (usersJson?.success) {
+        setUsers(usersJson.data || []);
+      } else if (usersJson?.message) {
+        setFetchError(`Users API: ${usersJson.message}`);
+      }
+
       if (productsJson?.success) setProducts(productsJson.data || []);
       if (ordersJson?.success) setOrders(ordersJson.data || []);
       if (financeJson?.success && financeJson.data) {
@@ -156,8 +217,11 @@ export default function AdminDashboardPage() {
           }
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Gagal memuat data Admin Dashboard:', error);
+      setFetchError(
+        `Gagal terhubung ke server (${API_BASE_URL}): ${error?.message || 'Network Error'}`
+      );
     } finally {
       setLoading(false);
     }
@@ -167,7 +231,7 @@ export default function AdminDashboardPage() {
     fetchAllAdminData();
   }, []);
 
-  // --- HANDLER TOGGLE MULTI-ROLE UNTUK 1 USER ID ---
+  // --- HANDLER TOGGLE MULTI-ROLE UNTUK 1 USER ID (Customer, Seller, Admin) ---
   const handleToggleUserRole = async (user: AdminUser, targetRole: UserRole) => {
     const currentRoles = getUserRoles(user);
     const exists = currentRoles.includes(targetRole);
@@ -206,6 +270,14 @@ export default function AdminDashboardPage() {
             : u
         )
       );
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Role Diperbarui',
+        text: json.message || `Role ${user.name} berhasil diperbarui.`,
+        timer: 1400,
+        showConfirmButton: false,
+      });
     } catch (err: any) {
       Swal.fire('Gagal', err.message || 'Terjadi kesalahan saat mengubah role.', 'error');
     } finally {
@@ -213,7 +285,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- HANDLER HAPUS PRODUK ---
+  // --- HANDLER HAPUS PRODUK OLEH ADMIN ---
   const handleDeleteProduct = async (product: AdminProduct) => {
     const confirm = await Swal.fire({
       title: 'Hapus Produk?',
@@ -245,7 +317,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // --- HANDLER UBAH STATUS ORDER ---
+  // --- HANDLER UBAH STATUS ORDER OLEH ADMIN ---
   const handleOrderStatusChange = async (orderId: number, newStatus: string) => {
     setUpdatingOrderId(orderId);
     try {
@@ -267,7 +339,7 @@ export default function AdminDashboardPage() {
         icon: 'success',
         title: 'Status Diperbarui',
         text: `Status pesanan diubah menjadi ${newStatus}.`,
-        timer: 1500,
+        timer: 1400,
         showConfirmButton: false,
       });
     } catch (err: any) {
@@ -304,6 +376,7 @@ export default function AdminDashboardPage() {
     f.seller_name?.toLowerCase().includes(financeSellerSearch.toLowerCase())
   );
 
+  // Hitung statistik role
   const totalAdmins = users.filter((u) => getUserRoles(u).includes('admin')).length;
   const totalSellers = users.filter((u) => getUserRoles(u).includes('seller')).length;
   const totalCustomers = users.filter((u) => getUserRoles(u).includes('customer')).length;
@@ -333,7 +406,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50/70 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50/70 p-4 sm:p-6 lg:p-8 pb-24">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header Admin */}
         <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white p-6 sm:p-8 rounded-3xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -357,7 +430,7 @@ export default function AdminDashboardPage() {
           <button
             onClick={fetchAllAdminData}
             disabled={loading}
-            className="inline-flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white font-bold px-4 py-2.5 rounded-2xl transition text-xs self-start sm:self-center"
+            className="inline-flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white font-bold px-4 py-2.5 rounded-2xl transition text-xs self-start sm:self-center cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh Data</span>
@@ -372,7 +445,7 @@ export default function AdminDashboardPage() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition ${
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                   isActive
                     ? 'bg-purple-700 text-white shadow-sm'
                     : 'text-gray-600 hover:bg-gray-100'
@@ -394,6 +467,17 @@ export default function AdminDashboardPage() {
           })}
         </div>
 
+        {/* Banner Diagnosa Error API */}
+        {fetchError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-2xl text-xs flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+            <div>
+              <p className="font-bold">Gagal Memuat Data dari Server</p>
+              <p className="mt-0.5">{fetchError}</p>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="bg-white rounded-3xl p-16 border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-3 text-gray-400">
             <Loader2 className="w-9 h-9 animate-spin text-purple-700" />
@@ -401,59 +485,83 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <>
-            {/* TAB 1: RINGKASAN */}
+            {/* ========================================================= */}
+            {/* TAB 1: RINGKASAN STATISTIK                                */}
+            {/* ========================================================= */}
             {activeTab === 'overview' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Pengguna</span>
-                    <Users className="w-5 h-5 text-purple-600" />
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pengguna</span>
+                      <Users className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 mt-2">{users.length}</h3>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {totalCustomers} Customer • {totalSellers} Seller • {totalAdmins} Admin
+                    </p>
                   </div>
-                  <h3 className="text-2xl font-black text-gray-900 mt-2">{users.length}</h3>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    {totalCustomers} Customer • {totalSellers} Seller • {totalAdmins} Admin
-                  </p>
+
+                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
+                      <Package className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 mt-2">{products.length}</h3>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {products.filter((p) => p.is_flash_sale).length} produk aktif di Flash Sale
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-400 uppercase">Total Pesanan</span>
+                      <ShoppingBag className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 mt-2">{orders.length}</h3>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {orders.filter((o) => o.status === 'paid' || o.status === 'completed').length}{' '}
+                      transaksi terbayar
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-400 uppercase">Total Omzet Pi</span>
+                      <Coins className="w-5 h-5 text-purple-700" />
+                    </div>
+                    <h3 className="text-2xl font-black text-purple-700 mt-2">
+                      π {Number(financeSummary.total_revenue || 0).toFixed(2)}
+                    </h3>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Produk: π {Number(financeSummary.total_product || 0).toFixed(2)}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Produk</span>
-                    <Package className="w-5 h-5 text-amber-500" />
+                {/* Pintasan Cepat ke Tabel Role Pengguna */}
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-base">
+                      Pengaturan Multi-Role Pengguna Marketplace
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Tetapkan atau ubah hak akses pengguna menjadi Customer, Seller, atau Admin secara bersamaan di dalam tabel.
+                    </p>
                   </div>
-                  <h3 className="text-2xl font-black text-gray-900 mt-2">{products.length}</h3>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    {products.filter((p) => p.is_flash_sale).length} produk aktif di Flash Sale
-                  </p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Pesanan</span>
-                    <ShoppingBag className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <h3 className="text-2xl font-black text-gray-900 mt-2">{orders.length}</h3>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    {orders.filter((o) => o.status === 'paid' || o.status === 'completed').length}{' '}
-                    transaksi terbayar
-                  </p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Total Omzet Pi</span>
-                    <Coins className="w-5 h-5 text-purple-700" />
-                  </div>
-                  <h3 className="text-2xl font-black text-purple-700 mt-2">
-                    π {Number(financeSummary.total_revenue || 0).toFixed(2)}
-                  </h3>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Produk: π {Number(financeSummary.total_product || 0).toFixed(2)}
-                  </p>
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className="px-4 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Kelola Role Pengguna →
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* TAB 2: MANAJEMEN PENGGUNA & MULTI-ROLE */}
+            {/* ========================================================= */}
+            {/* TAB 2: MANAJEMEN PENGGUNA & MULTI-ROLE                    */}
+            {/* ========================================================= */}
             {activeTab === 'users' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -502,94 +610,104 @@ export default function AdminDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {filteredUsers.map((u) => {
-                        const userRoles = getUserRoles(u);
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-10 text-center text-gray-400">
+                            Tidak ada data pengguna yang ditampilkan.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsers.map((u) => {
+                          const userRoles = getUserRoles(u);
 
-                        return (
-                          <tr key={u.id} className="hover:bg-gray-50/50 transition">
-                            <td className="p-4 pl-6">
-                              <div className="font-bold text-gray-900">
-                                {u.name}{' '}
-                                <span className="text-[10px] text-gray-400 font-normal">
-                                  (ID: {u.id})
-                                </span>
-                              </div>
-                              <div className="text-[11px] text-gray-400">
-                                @{u.username || `user_${u.id}`} {u.email ? `• ${u.email}` : ''}
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              {u.seller?.store_name ? (
-                                <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
-                                  <Store className="w-3.5 h-3.5" /> {u.seller.store_name}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400">{u.phone || '-'}</span>
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {userRoles.map((r) => (
-                                  <span
-                                    key={r}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                                      r === 'admin'
-                                        ? 'bg-purple-100 text-purple-800 border-purple-200'
-                                        : r === 'seller'
-                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                        : 'bg-sky-100 text-sky-800 border-sky-200'
-                                    }`}
-                                  >
-                                    {r === 'admin' && <Crown className="w-2.5 h-2.5" />}
-                                    {r === 'seller' && <Store className="w-2.5 h-2.5" />}
-                                    {r === 'customer' && <UserCheck className="w-2.5 h-2.5" />}
-                                    {r}
+                          return (
+                            <tr key={u.id} className="hover:bg-gray-50/50 transition">
+                              <td className="p-4 pl-6">
+                                <div className="font-bold text-gray-900">
+                                  {u.name}{' '}
+                                  <span className="text-[10px] text-gray-400 font-normal">
+                                    (ID: {u.id})
                                   </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="p-4 pr-6 text-right">
-                              <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
-                                {updatingRoleId === u.id && (
-                                  <Loader2 className="w-4 h-4 animate-spin text-purple-700 mr-1" />
+                                </div>
+                                <div className="text-[11px] text-gray-400">
+                                  @{u.username || `user_${u.id}`} {u.email ? `• ${u.email}` : ''}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                {u.seller?.store_name ? (
+                                  <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
+                                    <Store className="w-3.5 h-3.5" /> {u.seller.store_name}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">{u.phone || '-'}</span>
                                 )}
-
-                                {(['customer', 'seller', 'admin'] as UserRole[]).map((roleOption) => {
-                                  const isChecked = userRoles.includes(roleOption);
-                                  const activeColors: Record<UserRole, string> = {
-                                    customer: 'bg-sky-600 text-white border-sky-600',
-                                    seller: 'bg-amber-500 text-white border-amber-500',
-                                    admin: 'bg-purple-700 text-white border-purple-700',
-                                  };
-
-                                  return (
-                                    <button
-                                      key={roleOption}
-                                      type="button"
-                                      disabled={updatingRoleId === u.id}
-                                      onClick={() => handleToggleUserRole(u, roleOption)}
-                                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase border transition cursor-pointer disabled:opacity-50 ${
-                                        isChecked
-                                          ? activeColors[roleOption]
-                                          : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-600'
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {userRoles.map((r) => (
+                                    <span
+                                      key={r}
+                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                                        r === 'admin'
+                                          ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                          : r === 'seller'
+                                          ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                          : 'bg-sky-100 text-sky-800 border-sky-200'
                                       }`}
                                     >
-                                      {isChecked ? `✓ ${roleOption}` : roleOption}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                                      {r === 'admin' && <Crown className="w-2.5 h-2.5" />}
+                                      {r === 'seller' && <Store className="w-2.5 h-2.5" />}
+                                      {r === 'customer' && <UserCheck className="w-2.5 h-2.5" />}
+                                      {r}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="p-4 pr-6 text-right">
+                                <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                  {updatingRoleId === u.id && (
+                                    <Loader2 className="w-4 h-4 animate-spin text-purple-700 mr-1" />
+                                  )}
+
+                                  {(['customer', 'seller', 'admin'] as UserRole[]).map((roleOption) => {
+                                    const isChecked = userRoles.includes(roleOption);
+                                    const activeColors: Record<UserRole, string> = {
+                                      customer: 'bg-sky-600 text-white border-sky-600',
+                                      seller: 'bg-amber-500 text-white border-amber-500',
+                                      admin: 'bg-purple-700 text-white border-purple-700',
+                                    };
+
+                                    return (
+                                      <button
+                                        key={roleOption}
+                                        type="button"
+                                        disabled={updatingRoleId === u.id}
+                                        onClick={() => handleToggleUserRole(u, roleOption)}
+                                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase border transition cursor-pointer disabled:opacity-50 ${
+                                          isChecked
+                                            ? activeColors[roleOption]
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400 hover:text-gray-600'
+                                        }`}
+                                      >
+                                        {isChecked ? `✓ ${roleOption}` : roleOption}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* TAB 3: SEMUA PRODUK */}
+            {/* ========================================================= */}
+            {/* TAB 3: SEMUA PRODUK                                       */}
+            {/* ========================================================= */}
             {activeTab === 'products' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -621,82 +739,92 @@ export default function AdminDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {filteredProducts.map((p) => {
-                        const sisa =
-                          p.sisa_stock !== undefined && p.sisa_stock !== null
-                            ? p.sisa_stock
-                            : Math.max(0, Number(p.stock || 0) - Number(p.sold || 0));
+                      {filteredProducts.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-10 text-center text-gray-400">
+                            Belum ada produk yang ditampilkan.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProducts.map((p) => {
+                          const sisa =
+                            p.sisa_stock !== undefined && p.sisa_stock !== null
+                              ? p.sisa_stock
+                              : Math.max(0, Number(p.stock || 0) - Number(p.sold || 0));
 
-                        return (
-                          <tr key={p.id} className="hover:bg-gray-50/50 transition">
-                            <td className="p-4 pl-6 flex items-center gap-3">
-                              <div className="w-11 h-11 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                                {p.image_url ? (
-                                  <img
-                                    src={p.image_url}
-                                    alt={p.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <ImageIcon className="w-4 h-4 text-gray-400" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-gray-900">{p.name}</span>
-                                  {p.is_flash_sale && (
-                                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-700">
-                                      <Zap className="w-2.5 h-2.5" /> Flash Sale
-                                    </span>
+                          return (
+                            <tr key={p.id} className="hover:bg-gray-50/50 transition">
+                              <td className="p-4 pl-6 flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                  {p.image_url ? (
+                                    <img
+                                      src={p.image_url}
+                                      alt={p.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <ImageIcon className="w-4 h-4 text-gray-400" />
                                   )}
                                 </div>
-                                <span className="text-[11px] text-gray-400">
-                                  {p.category?.name || 'Umum'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-4 font-medium text-gray-600">
-                              {p.seller?.store_name || p.seller?.user?.name || 'Toko Partner'}
-                            </td>
-                            <td className="p-4 font-bold text-amber-600">
-                              {p.discount_price_pi && Number(p.discount_price_pi) > 0 ? (
                                 <div>
-                                  <span className="text-orange-600">π {p.discount_price_pi}</span>
-                                  <span className="block text-[10px] text-gray-400 line-through">
-                                    π {p.price_pi}
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-gray-900">{p.name}</span>
+                                    {p.is_flash_sale && (
+                                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-700">
+                                        <Zap className="w-2.5 h-2.5" /> Flash Sale
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-gray-400">
+                                    {p.category?.name || 'Umum'}
                                   </span>
                                 </div>
-                              ) : (
-                                `π ${p.price_pi}`
-                              )}
-                            </td>
-                            <td className="p-4">
-                              <span className="font-bold text-gray-800">
-                                {sisa} / {p.stock}
-                              </span>
-                              <span className="block text-[10px] text-gray-400">
-                                Terjual: {p.sold ?? 0}
-                              </span>
-                            </td>
-                            <td className="p-4 pr-6 text-right">
-                              <button
-                                onClick={() => handleDeleteProduct(p)}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
-                                title="Hapus Produk"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              </td>
+                              <td className="p-4 font-medium text-gray-600">
+                                {p.seller?.store_name || p.seller?.user?.name || 'Toko Partner'}
+                              </td>
+                              <td className="p-4 font-bold text-amber-600">
+                                {p.discount_price_pi && Number(p.discount_price_pi) > 0 ? (
+                                  <div>
+                                    <span className="text-orange-600">π {p.discount_price_pi}</span>
+                                    <span className="block text-[10px] text-gray-400 line-through">
+                                      π {p.price_pi}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  `π ${p.price_pi}`
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <span className="font-bold text-gray-800">
+                                  {sisa} / {p.stock}
+                                </span>
+                                <span className="block text-[10px] text-gray-400">
+                                  Terjual: {p.sold ?? 0}
+                                </span>
+                              </td>
+                              <td className="p-4 pr-6 text-right">
+                                <button
+                                  onClick={() => handleDeleteProduct(p)}
+                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                  title="Hapus Produk"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* TAB 4: SEMUA PESANAN */}
+            {/* ========================================================= */}
+            {/* TAB 4: SEMUA PESANAN                                      */}
+            {/* ========================================================= */}
             {activeTab === 'orders' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -729,63 +857,73 @@ export default function AdminDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {filteredOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-gray-50/50 transition">
-                          <td className="p-4 pl-6 font-bold text-gray-900">{o.order_number}</td>
-                          <td className="p-4">
-                            <div className="font-semibold text-gray-800">{o.recipient_name}</div>
-                            <div className="text-[11px] text-gray-400">
-                              Akun: {o.user?.name || '-'}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className="inline-flex items-center gap-1 font-semibold text-gray-700 uppercase">
-                              <Truck className="w-3.5 h-3.5 text-gray-400" />
-                              {o.courier_company || '-'}
-                            </span>
-                            <span className="block text-[10px] text-gray-400">
-                              Resi: {o.tracking_number || 'Belum ada'}
-                            </span>
-                          </td>
-                          <td className="p-4 font-bold text-purple-700">π {o.total_amount_pi}</td>
-                          <td className="p-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${getOrderStatusBadge(
-                                o.status
-                              )}`}
-                            >
-                              {o.status}
-                            </span>
-                          </td>
-                          <td className="p-4 pr-6 text-right">
-                            <div className="inline-flex items-center gap-2">
-                              {updatingOrderId === o.id && (
-                                <Loader2 className="w-4 h-4 animate-spin text-purple-700" />
-                              )}
-                              <select
-                                value={o.status}
-                                disabled={updatingOrderId === o.id}
-                                onChange={(e) => handleOrderStatusChange(o.id, e.target.value)}
-                                className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="paid">Paid</option>
-                                <option value="processing">Processing</option>
-                                <option value="shipped">Shipped</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
-                            </div>
+                      {filteredOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-10 text-center text-gray-400">
+                            Belum ada transaksi pesanan.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredOrders.map((o) => (
+                          <tr key={o.id} className="hover:bg-gray-50/50 transition">
+                            <td className="p-4 pl-6 font-bold text-gray-900">{o.order_number}</td>
+                            <td className="p-4">
+                              <div className="font-semibold text-gray-800">{o.recipient_name}</div>
+                              <div className="text-[11px] text-gray-400">
+                                Akun: {o.user?.name || '-'}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex items-center gap-1 font-semibold text-gray-700 uppercase">
+                                <Truck className="w-3.5 h-3.5 text-gray-400" />
+                                {o.courier_company || '-'}
+                              </span>
+                              <span className="block text-[10px] text-gray-400">
+                                Resi: {o.tracking_number || 'Belum ada'}
+                              </span>
+                            </td>
+                            <td className="p-4 font-bold text-purple-700">π {o.total_amount_pi}</td>
+                            <td className="p-4">
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${getOrderStatusBadge(
+                                  o.status
+                                )}`}
+                              >
+                                {o.status}
+                              </span>
+                            </td>
+                            <td className="p-4 pr-6 text-right">
+                              <div className="inline-flex items-center gap-2">
+                                {updatingOrderId === o.id && (
+                                  <Loader2 className="w-4 h-4 animate-spin text-purple-700" />
+                                )}
+                                <select
+                                  value={o.status}
+                                  disabled={updatingOrderId === o.id}
+                                  onChange={(e) => handleOrderStatusChange(o.id, e.target.value)}
+                                  className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white font-bold text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="paid">Paid</option>
+                                  <option value="processing">Processing</option>
+                                  <option value="shipped">Shipped</option>
+                                  <option value="completed">Completed</option>
+                                  <option value="cancelled">Cancelled</option>
+                                </select>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* TAB 5: LAPORAN KEUANGAN */}
+            {/* ========================================================= */}
+            {/* TAB 5: LAPORAN KEUANGAN                                   */}
+            {/* ========================================================= */}
             {activeTab === 'finance' && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -840,20 +978,28 @@ export default function AdminDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
-                        {filteredFinance.map((item) => (
-                          <tr key={item.id} className="hover:bg-gray-50/50 transition">
-                            <td className="p-4 pl-6 font-bold text-gray-900">
-                              {item.order_number}
-                            </td>
-                            <td className="p-4 font-semibold text-gray-700">{item.seller_name}</td>
-                            <td className="p-4 font-bold text-purple-700">
-                              π {Number(item.total_amount).toFixed(2)}
-                            </td>
-                            <td className="p-4 pr-6 text-right font-semibold text-amber-600">
-                              π {Number(item.shipping_fee).toFixed(2)}
+                        {filteredFinance.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="p-10 text-center text-gray-400">
+                              Belum ada riwayat keuangan toko.
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredFinance.map((item) => (
+                            <tr key={item.id} className="hover:bg-gray-50/50 transition">
+                              <td className="p-4 pl-6 font-bold text-gray-900">
+                                {item.order_number}
+                              </td>
+                              <td className="p-4 font-semibold text-gray-700">{item.seller_name}</td>
+                              <td className="p-4 font-bold text-purple-700">
+                                π {Number(item.total_amount).toFixed(2)}
+                              </td>
+                              <td className="p-4 pr-6 text-right font-semibold text-amber-600">
+                                π {Number(item.shipping_fee).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
