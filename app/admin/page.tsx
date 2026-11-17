@@ -142,7 +142,7 @@ export default function AdminDashboardPage() {
         const parsed = JSON.parse(u.roles);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch {
-        // Fallback
+        // Fallback ke role tunggal
       }
     }
     return u.role ? [u.role] : ['customer'];
@@ -190,7 +190,7 @@ export default function AdminDashboardPage() {
         );
       }
     } catch (error: any) {
-      console.error('Gagal memuat data Admin Dashboard:', error);
+      console.error('Admin Dashboard fetch error:', error);
       setFetchError(error?.message || t('serverLoadErrorTitle'));
     } finally {
       setLoading(false);
@@ -232,7 +232,7 @@ export default function AdminDashboardPage() {
           });
 
       if (json && json.success === false) {
-        throw new Error(json.message || 'Gagal menyimpan kategori.');
+        throw new Error(json.message || t('categorySaveError'));
       }
 
       if (editingCategoryId) {
@@ -247,12 +247,12 @@ export default function AdminDashboardPage() {
       Swal.fire({
         icon: 'success',
         title: t('successTitle'),
-        text: json?.message || 'Kategori berhasil disimpan!',
+        text: json?.message || t('categorySavedSuccess'),
         timer: 1500,
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire(t('failedTitle'), err?.message || 'Gagal menyimpan kategori.', 'error');
+      Swal.fire(t('failedTitle'), err?.message || t('categorySaveError'), 'error');
     } finally {
       setSavingCategory(false);
     }
@@ -267,8 +267,8 @@ export default function AdminDashboardPage() {
 
   const handleDeleteCategory = async (cat: AdminCategory) => {
     const confirm = await Swal.fire({
-      title: 'Hapus Kategori?',
-      text: `Kategori "${cat.name}" akan dihapus permanen.`,
+      title: t('confirmDeleteCategoryTitle'),
+      text: `"${cat.name}" ${t('confirmDeleteCategoryText')}`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -285,7 +285,7 @@ export default function AdminDashboardPage() {
       });
 
       if (json && json.success === false) {
-        throw new Error(json.message || 'Gagal menghapus kategori.');
+        throw new Error(json.message || t('categoryDeleteError'));
       }
 
       setCategories((prev) => prev.filter((c) => c.id !== cat.id));
@@ -294,12 +294,12 @@ export default function AdminDashboardPage() {
       Swal.fire({
         icon: 'success',
         title: t('successTitle'),
-        text: 'Kategori berhasil dihapus.',
+        text: t('categoryDeletedSuccess'),
         timer: 1400,
         showConfirmButton: false,
       });
     } catch (err: any) {
-      Swal.fire(t('failedTitle'), err?.message || 'Kategori tidak dapat dihapus.', 'error');
+      Swal.fire(t('failedTitle'), err?.message || t('categoryDeleteError'), 'error');
     }
   };
 
@@ -471,7 +471,7 @@ export default function AdminDashboardPage() {
   const menuItems: { id: AdminTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'overview', label: t('adminTabOverview'), icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'users', label: t('adminTabUsers'), icon: <Users className="w-4 h-4" />, badge: users.length },
-    { id: 'categories', label: 'Kategori', icon: <Tags className="w-4 h-4" />, badge: categories.length },
+    { id: 'categories', label: t('adminTabCategories'), icon: <Tags className="w-4 h-4" />, badge: categories.length },
     { id: 'products', label: t('adminTabProducts'), icon: <Package className="w-4 h-4" />, badge: products.length },
     { id: 'orders', label: t('adminTabOrders'), icon: <ShoppingBag className="w-4 h-4" />, badge: orders.length },
     { id: 'finance', label: t('adminTabFinance'), icon: <Coins className="w-4 h-4" /> },
@@ -642,17 +642,17 @@ export default function AdminDashboardPage() {
                   <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="font-bold text-gray-900 text-base">
-                        Kategori Produk Marketplace ({categories.length})
+                        {t('marketplaceCategoriesShortcutTitle')} ({categories.length})
                       </h3>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Tambahkan kategori baru seperti Tenun Ikat, Kopi Flores, Madu Hutan, dll.
+                        {t('marketplaceCategoriesShortcutDesc')}
                       </p>
                     </div>
                     <button
                       onClick={() => setActiveTab('categories')}
                       className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer"
                     >
-                      + Tambah Kategori →
+                      {t('addCategoryShortcutBtn')}
                     </button>
                   </div>
                 </div>
@@ -813,7 +813,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ========================================================= */}
-            {/* TAB BARU: TAMBAH & KELOLA KATEGORI PRODUK                 */}
+            {/* TAB 3: TAMBAH & KELOLA KATEGORI PRODUK                    */}
             {/* ========================================================= */}
             {activeTab === 'categories' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -821,21 +821,19 @@ export default function AdminDashboardPage() {
                 <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 h-fit">
                   <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                     <Tags className="w-5 h-5 text-purple-700" />
-                    {editingCategoryId ? 'Edit Kategori Produk' : 'Tambah Kategori Baru'}
+                    {editingCategoryId ? t('editCategoryTitle') : t('addNewCategoryTitle')}
                   </h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Kategori yang ditambahkan akan langsung muncul di filter katalog & form produk seller.
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">{t('addCategoryFormHint')}</p>
 
                   <form onSubmit={handleSaveCategory} className="space-y-4 mt-5">
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                        Nama Kategori <span className="text-red-500">*</span>
+                        {t('categoryNameField')} <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         required
-                        placeholder="Contoh: Tenun Ikat, Kopi Flores, Madu Hutan..."
+                        placeholder={t('categoryNamePlaceholder')}
                         value={categoryName}
                         onChange={(e) => setCategoryName(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -844,11 +842,11 @@ export default function AdminDashboardPage() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                        Ikon / Emoji (Opsional)
+                        {t('categoryIconField')}
                       </label>
                       <input
                         type="text"
-                        placeholder="Contoh: 🧶 atau ☕ atau 🍯"
+                        placeholder={t('categoryIconPlaceholder')}
                         value={categoryIcon}
                         onChange={(e) => setCategoryIcon(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -857,11 +855,11 @@ export default function AdminDashboardPage() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                        Deskripsi Singkat (Opsional)
+                        {t('categoryDescriptionField')}
                       </label>
                       <textarea
                         rows={3}
-                        placeholder="Keterangan singkat jenis produk pada kategori ini..."
+                        placeholder={t('categoryDescriptionPlaceholder')}
                         value={categoryDescription}
                         onChange={(e) => setCategoryDescription(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -881,7 +879,9 @@ export default function AdminDashboardPage() {
                         ) : (
                           <Plus className="w-4 h-4" />
                         )}
-                        <span>{editingCategoryId ? 'Simpan Perubahan' : 'Tambah Kategori'}</span>
+                        <span>
+                          {editingCategoryId ? t('saveCategoryChangesBtn') : t('addCategoryBtn')}
+                        </span>
                       </button>
 
                       {editingCategoryId && (
@@ -903,18 +903,16 @@ export default function AdminDashboardPage() {
                   <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="font-bold text-gray-900 text-base">
-                        Daftar Kategori Aktif ({categories.length})
+                        {t('activeCategoriesListHeading')} ({categories.length})
                       </h3>
-                      <p className="text-xs text-gray-500">
-                        Kategori yang sedang digunakan produk tidak dapat dihapus sebelum produk dipindahkan.
-                      </p>
+                      <p className="text-xs text-gray-500">{t('activeCategoriesListHint')}</p>
                     </div>
 
                     <div className="relative w-full sm:w-56">
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Cari kategori..."
+                        placeholder={t('searchCategoryPlaceholder')}
                         value={categorySearch}
                         onChange={(e) => setCategorySearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-600"
@@ -926,9 +924,9 @@ export default function AdminDashboardPage() {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-gray-50/70 text-[11px] uppercase tracking-wider text-gray-400 border-b border-gray-100">
-                          <th className="p-4 pl-6">Nama Kategori</th>
-                          <th className="p-4">Slug / Deskripsi</th>
-                          <th className="p-4">Jumlah Produk</th>
+                          <th className="p-4 pl-6">{t('colCategoryName')}</th>
+                          <th className="p-4">{t('colSlugDescription')}</th>
+                          <th className="p-4">{t('colProductCount')}</th>
                           <th className="p-4 pr-6 text-right">{t('colAction')}</th>
                         </tr>
                       </thead>
@@ -936,7 +934,7 @@ export default function AdminDashboardPage() {
                         {filteredCategories.length === 0 ? (
                           <tr>
                             <td colSpan={4} className="p-10 text-center text-gray-400">
-                              Belum ada kategori yang tersimpan. Silakan tambahkan di form sebelah kiri.
+                              {t('noCategoriesSaved')}
                             </td>
                           </tr>
                         ) : (
@@ -962,7 +960,7 @@ export default function AdminDashboardPage() {
                               </td>
                               <td className="p-4">
                                 <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700">
-                                  {cat.products_count ?? 0} produk
+                                  {cat.products_count ?? 0} {t('productsCountSuffix')}
                                 </span>
                               </td>
                               <td className="p-4 pr-6 text-right">
@@ -971,7 +969,7 @@ export default function AdminDashboardPage() {
                                     type="button"
                                     onClick={() => handleEditCategoryClick(cat)}
                                     className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition cursor-pointer"
-                                    title="Edit Kategori"
+                                    title={t('editCategoryTooltip')}
                                   >
                                     <Pencil className="w-4 h-4" />
                                   </button>
@@ -979,7 +977,7 @@ export default function AdminDashboardPage() {
                                     type="button"
                                     onClick={() => handleDeleteCategory(cat)}
                                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
-                                    title="Hapus Kategori"
+                                    title={t('deleteCategoryTooltip')}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
@@ -996,7 +994,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ========================================================= */}
-            {/* TAB 3: SEMUA PRODUK                                       */}
+            {/* TAB 4: SEMUA PRODUK                                       */}
             {/* ========================================================= */}
             {activeTab === 'products' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1116,7 +1114,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ========================================================= */}
-            {/* TAB 4: SEMUA PESANAN                                      */}
+            {/* TAB 5: SEMUA PESANAN                                      */}
             {/* ========================================================= */}
             {activeTab === 'orders' && (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1216,7 +1214,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* ========================================================= */}
-            {/* TAB 5: LAPORAN KEUANGAN                                   */}
+            {/* TAB 6: LAPORAN KEUANGAN                                   */}
             {/* ========================================================= */}
             {activeTab === 'finance' && (
               <div className="space-y-4">
