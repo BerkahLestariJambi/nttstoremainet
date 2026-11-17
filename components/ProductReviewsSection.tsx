@@ -56,6 +56,13 @@ export interface ProductReviewsSectionProps {
   sellerUserId?: number | null;
 }
 
+interface AuthSessionInfo {
+  id?: number;
+  username?: string;
+  pi_uid?: string;
+  token?: string;
+}
+
 export default function ProductReviewsSection({
   productId,
   sellerUserId,
@@ -66,8 +73,7 @@ export default function ProductReviewsSection({
   const [loading, setLoading] = useState<boolean>(true);
   const [lightboxMedia, setLightboxMedia] = useState<ReviewMedia | null>(null);
 
-  // State untuk form balasan bersarang
-  const [currentUser, setCurrentUser] = useState<{ id: number; name: string } | null>(null);
+  const [authSession, setAuthSession] = useState<AuthSessionInfo | null>(null);
   const [activeReplyBox, setActiveReplyBox] = useState<{
     reviewId: number;
     parentId: number | null;
@@ -87,25 +93,67 @@ export default function ProductReviewsSection({
     return `${DOMAIN_BASE_URL}${clean.startsWith('/public') ? clean : `/public${clean}`}`;
   };
 
-  // Deteksi user yang sedang login
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (!key) continue;
-      const val = window.localStorage.getItem(key);
-      if (!val || !val.trim().startsWith('{')) continue;
-      try {
-        const parsed = JSON.parse(val);
-        const u = parsed?.user || parsed;
-        if (u?.id) {
-          setCurrentUser({ id: Number(u.id), name: u.name || u.username || 'Pengguna' });
-          break;
+  // Deteksi sesi login Pi dari localStorage / sessionStorage (id, username, pi_uid, maupun token)
+  const detectAuthSession = (): AuthSessionInfo | null => {
+    if (typeof window === 'undefined') return null;
+
+    const session: AuthSessionInfo = {};
+    const stores = [window.localStorage, window.sessionStorage];
+
+    for (const store of stores) {
+      for (let i = 0; i < store.length; i++) {
+        const key = store.key(i);
+        if (!key) continue;
+        const val = store.getItem(key);
+        if (!val || val === 'null' || val === 'undefined') continue;
+
+        const cleanVal = val.trim();
+
+        // Cek token Sanctum ("15|abc...") atau JWT ("eyJ...")
+        if (/^\d+\|[A-Za-z0-9]{20,}$/.test(cleanVal) || cleanVal.startsWith('eyJ')) {
+          session.token = cleanVal.replace(/^Bearer\s+/i, '');
         }
-      } catch {
-        // abaikan
+
+        if (key.toLowerCase().includes('username') && !cleanVal.startsWith('{')) {
+          session.username = cleanVal.replace(/^@/, '');
+        }
+
+        if (key.toLowerCase().includes('uid') && !cleanVal.startsWith('{')) {
+          session.pi_uid = cleanVal;
+        }
+
+        // Jika berbentuk objek JSON
+        if (cleanVal.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(cleanVal);
+            const u = parsed?.user || parsed?.data?.user || parsed;
+            if (u?.id) session.id = Number(u.id);
+            if (u?.username) session.username = String(u.username).replace(/^@/, '');
+            if (u?.pi_uid || u?.uid) session.pi_uid = String(u.pi_uid || u.uid);
+
+            const tok =
+              parsed?.token ||
+              parsed?.access_token ||
+              parsed?.api_token ||
+              parsed?.data?.token;
+            if (typeof tok === 'string' && tok.length > 10) {
+              session.token = tok.replace(/^Bearer\s+/i, '');
+            }
+          } catch {
+            // abaikan
+          }
+        }
       }
     }
+
+    if (session.id || session.username || session.pi_uid || session.token) {
+      return session;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    setAuthSession(detectAuthSession());
   }, []);
 
   const fetchReviews = async () => {
@@ -135,24 +183,28 @@ export default function ProductReviewsSection({
     e.preventDefault();
     if (!activeReplyBox || !replyText.trim()) return;
 
-    if (!currentUser?.id) {
-      Swal.fire('Login Diperlukan', 'Silakan login terlebih dahulu untuk membalas.', 'warning');
-      return;
-    }
+    const currentSession = detectAuthSession() || authSession;
 
     setSubmittingReply(true);
     try {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      };
+      if (currentSession?.token) {
+        headers['Authorization'] = `Bearer ${currentSession.token}`;
+      }
+
       const res = await fetch(`${API_BASE_URL}/reviews/${activeReplyBox.reviewId}/reply`, {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           comment: replyText.trim(),
           parent_id: activeReplyBox.parentId,
-          user_id: currentUser.id,
+          user_id: currentSession?.id || null,
+          username: currentSession?.username || null,
+          pi_uid: currentSession?.pi_uid || null,
         }),
       });
 
@@ -212,7 +264,6 @@ export default function ProductReviewsSection({
 
             <p className="text-gray-700 leading-relaxed">{node.comment}</p>
 
-            {/* Tombol Balas di tiap level komentar */}
             {depth < 4 && (
               <div className="pt-1">
                 <button
@@ -233,7 +284,6 @@ export default function ProductReviewsSection({
             )}
           </div>
 
-          {/* Form Input jika membalas tepat di komentar ini */}
           {activeReplyBox?.reviewId === reviewId && activeReplyBox?.parentId === node.id && (
             <form onSubmit={handleSendReply} className="mt-2 ml-3 flex items-center gap-2">
               <input
@@ -265,7 +315,6 @@ export default function ProductReviewsSection({
             </form>
           )}
 
-          {/* Rekursif untuk anak balasan berikutnya */}
           {Array.isArray(node.children) &&
             node.children.length > 0 &&
             renderReplyNodes(node.children, reviewId, depth + 1)}
@@ -276,7 +325,6 @@ export default function ProductReviewsSection({
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mt-8 space-y-6">
-      {/* Header Statistik Rating */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-gray-100">
         <div>
           <h2 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
@@ -310,7 +358,6 @@ export default function ProductReviewsSection({
         </div>
       </div>
 
-      {/* Daftar Ulasan Utama + Thread Balasan Bersarang */}
       {loading ? (
         <p className="text-xs text-gray-400 py-6 text-center">Memuat ulasan pembeli...</p>
       ) : reviews.length === 0 ? (
@@ -360,7 +407,6 @@ export default function ProductReviewsSection({
                   <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{rev.comment}</p>
                 )}
 
-                {/* Galeri Foto & Video Bukti Ulasan */}
                 {Array.isArray(rev.media) && rev.media.length > 0 && (
                   <div className="flex items-center gap-2.5 flex-wrap pt-1">
                     {rev.media.map((m, idx) => {
@@ -392,7 +438,6 @@ export default function ProductReviewsSection({
                   </div>
                 )}
 
-                {/* Tombol Balas Ulasan Utama */}
                 <div>
                   <button
                     type="button"
@@ -411,7 +456,6 @@ export default function ProductReviewsSection({
                   </button>
                 </div>
 
-                {/* Form Input Balasan Tingkat Pertama */}
                 {activeReplyBox?.reviewId === rev.id && activeReplyBox?.parentId === null && (
                   <form onSubmit={handleSendReply} className="mt-2 ml-3 flex items-center gap-2">
                     <input
@@ -444,7 +488,6 @@ export default function ProductReviewsSection({
                   </form>
                 )}
 
-                {/* Tampilkan Seluruh Pohon Balasan Bersarang (Nested Replies) */}
                 {Array.isArray(rev.replies) &&
                   rev.replies.length > 0 &&
                   renderReplyNodes(rev.replies, rev.id, 1)}
@@ -454,7 +497,6 @@ export default function ProductReviewsSection({
         </div>
       )}
 
-      {/* Lightbox Perbesar Foto / Putar Video */}
       {lightboxMedia && (
         <div
           onClick={() => setLightboxMedia(null)}
