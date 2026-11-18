@@ -9,8 +9,6 @@ import {
   Film,
   Image as ImageIcon,
   CheckCircle2,
-  Crown,
-  AlertTriangle,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useLanguage } from '@/context/LanguageContext';
@@ -218,28 +216,6 @@ export default function ReviewModal({
 
       const json = await res.json();
 
-      // Jika kuota uji coba 1x per user sudah habis -> tampilkan prompt aktivasi Premium
-      if (json?.trial_expired || (res.status === 403 && json?.trial_expired !== undefined)) {
-        onClose();
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Batas Uji Coba Tercapai (1x per User)',
-          html: `
-            <p class="text-sm text-gray-600">
-              Fitur ini <strong>hanya uji coba dan hanya dapat digunakan 1 kali saja</strong> per akun.
-            </p>
-            <p class="text-sm text-gray-800 font-semibold mt-2">
-              Untuk menggunakan fitur ulasan & upload foto/video seterusnya, silakan aktivasi yang <strong>Premium</strong>.
-            </p>
-          `,
-          confirmButtonText: 'Aktivasi Premium',
-          confirmButtonColor: '#7e22ce',
-          showCancelButton: true,
-          cancelButtonText: 'Tutup',
-        });
-        return;
-      }
-
       if (!res.ok || json.success === false) {
         throw new Error(json.message || 'Gagal mengirim ulasan.');
       }
@@ -247,9 +223,7 @@ export default function ReviewModal({
       Swal.fire({
         icon: 'success',
         title: t('successTitle'),
-        text:
-          json.message ||
-          'Ulasan produk berhasil dikirim! (Kuota uji coba 1x per akun telah digunakan)',
+        text: json.message || 'Terima kasih! Ulasan produk Anda berhasil dikirim.',
         timer: 2000,
         showConfirmButton: false,
       });
@@ -308,24 +282,6 @@ export default function ReviewModal({
             <h3 className="font-bold text-gray-900 text-sm sm:text-base line-clamp-1 mt-1">
               {productName}
             </h3>
-          </div>
-        </div>
-
-        {/* Banner Informasi Batas Uji Coba 1x Per User & Aktivasi Premium */}
-        <div className="mt-3.5 p-3 rounded-2xl bg-purple-50 border border-purple-200 flex items-start gap-2.5">
-          <div className="p-1.5 rounded-xl bg-purple-700 text-white shrink-0 mt-0.5">
-            <Crown className="w-3.5 h-3.5 text-amber-300" />
-          </div>
-          <div className="text-[11px] leading-relaxed text-purple-950">
-            <p className="font-extrabold flex items-center gap-1 text-purple-900">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>Mode Uji Coba (Maksimal 1 Kali per User)</span>
-            </p>
-            <p className="mt-0.5 text-purple-800">
-              Fitur ini <strong>hanya uji coba dan hanya dapat digunakan 1 kali saja</strong> per
-              akun. Untuk menggunakan fitur ini seterusnya, silakan aktivasi versi{' '}
-              <strong className="text-purple-950 underline">Premium</strong>.
-            </p>
           </div>
         </div>
 
