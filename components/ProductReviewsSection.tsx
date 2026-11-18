@@ -5,13 +5,13 @@ import {
   Star,
   CheckCircle2,
   MessageSquare,
-  PlayCircle,
   X,
   Store,
   Reply,
   Send,
   Loader2,
   CornerDownRight,
+  Maximize2,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -86,11 +86,23 @@ export default function ProductReviewsSection({
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
   const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
-  const resolveMediaUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const clean = url.startsWith('/') ? url : `/${url}`;
-    return `${DOMAIN_BASE_URL}${clean.startsWith('/public') ? clean : `/public${clean}`}`;
+  // Normalisasi URL gambar & video bukti ulasan ke https://domain/public/reviews/{nama_file}
+  const resolveMediaUrl = (url?: string | null) => {
+    if (!url || typeof url !== 'string' || url.trim() === '') return '';
+
+    const clean = url.trim().replace(/\\/g, '/');
+
+    if (
+      (clean.startsWith('http://') || clean.startsWith('https://')) &&
+      !clean.includes('nttstorepi.mejatika.com')
+    ) {
+      return clean;
+    }
+
+    const fileName = clean.split('/').filter(Boolean).pop();
+    if (!fileName) return '';
+
+    return `${DOMAIN_BASE_URL}/public/reviews/${fileName}`;
   };
 
   // Deteksi sesi login Pi dari localStorage / sessionStorage (id, username, pi_uid, maupun token)
@@ -324,7 +336,7 @@ export default function ProductReviewsSection({
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mt-8 space-y-6">
+    <div id="reviews" className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mt-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-gray-100">
         <div>
           <h2 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
@@ -338,7 +350,7 @@ export default function ProductReviewsSection({
 
         <div className="flex items-center gap-3 bg-amber-50 px-4 py-2.5 rounded-2xl border border-amber-100">
           <span className="text-2xl font-black text-amber-600">
-            {totalReviews > 0 ? averageRating.toFixed(1) : '0.0'}
+            {totalReviews > 0 ? Number(averageRating).toFixed(1) : '0.0'}
           </span>
           <div>
             <div className="flex items-center gap-0.5">
@@ -346,7 +358,7 @@ export default function ProductReviewsSection({
                 <Star
                   key={s}
                   className={`w-4 h-4 ${
-                    s <= Math.round(averageRating)
+                    s <= Math.round(Number(averageRating))
                       ? 'fill-amber-400 text-amber-400'
                       : 'text-gray-300'
                   }`}
@@ -408,33 +420,60 @@ export default function ProductReviewsSection({
                 )}
 
                 {Array.isArray(rev.media) && rev.media.length > 0 && (
-                  <div className="flex items-center gap-2.5 flex-wrap pt-1">
-                    {rev.media.map((m, idx) => {
-                      const fullUrl = resolveMediaUrl(m.url);
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setLightboxMedia({ type: m.type, url: fullUrl })}
-                          className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 bg-black group cursor-pointer"
-                        >
-                          {m.type === 'video' ? (
-                            <>
-                              <video src={fullUrl} className="w-full h-full object-cover opacity-80" />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                                <PlayCircle className="w-7 h-7 text-white drop-shadow" />
-                              </div>
-                            </>
-                          ) : (
-                            <img
+                  <div className="space-y-2.5 pt-1">
+                    {/* Video ditampilkan lebar agar langsung bisa diputar */}
+                    {rev.media
+                      .filter((m) => m.type === 'video')
+                      .map((m, idx) => {
+                        const fullUrl = resolveMediaUrl(m.url);
+                        return (
+                          <div
+                            key={`vid-${idx}`}
+                            className="relative w-full max-w-md aspect-video rounded-2xl overflow-hidden border border-gray-200 bg-black"
+                          >
+                            <video
                               src={fullUrl}
-                              alt="Bukti ulasan"
-                              className="w-full h-full object-cover group-hover:scale-105 transition"
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="w-full h-full object-contain bg-black"
                             />
-                          )}
-                        </button>
-                      );
-                    })}
+                            <button
+                              type="button"
+                              onClick={() => setLightboxMedia({ type: 'video', url: fullUrl })}
+                              title="Perbesar video"
+                              className="absolute top-2 right-2 bg-black/65 hover:bg-black/85 text-white p-1.5 rounded-lg transition cursor-pointer"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                    {/* Foto bukti ulasan */}
+                    {rev.media.some((m) => m.type !== 'video') && (
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {rev.media
+                          .filter((m) => m.type !== 'video')
+                          .map((m, idx) => {
+                            const fullUrl = resolveMediaUrl(m.url);
+                            return (
+                              <button
+                                key={`img-${idx}`}
+                                type="button"
+                                onClick={() => setLightboxMedia({ type: 'image', url: fullUrl })}
+                                className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 group cursor-pointer"
+                              >
+                                <img
+                                  src={fullUrl}
+                                  alt="Bukti ulasan"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition"
+                                />
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -519,7 +558,8 @@ export default function ProductReviewsSection({
                 src={lightboxMedia.url}
                 controls
                 autoPlay
-                className="max-h-[80vh] w-auto rounded-2xl shadow-2xl"
+                playsInline
+                className="max-h-[80vh] w-full rounded-2xl shadow-2xl bg-black"
               />
             ) : (
               <img
