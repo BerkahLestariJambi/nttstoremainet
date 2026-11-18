@@ -2,7 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Room, RoomEvent, Track, RemoteVideoTrack } from 'livekit-client';
+import {
+  Room,
+  RoomEvent,
+  Track,
+  RemoteVideoTrack,
+  RemoteAudioTrack,
+} from 'livekit-client';
 import {
   Radio,
   Users,
@@ -57,10 +63,12 @@ export default function LiveViewerPage() {
   const [showCatalogDrawer, setShowCatalogDrawer] = useState<boolean>(false);
   const [viewerCount, setViewerCount] = useState<number>(1);
   const [muted, setMuted] = useState<boolean>(false);
+  const [audioBlocked, setAudioBlocked] = useState<boolean>(false);
   const [hasVideoTrack, setHasVideoTrack] = useState<boolean>(false);
 
-  // Simpan track video remote agar selalu terpasang ke <video> setelah render selesai
+  // Simpan track video & audio remote agar selalu terpasang setelah render selesai
   const [remoteVideoTrack, setRemoteVideoTrack] = useState<RemoteVideoTrack | null>(null);
+  const [remoteAudioTrack, setRemoteAudioTrack] = useState<RemoteAudioTrack | null>(null);
 
   // Chat
   const [comments, setComments] = useState<LiveComment[]>([]);
@@ -71,7 +79,7 @@ export default function LiveViewerPage() {
 
   // Refs LiveKit
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const audioContainerRef = useRef<HTMLDivElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const roomRef = useRef<Room | null>(null);
 
   const resolveProductImg = (url?: string | null) => {
@@ -115,7 +123,7 @@ export default function LiveViewerPage() {
     return 'Pembeli Pi';
   };
 
-  // Tempelkan remoteVideoTrack ke elemen <video> kapan pun elemen DOM siap
+  // 1. Tempelkan RemoteVideoTrack ke <video> setelah DOM siap
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl || !remoteVideoTrack) return;
@@ -123,18 +131,38 @@ export default function LiveViewerPage() {
     remoteVideoTrack.attach(videoEl);
     setHasVideoTrack(true);
 
-    // Paksa play agar tidak tertahan kebijakan autoplay browser mobile / Pi Browser
-    videoEl.play().catch(() => {
-      // Jika autoplay bersuara diblokir browser, mulai dalam mode mute lalu putar
-      videoEl.muted = true;
-      setMuted(true);
-      videoEl.play().catch(() => {});
-    });
+    // Video selalu muted karena suara diputar lewat <audio> terpisah agar tidak saling konflik
+    videoEl.muted = true;
+    videoEl.play().catch(() => {});
 
     return () => {
       remoteVideoTrack.detach(videoEl);
     };
   }, [remoteVideoTrack, loading]);
+
+  // 2. Tempelkan RemoteAudioTrack ke <audio> setelah DOM siap & putar suara penjual
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl || !remoteAudioTrack) return;
+
+    remoteAudioTrack.attach(audioEl);
+    audioEl.muted = muted;
+    audioEl.volume = 1.0;
+
+    audioEl
+      .play()
+      .then(() => {
+        setAudioBlocked(false);
+      })
+      .catch(() => {
+        // Browser menahan autoplay suara sebelum user menyentuh layar
+        setAudioBlocked(true);
+      });
+
+    return () => {
+      remoteAudioTrack.detach(audioEl);
+    };
+  }, [remoteAudioTrack, loading]);
 
   useEffect(() => {
     if (!roomName) return;
@@ -180,13 +208,20 @@ export default function LiveViewerPage() {
         room.on(RoomEvent.ParticipantConnected, updateLiveViewerCount);
         room.on(RoomEvent.ParticipantDisconnected, updateLiveViewerCount);
 
+        room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+          if (!room.canPlaybackAudio) {
+            setAudioBlocked(true);
+          } else {
+            setAudioBlocked(false);
+          }
+        });
+
         room.on(RoomEvent.TrackSubscribed, (track) => {
           if (!isMounted) return;
           if (track.kind === Track.Kind.Video) {
             setRemoteVideoTrack(track as RemoteVideoTrack);
-          } else if (track.kind === Track.Kind.Audio && audioContainerRef.current) {
-            const audioEl = track.attach();
-            audioContainerRef.current.appendChild(audioEl);
+          } else if (track.kind === Track.Kind.Audio) {
+            setRemoteAudioTrack(track as RemoteAudioTrack);
           }
         });
 
@@ -194,6 +229,8 @@ export default function LiveViewerPage() {
           if (track.kind === Track.Kind.Video) {
             setRemoteVideoTrack(null);
             setHasVideoTrack(false);
+          } else if (track.kind === Track.Kind.Audio) {
+            setRemoteAudioTrack(null);
           }
           track.detach();
         });
@@ -205,13 +242,23 @@ export default function LiveViewerPage() {
         await room.connect(ws_url, token);
         updateLiveViewerCount();
 
-        // Cek jika track video penjual sudah ada saat pembeli masuk
+        // Ambil track video & audio penjual yang sudah aktif sebelum pembeli masuk
         room.remoteParticipants.forEach((participant) => {
           participant.videoTrackPublications.forEach((pub) => {
             if (pub.track && pub.track.kind === Track.Kind.Video) {
               setRemoteVideoTrack(pub.track as RemoteVideoTrack);
             }
           });
+          participant.audioTrackPublications.forEach((pub) => {
+            if (pub.track && pub.track.kind === Track.Kind.Audio) {
+              setRemoteAudioTrack(pub.track as RemoteAudioTrack);
+            }
+          });
+        });
+
+        // Coba aktifkan playback audio LiveKit
+        room.startAudio().catch(() => {
+          if (isMounted) setAudioBlocked(true);
         });
       } catch (err) {
         console.error('Gagal bergabung ke room live:', err);
@@ -279,20 +326,28 @@ export default function LiveViewerPage() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
 
-  const handleToggleMute = () => {
-    const nextMuted = !muted;
-    setMuted(nextMuted);
-    if (videoRef.current) {
-      videoRef.current.muted = nextMuted;
-      if (!nextMuted) {
-        videoRef.current.play().catch(() => {});
-      }
+  // Aktifkan suara setelah sentuhan user (mengatasi blokir autoplay browser mobile)
+  const handleUnlockAudio = async () => {
+    setMuted(false);
+    setAudioBlocked(false);
+    if (roomRef.current) {
+      await roomRef.current.startAudio().catch(() => {});
     }
-    if (audioContainerRef.current) {
-      audioContainerRef.current.querySelectorAll('audio').forEach((el) => {
-        el.muted = nextMuted;
-        if (!nextMuted) el.play().catch(() => {});
-      });
+    if (audioRef.current) {
+      audioRef.current.muted = false;
+      audioRef.current.volume = 1.0;
+      await audioRef.current.play().catch(() => {});
+    }
+  };
+
+  const handleToggleMute = async () => {
+    if (audioBlocked || muted) {
+      await handleUnlockAudio();
+      return;
+    }
+    setMuted(true);
+    if (audioRef.current) {
+      audioRef.current.muted = true;
     }
   };
 
@@ -432,20 +487,39 @@ export default function LiveViewerPage() {
     : '0';
 
   return (
-    <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex items-center justify-center overflow-hidden">
-      <div ref={audioContainerRef} className="hidden" />
+    <div
+      onClick={() => {
+        if (audioBlocked) handleUnlockAudio();
+      }}
+      className="fixed inset-0 z-[70] h-[100dvh] bg-black flex items-center justify-center overflow-hidden"
+    >
+      {/* Elemen audio khusus suara penjual */}
+      <audio ref={audioRef} autoPlay playsInline className="hidden" />
 
       <div className="relative w-full max-w-md h-[100dvh] bg-black overflow-hidden flex flex-col justify-between">
-        {/* Video Stream */}
+        {/* Video Stream (muted agar tidak bentrok dengan audioRef) */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
-          muted={muted}
+          muted
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
 
-        {/* Indikator menunggu stream kamera penjual jika belum masuk */}
+        {/* Banner Ketuk untuk Nyalakan Suara jika browser menahan autoplay audio */}
+        {(audioBlocked || muted) && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30">
+            <button
+              type="button"
+              onClick={handleUnlockAudio}
+              className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold px-4 py-2 rounded-full shadow-lg animate-bounce cursor-pointer"
+            >
+              <Volume2 className="w-4 h-4" /> Ketuk untuk Nyalakan Suara
+            </button>
+          </div>
+        )}
+
+        {/* Indikator menunggu stream kamera penjual */}
         {!hasVideoTrack && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white/80 gap-2 pointer-events-none">
             <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
@@ -476,9 +550,13 @@ export default function LiveViewerPage() {
               type="button"
               onClick={handleToggleMute}
               className="p-2 rounded-full bg-black/55 text-white cursor-pointer"
-              title={muted ? 'Nyalakan Suara' : 'Matikan Suara'}
+              title={muted || audioBlocked ? 'Nyalakan Suara' : 'Matikan Suara'}
             >
-              {muted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4" />}
+              {muted || audioBlocked ? (
+                <VolumeX className="w-4 h-4 text-rose-400" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-emerald-400" />
+              )}
             </button>
             <button
               type="button"
