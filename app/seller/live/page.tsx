@@ -30,6 +30,8 @@ import {
   UserPlus,
   Check,
   PhoneOff,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
@@ -83,6 +85,9 @@ export default function SellerLiveBroadcastPage() {
   const [camEnabled, setCamEnabled] = useState<boolean>(true);
   const [micEnabled, setMicEnabled] = useState<boolean>(true);
 
+  // Show/Hide Drawer Produk Samping (default tertutup agar layar murni video + chat)
+  const [showProductDrawer, setShowProductDrawer] = useState<boolean>(false);
+
   // Daftar Penonton Aktif Real-time
   const [activeViewers, setActiveViewers] = useState<ActiveViewer[]>([]);
   const [showViewersModal, setShowViewersModal] = useState<boolean>(false);
@@ -98,6 +103,7 @@ export default function SellerLiveBroadcastPage() {
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [chatInput, setChatInput] = useState<string>('');
   const lastCommentIdRef = useRef<number>(0);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   // Refs LiveKit
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -403,6 +409,10 @@ export default function SellerLiveBroadcastPage() {
     return () => clearInterval(timer);
   }, [isLive, streamId]);
 
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
+
   // Penjual menyetujui / menolak / menurunkan Tamu Join Live
   const handleRespondCoHost = async (
     action: 'approve' | 'reject' | 'remove',
@@ -499,6 +509,9 @@ export default function SellerLiveBroadcastPage() {
         credentials: 'include',
         body: JSON.stringify({ product_id: productId }),
       });
+
+      // Otomatis sembunyikan drawer setelah produk disematkan agar layar kembali bersih
+      setShowProductDrawer(false);
     } catch (err) {
       console.error('Gagal menyematkan produk:', err);
     }
@@ -648,15 +661,16 @@ export default function SellerLiveBroadcastPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex flex-col lg:flex-row">
+    <div className="fixed inset-0 z-[70] h-[100dvh] bg-black overflow-hidden">
       {/* Container audio tamu Join Live */}
       <div
         ref={cohostAudioContainerRef}
         className="fixed bottom-0 left-0 w-0 h-0 overflow-hidden pointer-events-none"
       />
 
-      {/* Layar Kamera Penyiar (Otomatis Split-Screen jika ada Tamu Join Live) */}
-      <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+      {/* LAYAR UTAMA MURNI: VIDEO / SPLIT-SCREEN + LIVE CHAT */}
+      <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+        {/* Grid Video: Fullscreen jika solo, Split-Screen 2 baris jika ada Tamu Join Live */}
         <div
           className={`w-full h-full grid ${
             cohostVideoTrack ? 'grid-rows-2' : 'grid-rows-1'
@@ -683,23 +697,14 @@ export default function SellerLiveBroadcastPage() {
                 muted
                 className="w-full h-full object-cover"
               />
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-20">
-                <span className="bg-purple-600 text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow">
-                  Tamu Join Live: @{cohostName}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRespondCoHost('remove', activeCohostViewerId)}
-                  className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow cursor-pointer"
-                >
-                  <PhoneOff className="w-3.5 h-3.5" /> Turunkan Tamu
-                </button>
-              </div>
+              <span className="absolute top-3 left-3 bg-purple-600/90 backdrop-blur-xs text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow z-20">
+                Tamu Live: @{cohostName}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Bar Atas Status Live & Tombol Lihat Penonton */}
+        {/* Bar Atas Status Live & Daftar Penonton */}
         <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 z-20">
           <div className="flex items-center gap-2 bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full text-white">
             <span className="inline-flex items-center gap-1 bg-red-600 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
@@ -767,7 +772,7 @@ export default function SellerLiveBroadcastPage() {
           </div>
         )}
 
-        {/* Kontrol Kamera & Mic di Samping */}
+        {/* Kontrol Kamera & Mic di Samping Kanan */}
         <div className="absolute right-4 top-20 flex flex-col gap-2.5 z-20">
           <button
             type="button"
@@ -799,9 +804,25 @@ export default function SellerLiveBroadcastPage() {
           </button>
         </div>
 
-        {/* Overlay Komentar di Bawah Kamera (Mobile) */}
-        <div className="lg:hidden absolute bottom-20 left-4 right-16 max-h-36 overflow-y-auto space-y-1.5 z-20 pointer-events-none">
-          {comments.slice(-6).map((c) => (
+        {/* Tab Show/Hide Etalase Produk di Sisi Kanan Tengah */}
+        <button
+          type="button"
+          onClick={() => setShowProductDrawer((prev) => !prev)}
+          title={showProductDrawer ? 'Sembunyikan Etalase Produk' : 'Pilih Produk Disematkan'}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-30 bg-amber-500 hover:bg-amber-600 text-white pl-2.5 pr-2 py-3 rounded-l-2xl shadow-xl flex flex-col items-center gap-1 cursor-pointer transition"
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span className="text-[9px] font-black uppercase tracking-tighter">Produk</span>
+          {showProductDrawer ? (
+            <ChevronRight className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronLeft className="w-3.5 h-3.5" />
+          )}
+        </button>
+
+        {/* Overlay Komentar di Bawah Layar (Semua Ukuran Layar) */}
+        <div className="absolute bottom-20 left-4 right-16 max-h-44 overflow-y-auto space-y-1.5 z-20 pr-1">
+          {comments.map((c) => (
             <div
               key={c.id}
               className="bg-black/55 backdrop-blur-xs text-white text-xs px-3 py-1.5 rounded-2xl w-fit max-w-full"
@@ -810,135 +831,121 @@ export default function SellerLiveBroadcastPage() {
               <span>{c.message}</span>
             </div>
           ))}
+          <div ref={chatBottomRef} />
         </div>
 
-        {/* Input Chat Penjual di Bawah (Mobile) */}
+        {/* Input Chat Penjual di Bawah */}
         <form
           onSubmit={handleSendComment}
-          className="lg:hidden absolute bottom-4 left-4 right-4 flex items-center gap-2 z-20"
+          className="absolute bottom-4 left-4 right-4 max-w-xl mx-auto flex items-center gap-2 z-20"
         >
+          <button
+            type="button"
+            onClick={() => setShowProductDrawer(true)}
+            title="Sematkan Produk"
+            className="relative p-2.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white shrink-0 shadow cursor-pointer"
+          >
+            <ShoppingBag className="w-4 h-4" />
+            {pinnedProductId && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white" />
+            )}
+          </button>
+
           <input
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Sapa penonton Anda..."
-            className="flex-1 bg-black/60 backdrop-blur-md text-white placeholder-white/60 text-xs px-4 py-2.5 rounded-full border border-white/20 focus:outline-none"
+            placeholder="Sapa penonton atau balas komentar..."
+            className="flex-1 bg-black/60 backdrop-blur-md text-white placeholder-white/70 text-xs px-4 py-2.5 rounded-full border border-white/25 focus:outline-none focus:border-amber-400"
           />
           <button
             type="submit"
-            className="p-2.5 rounded-full bg-amber-500 text-white cursor-pointer"
+            className="p-2.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white shrink-0 cursor-pointer"
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
       </div>
 
-      {/* Panel Kontrol Etalase Produk, Daftar Penonton & Chat (Sidebar) */}
-      <div className="w-full lg:w-96 bg-white flex flex-col max-h-[45vh] lg:max-h-full border-t lg:border-t-0 lg:border-l border-gray-200">
-        {/* Bar Penonton Aktif Real-time */}
-        <div className="px-4 py-2.5 bg-amber-50/80 border-b border-amber-100 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <Users className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="text-xs font-extrabold text-gray-900">
-              Sedang Menonton ({activeViewers.length})
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowViewersModal(true)}
-            className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer shrink-0"
+      {/* SLIDE-OVER DRAWER PRODUK DARI SAMPING KANAN (SHOW / HIDE) */}
+      {showProductDrawer && (
+        <div
+          onClick={() => setShowProductDrawer(false)}
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs flex justify-end"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-80 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
           >
-            Lihat Pembeli
-          </button>
-        </div>
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
+                <ShoppingBag className="w-4 h-4 text-amber-500" /> Sematkan Produk
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowProductDrawer(false)}
+                className="p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* Daftar Produk untuk Disematkan ke Layar Pembeli */}
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
-            <ShoppingBag className="w-4 h-4 text-amber-500" /> Sematkan Produk di Layar Pembeli
-          </h3>
-          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-            {products.map((prod) => {
-              const isPinned = pinnedProductId === prod.id;
-              const img = resolveProductImg(prod.image_url);
-              const price = formatPiPrice(prod.discount_price_pi || prod.price_pi);
-              return (
-                <div
-                  key={prod.id}
-                  className={`flex items-center justify-between gap-2 p-2 rounded-xl border text-xs ${
-                    isPinned
-                      ? 'border-amber-500 bg-amber-50/70'
-                      : 'border-gray-100 bg-gray-50/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {img && (
-                      <img
-                        src={img}
-                        alt={prod.name}
-                        className="w-10 h-10 rounded-lg object-cover shrink-0"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 truncate">{prod.name}</p>
-                      <p className="text-[11px] font-extrabold text-amber-600">π {price}</p>
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
+              {products.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-8">
+                  Belum ada produk di etalase toko Anda.
+                </p>
+              ) : (
+                products.map((prod) => {
+                  const isPinned = pinnedProductId === prod.id;
+                  const img = resolveProductImg(prod.image_url);
+                  const price = formatPiPrice(prod.discount_price_pi || prod.price_pi);
+                  return (
+                    <div
+                      key={prod.id}
+                      className={`flex items-center justify-between gap-2 p-2.5 rounded-2xl border text-xs ${
+                        isPinned
+                          ? 'border-amber-500 bg-amber-50/80'
+                          : 'border-gray-100 bg-gray-50/70'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {img && (
+                          <img
+                            src={img}
+                            alt={prod.name}
+                            className="w-11 h-11 rounded-xl object-cover shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 truncate">{prod.name}</p>
+                          <p className="text-[11px] font-extrabold text-amber-600 mt-0.5">
+                            π {price}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handlePinProduct(prod.id)}
+                        className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer ${
+                          isPinned
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-white border border-gray-200 text-gray-700 hover:bg-amber-50'
+                        }`}
+                      >
+                        <Pin className="w-3 h-3" /> {isPinned ? 'Aktif' : 'Sematkan'}
+                      </button>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handlePinProduct(prod.id)}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer ${
-                      isPinned
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-amber-50'
-                    }`}
-                  >
-                    <Pin className="w-3 h-3" /> {isPinned ? 'Disematkan' : 'Sematkan'}
-                  </button>
-                </div>
-              );
-            })}
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Live Chat Panel (Desktop) */}
-        <div className="hidden lg:flex flex-col flex-1 p-4 overflow-hidden">
-          <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider mb-2">
-            Live Chat Penonton
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-            {comments.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-8">
-                Belum ada komentar masuk...
-              </p>
-            ) : (
-              comments.map((c) => (
-                <div key={c.id} className="bg-gray-50 px-3 py-2 rounded-xl text-xs">
-                  <span className="font-bold text-purple-700">{c.sender_name}: </span>
-                  <span className="text-gray-700">{c.message}</span>
-                </div>
-              ))
-            )}
-          </div>
-          <form onSubmit={handleSendComment} className="mt-3 flex items-center gap-2">
-            <input
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Balas komentar..."
-              className="flex-1 px-3.5 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
-            <button
-              type="submit"
-              className="p-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white cursor-pointer"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* Modal Daftar Pembeli yang Sedang Menonton Live (Bisa Langsung Undang Join Live) */}
+      {/* Modal Daftar Pembeli yang Sedang Menonton Live (Undang atau Turunkan Tamu) */}
       {showViewersModal && (
         <div
           onClick={() => setShowViewersModal(false)}
@@ -970,39 +977,73 @@ export default function SellerLiveBroadcastPage() {
               </p>
             ) : (
               <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                {activeViewers.map((viewer) => (
-                  <div
-                    key={viewer.identity}
-                    className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-gray-50 border border-gray-100"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center shrink-0 uppercase">
-                        {viewer.name.slice(0, 2)}
+                {activeViewers.map((viewer) => {
+                  const isCohost = viewer.identity.startsWith('cohost-');
+                  return (
+                    <div
+                      key={viewer.identity}
+                      className={`flex items-center justify-between gap-2 p-2.5 rounded-2xl border ${
+                        isCohost
+                          ? 'bg-purple-50/80 border-purple-200'
+                          : 'bg-gray-50 border-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-full font-extrabold text-xs flex items-center justify-center shrink-0 uppercase ${
+                            isCohost
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-purple-100 text-purple-700'
+                          }`}
+                        >
+                          {viewer.name.slice(0, 2)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-gray-900 truncate">
+                            @{viewer.name}
+                          </p>
+                          {isCohost ? (
+                            <p className="text-[10px] text-purple-700 font-extrabold">
+                              ● Sedang Join Live (On-Cam)
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-emerald-600 font-semibold">
+                              ● Sedang menonton ({viewer.joinedAt})
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-900 truncate">
-                          @{viewer.name}
-                        </p>
-                        <p className="text-[10px] text-emerald-600 font-semibold">
-                          ● Sedang menonton ({viewer.joinedAt})
-                        </p>
-                      </div>
-                    </div>
 
-                    {!activeCohostViewerId && !viewer.identity.startsWith('cohost-') && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowViewersModal(false);
-                          handleRespondCoHost('approve', viewer.identity, viewer.name);
-                        }}
-                        className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold shrink-0 cursor-pointer"
-                      >
-                        Undang Live
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      {isCohost ? (
+                        <button
+                          type="button"
+                          disabled={respondingCohost}
+                          onClick={() => {
+                            setShowViewersModal(false);
+                            handleRespondCoHost('remove', activeCohostViewerId || viewer.identity);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-extrabold shrink-0 cursor-pointer"
+                        >
+                          <PhoneOff className="w-3 h-3" /> Turunkan
+                        </button>
+                      ) : (
+                        !activeCohostViewerId && (
+                          <button
+                            type="button"
+                            disabled={respondingCohost}
+                            onClick={() => {
+                              setShowViewersModal(false);
+                              handleRespondCoHost('approve', viewer.identity, viewer.name);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold shrink-0 cursor-pointer"
+                          >
+                            Undang Live
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
