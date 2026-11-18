@@ -19,11 +19,13 @@ import {
   CheckCircle2,
   Store,
   ExternalLink,
+  Radio,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface Product {
   id: number;
+  seller_id?: number;
   name: string;
   slug: string;
   description: string;
@@ -39,8 +41,18 @@ interface Product {
   reviews_count?: number;
   reviews_avg_rating?: number | string | null;
   seller?: {
+    id?: number;
     store_name: string;
   };
+}
+
+interface ActiveLiveInfo {
+  id: number;
+  seller_id: number;
+  room_name: string;
+  title: string;
+  viewer_count: number;
+  pinned_product_id?: number | null;
 }
 
 interface ReviewMedia {
@@ -77,6 +89,7 @@ export default function ProductGrid() {
   const { t } = useLanguage();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [activeLives, setActiveLives] = useState<ActiveLiveInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +128,43 @@ export default function ProductGrid() {
         setLoading(false);
       });
   }, [t]);
+
+  // Ambil daftar sesi LIVE aktif agar produk yang dipilih/disematkan langsung menampilkan badge & tombol LIVE
+  useEffect(() => {
+    const fetchActiveLives = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/live`, {
+          headers: { Accept: 'application/json' },
+        });
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.data)) {
+          setActiveLives(json.data);
+        }
+      } catch {
+        // Abaikan jika endpoint live belum aktif
+      }
+    };
+
+    fetchActiveLives();
+    const timer = setInterval(fetchActiveLives, 10000);
+    return () => clearInterval(timer);
+  }, [API_BASE_URL]);
+
+  // Cek apakah produk ini sedang dipilih/disematkan dalam siaran LIVE aktif
+  const getLiveForProduct = (product: Product): ActiveLiveInfo | undefined => {
+    const pinnedMatch = activeLives.find(
+      (live) => Number(live.pinned_product_id) === Number(product.id)
+    );
+    if (pinnedMatch) return pinnedMatch;
+
+    const sellerId = product.seller_id ?? product.seller?.id;
+    if (sellerId) {
+      return activeLives.find(
+        (live) => !live.pinned_product_id && Number(live.seller_id) === Number(sellerId)
+      );
+    }
+    return undefined;
+  };
 
   /**
    * Menampilkan seluruh digit desimal apa adanya (misal: 6.000510, 6.50000)
@@ -348,21 +398,31 @@ export default function ProductGrid() {
     );
   }
 
+  // Produk yang sedang LIVE ditampilkan paling atas
+  const sortedProducts = [...products].sort((a, b) => {
+    const aLive = getLiveForProduct(a) ? 1 : 0;
+    const bLive = getLiveForProduct(b) ? 1 : 0;
+    return bLive - aLive;
+  });
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-        {products.map((product) => {
+        {sortedProducts.map((product) => {
           const imgUrl = getFullImageUrl(product.image_url);
           const isAddingThis = addingCartId === product.id;
           const isBuyingThis = buyingId === product.id;
           const { sold, remainingStock, reviewCount, avgRating } = getProductMetrics(product);
           const { hasActivePromo, activeFormatted, originalFormatted } = getDisplayPrices(product);
           const isOutOfStock = remainingStock <= 0;
+          const liveSession = getLiveForProduct(product);
 
           return (
             <div
               key={product.id}
-              className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
+              className={`bg-white border rounded-2xl p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden ${
+                liveSession ? 'border-rose-300 ring-2 ring-rose-500/20' : 'border-gray-100'
+              }`}
             >
               <div>
                 <div className="h-44 w-full bg-gray-50 rounded-xl overflow-hidden mb-3 relative flex items-center justify-center border border-gray-100">
@@ -381,6 +441,17 @@ export default function ProductGrid() {
                     <Package className="w-8 h-8 mb-1 opacity-50" />
                     <span className="text-[10px] text-gray-400">{t('noImage')}</span>
                   </div>
+
+                  {/* Badge LIVE Publik langsung di kartu produk yang dipilih penjual */}
+                  {liveSession && (
+                    <Link
+                      href={`/live/${liveSession.room_name}`}
+                      className="absolute top-2 left-2 z-20 inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-md animate-pulse"
+                    >
+                      <Radio className="w-3 h-3" />
+                      <span>LIVE • {liveSession.viewer_count}</span>
+                    </Link>
+                  )}
 
                   {isOutOfStock && (
                     <div className="absolute inset-0 z-20 bg-black/50 flex items-center justify-center">
@@ -464,6 +535,17 @@ export default function ProductGrid() {
                     </span>
                   )}
                 </div>
+
+                {/* Tombol Tonton Live langsung muncul pada produk yang sedang dipilih penjual */}
+                {liveSession && (
+                  <Link
+                    href={`/live/${liveSession.room_name}`}
+                    className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-xs transition"
+                  >
+                    <Radio className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Tonton Live Sekarang</span>
+                  </Link>
+                )}
 
                 <div className="flex items-center justify-between gap-1.5 pt-1">
                   <button
