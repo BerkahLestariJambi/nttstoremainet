@@ -51,7 +51,6 @@ export default function ReviewModal({
 
   if (!isOpen) return null;
 
-  // Memindai seluruh localStorage, sessionStorage, & cookie untuk token Sanctum / Pi
   const getAuthToken = (): string | null => {
     if (typeof window === 'undefined') return null;
 
@@ -63,12 +62,10 @@ export default function ReviewModal({
         const val = store.getItem(key);
         if (!val) continue;
 
-        // Pola token Sanctum (misal: "15|aBcDeFg...") atau JWT ("eyJ...")
         if (/^\d+\|[A-Za-z0-9]{20,}$/.test(val.trim()) || val.trim().startsWith('eyJ')) {
           return val.replace(/^Bearer\s+/i, '').trim();
         }
 
-        // Jika tersimpan sebagai JSON object (user / auth / pi_auth)
         if (val.trim().startsWith('{')) {
           try {
             const parsed = JSON.parse(val);
@@ -89,7 +86,6 @@ export default function ReviewModal({
       }
     }
 
-    // Fallback cek cookie
     if (typeof document !== 'undefined' && document.cookie) {
       const match = document.cookie.match(
         /(?:^|;\s*)(?:token|auth_token|access_token|pi_token)=([^;]+)/
@@ -102,7 +98,6 @@ export default function ReviewModal({
     return null;
   };
 
-  // Mengambil pi_uid & username dari storage sebagai fallback sesi Pi
   const getPiUserMeta = (): { pi_uid?: string; username?: string } => {
     if (typeof window === 'undefined') return {};
     const meta: { pi_uid?: string; username?: string } = {};
@@ -354,48 +349,62 @@ export default function ReviewModal({
               />
             </label>
 
-            {/* Preview Foto & Video Terpilih */}
+            {/* Preview Foto & Video Terpilih (Video melebar penuh dengan tombol play) */}
             {mediaFiles.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2.5">
-                {mediaFiles.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-black"
-                  >
-                    {item.type === 'video' ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mt-2.5">
+                {mediaFiles.map((item, idx) =>
+                  item.type === 'video' ? (
+                    <div
+                      key={idx}
+                      className="col-span-full relative aspect-video rounded-2xl overflow-hidden border border-gray-200 bg-black"
+                    >
                       <video
                         src={item.previewUrl}
-                        className="w-full h-full object-cover opacity-90"
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="w-full h-full object-contain bg-black"
                       />
-                    ) : (
+
+                      <span className="absolute top-2 left-2 bg-black/75 text-white text-[10px] font-semibold px-2 py-0.5 rounded-md flex items-center gap-1 pointer-events-none">
+                        <Film className="w-3 h-3" /> Video
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => removeMedia(idx)}
+                        className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full shadow hover:bg-red-700 cursor-pointer"
+                        title="Hapus video"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      key={idx}
+                      className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-100"
+                    >
                       <img
                         src={item.previewUrl}
                         alt={`Preview ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                    )}
 
-                    <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                      {item.type === 'video' ? (
-                        <>
-                          <Film className="w-2.5 h-2.5" /> Video
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="w-2.5 h-2.5" /> Foto
-                        </>
-                      )}
-                    </span>
+                      <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <ImageIcon className="w-2.5 h-2.5" /> Foto
+                      </span>
 
-                    <button
-                      type="button"
-                      onClick={() => removeMedia(idx)}
-                      className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                      <button
+                        type="button"
+                        onClick={() => removeMedia(idx)}
+                        className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 cursor-pointer"
+                        title="Hapus foto"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>
