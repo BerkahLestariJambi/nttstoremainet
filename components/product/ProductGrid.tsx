@@ -15,6 +15,10 @@ import {
   Minus,
   X,
   Star,
+  MessageSquare,
+  CheckCircle2,
+  Store,
+  ExternalLink,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -39,6 +43,34 @@ interface Product {
   };
 }
 
+interface ReviewMedia {
+  type: 'image' | 'video';
+  url: string;
+}
+
+interface ProductReviewItem {
+  id: number;
+  rating: number;
+  comment: string | null;
+  media?: ReviewMedia[];
+  seller_reply?: string | null;
+  created_at: string;
+  user?: {
+    name?: string;
+    username?: string;
+  };
+  replies?: {
+    id: number;
+    comment: string;
+    is_seller: boolean;
+    created_at: string;
+    user?: {
+      name?: string;
+      username?: string;
+    };
+  }[];
+}
+
 export default function ProductGrid() {
   const router = useRouter();
   const { addToCart: addToLocalCart } = useCart();
@@ -54,6 +86,15 @@ export default function ProductGrid() {
   // State untuk modal pilih jumlah saat klik ikon keranjang
   const [selectedProductForCart, setSelectedProductForCart] = useState<Product | null>(null);
   const [customQty, setCustomQty] = useState<number>(1);
+
+  // State untuk modal lihat ulasan langsung saat klik bintang/jumlah ulasan
+  const [reviewModalProduct, setReviewModalProduct] = useState<Product | null>(null);
+  const [reviewsList, setReviewsList] = useState<ProductReviewItem[]>([]);
+  const [reviewsStats, setReviewsStats] = useState<{ avg: number; total: number }>({
+    avg: 0,
+    total: 0,
+  });
+  const [loadingReviews, setLoadingReviews] = useState<boolean>(false);
 
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
@@ -93,6 +134,14 @@ export default function ProductGrid() {
     return `${DOMAIN_BASE_URL}/public/products/${fileName}`;
   };
 
+  const getReviewMediaUrl = (url?: string | null) => {
+    if (!url || typeof url !== 'string') return '';
+    const clean = url.trim().replace(/\\/g, '/');
+    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+    const normalized = clean.startsWith('/') ? clean : `/${clean}`;
+    return `${DOMAIN_BASE_URL}${normalized.startsWith('/public/') ? normalized : `/public${normalized}`}`;
+  };
+
   // Helper menghitung sisa stok, jumlah terjual, & rating ulasan
   const getProductMetrics = (product: Product) => {
     const sold = Number(product.sold_count ?? product.sold ?? 0);
@@ -113,6 +162,33 @@ export default function ProductGrid() {
       reviewCount,
       avgRating,
     };
+  };
+
+  // Buka popup ulasan langsung dari kartu produk
+  const handleOpenReviewsModal = async (product: Product) => {
+    const { avgRating, reviewCount } = getProductMetrics(product);
+    setReviewModalProduct(product);
+    setReviewsStats({ avg: avgRating, total: reviewCount });
+    setReviewsList([]);
+    setLoadingReviews(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/products/${product.id}/reviews`, {
+        headers: { Accept: 'application/json' },
+      });
+      const json = await res.json();
+      if (json?.success && json?.data) {
+        setReviewsList(Array.isArray(json.data.reviews) ? json.data.reviews : []);
+        setReviewsStats({
+          avg: Number(json.data.average_rating ?? avgRating),
+          total: Number(json.data.total_reviews ?? reviewCount),
+        });
+      }
+    } catch (err) {
+      console.error('Gagal memuat ulasan produk:', err);
+    } finally {
+      setLoadingReviews(false);
+    }
   };
 
   // Buka popup pemilih jumlah (default 1) saat ikon keranjang diklik
@@ -283,8 +359,13 @@ export default function ProductGrid() {
                   {product.description}
                 </p>
 
-                {/* Baris Rating Bintang & Jumlah Ulasan */}
-                <div className="flex items-center gap-1.5 mt-2">
+                {/* Tombol Klik Langsung Rating Bintang & Jumlah Ulasan */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenReviewsModal(product)}
+                  title="Klik untuk melihat ulasan pembeli"
+                  className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 -ml-2 rounded-lg hover:bg-amber-50/80 transition cursor-pointer group"
+                >
                   <div className="flex items-center gap-0.5">
                     {[1, 2, 3, 4, 5].map((star) => {
                       const filled = reviewCount > 0 && Math.round(avgRating) >= star;
@@ -303,13 +384,13 @@ export default function ProductGrid() {
                   <span className="text-[11px] font-bold text-gray-700">
                     {reviewCount > 0 ? avgRating.toFixed(1) : '0.0'}
                   </span>
-                  <span className="text-[11px] text-gray-400">
+                  <span className="text-[11px] text-amber-700 font-semibold underline decoration-amber-300 group-hover:text-amber-800">
                     ({reviewCount} ulasan)
                   </span>
-                </div>
+                </button>
 
                 {/* Baris Sisa Stock & Terjual (Sold) */}
-                <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-dashed border-gray-100">
+                <div className="flex items-center justify-between text-[11px] mt-1.5 pt-2 border-t border-dashed border-gray-100">
                   <span
                     className={`font-semibold ${
                       isOutOfStock
@@ -383,6 +464,193 @@ export default function ProductGrid() {
           );
         })}
       </div>
+
+      {/* Modal Lihat Ulasan Langsung dari Kartu Produk */}
+      {reviewModalProduct && (
+        <div
+          onClick={() => setReviewModalProduct(null)}
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-center justify-center p-4 pb-20 sm:pb-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full max-h-[82vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden"
+          >
+            {/* Header Modal Ulasan */}
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {getFullImageUrl(reviewModalProduct.image_url) && (
+                  <img
+                    src={getFullImageUrl(reviewModalProduct.image_url)}
+                    alt={reviewModalProduct.name}
+                    className="w-11 h-11 rounded-xl object-cover border border-gray-100 shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <h4 className="text-sm font-extrabold text-gray-900 truncate">
+                    Ulasan: {reviewModalProduct.name}
+                  </h4>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span className="text-xs font-bold text-gray-800">
+                      {reviewsStats.total > 0 ? reviewsStats.avg.toFixed(1) : '0.0'}
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      • {reviewsStats.total} ulasan pembeli
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewModalProduct(null)}
+                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Isi Daftar Ulasan */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
+              {loadingReviews ? (
+                <div className="py-10 flex flex-col items-center justify-center text-gray-400 gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+                  <span className="text-xs">Memuat ulasan pembeli...</span>
+                </div>
+              ) : reviewsList.length === 0 ? (
+                <div className="py-10 text-center space-y-2">
+                  <MessageSquare className="w-10 h-10 text-gray-200 mx-auto" />
+                  <p className="text-xs font-semibold text-gray-600">
+                    Belum ada ulasan untuk produk ini.
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Jadilah pembeli pertama yang memberikan ulasan setelah bertransaksi!
+                  </p>
+                </div>
+              ) : (
+                reviewsList.map((rev) => {
+                  const reviewerName = rev.user?.name || rev.user?.username || 'Pembeli Pi';
+                  return (
+                    <div
+                      key={rev.id}
+                      className="p-3.5 rounded-2xl bg-gray-50/80 border border-gray-100 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-gray-900">{reviewerName}</span>
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Terverifikasi
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(rev.created_at).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`w-3.5 h-3.5 ${
+                              rev.rating >= s
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-gray-200 fill-gray-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      {rev.comment && (
+                        <p className="text-xs text-gray-700 leading-relaxed">{rev.comment}</p>
+                      )}
+
+                      {/* Foto / Video Bukti Ulasan */}
+                      {Array.isArray(rev.media) && rev.media.length > 0 && (
+                        <div className="flex items-center gap-2 overflow-x-auto pt-1">
+                          {rev.media.map((m, idx) => {
+                            const mediaSrc = getReviewMediaUrl(m.url);
+                            return m.type === 'video' ? (
+                              <video
+                                key={idx}
+                                src={mediaSrc}
+                                controls
+                                className="w-20 h-20 rounded-xl object-cover border border-gray-200 bg-black shrink-0"
+                              />
+                            ) : (
+                              <a
+                                key={idx}
+                                href={mediaSrc}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shrink-0"
+                              >
+                                <img
+                                  src={mediaSrc}
+                                  alt="Bukti ulasan"
+                                  className="w-20 h-20 rounded-xl object-cover border border-gray-200"
+                                />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Balasan Penjual jika ada */}
+                      {(rev.seller_reply || (rev.replies && rev.replies.length > 0)) && (
+                        <div className="mt-2 pl-2.5 border-l-2 border-purple-300 space-y-1.5">
+                          {rev.replies && rev.replies.length > 0 ? (
+                            rev.replies.map((rep) => (
+                              <div
+                                key={rep.id}
+                                className="p-2 rounded-xl bg-purple-50/70 border border-purple-100 text-[11px]"
+                              >
+                                <span className="font-bold text-purple-900 inline-flex items-center gap-1">
+                                  {rep.is_seller && <Store className="w-3 h-3" />}
+                                  {rep.user?.name || rep.user?.username || 'Penjual'}:
+                                </span>{' '}
+                                <span className="text-gray-700">{rep.comment}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-2 rounded-xl bg-purple-50/70 border border-purple-100 text-[11px]">
+                              <span className="font-bold text-purple-900 inline-flex items-center gap-1">
+                                <Store className="w-3 h-3" /> Respon Penjual:
+                              </span>{' '}
+                              <span className="text-gray-700">{rev.seller_reply}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Modal Ulasan */}
+            <div className="p-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setReviewModalProduct(null)}
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold cursor-pointer"
+              >
+                Tutup
+              </button>
+              <Link
+                href={`/products/${reviewModalProduct.slug}#reviews`}
+                onClick={() => setReviewModalProduct(null)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-xs transition"
+              >
+                <span>Buka Halaman Produk</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Pilih Jumlah Produk Saat Klik Ikon Keranjang */}
       {selectedProductForCart && (() => {
