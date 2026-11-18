@@ -246,6 +246,7 @@ export default function SellerLiveBroadcastPage() {
     setActiveViewers([]);
     setCohostVideoTrack(null);
     setCohostName('');
+    setActiveCohostViewerId('');
   };
 
   const handleStartLive = async (e: React.FormEvent) => {
@@ -311,6 +312,15 @@ export default function SellerLiveBroadcastPage() {
           if (cohostAudioContainerRef.current) {
             cohostAudioContainerRef.current.innerHTML = '';
           }
+          // Bersihkan cache di backend secara otomatis jika tamu tiba-tiba keluar / tutup browser
+          fetch(`${API_BASE_URL}/live/${id}/cohost/leave`, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ identity: participant.identity }),
+          }).catch(() => {});
         }
       });
 
@@ -394,11 +404,14 @@ export default function SellerLiveBroadcastPage() {
           setCohostRequest(json.cohost_request || null);
 
           if (json.cohost_active) {
-            setActiveCohostViewerId(json.cohost_active.viewer_identity || '');
+            setActiveCohostViewerId(
+              json.cohost_active.viewer_identity || json.cohost_active.identity || ''
+            );
             setCohostName(json.cohost_active.name || 'Tamu Live');
           } else {
             setActiveCohostViewerId('');
             setCohostVideoTrack(null);
+            setCohostName('');
           }
         }
       } catch {}
@@ -450,6 +463,9 @@ export default function SellerLiveBroadcastPage() {
         setActiveCohostViewerId('');
         setCohostVideoTrack(null);
         setCohostName('');
+        if (cohostAudioContainerRef.current) {
+          cohostAudioContainerRef.current.innerHTML = '';
+        }
       }
     } catch (err) {
       console.error('Gagal merespons Join Live:', err);
@@ -687,7 +703,7 @@ export default function SellerLiveBroadcastPage() {
             />
           </div>
 
-          {/* Kamera Tamu Join Live */}
+          {/* Kamera Tamu Join Live (Bersih tanpa tombol bertumpuk di bawah) */}
           {cohostVideoTrack && (
             <div className="relative w-full h-full overflow-hidden border-t-2 border-amber-400">
               <video
