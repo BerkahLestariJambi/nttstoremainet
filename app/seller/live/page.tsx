@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Room,
+  RoomEvent,
   createLocalTracks,
   LocalVideoTrack,
   LocalAudioTrack,
@@ -23,6 +24,7 @@ import {
   Loader2,
   ShoppingBag,
   ArrowLeft,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
@@ -45,6 +47,12 @@ interface LiveComment {
   message: string;
 }
 
+interface ActiveViewer {
+  identity: string;
+  name: string;
+  joinedAt: string;
+}
+
 export default function SellerLiveBroadcastPage() {
   const router = useRouter();
 
@@ -61,10 +69,13 @@ export default function SellerLiveBroadcastPage() {
   const [isLive, setIsLive] = useState<boolean>(false);
   const [starting, setStarting] = useState<boolean>(false);
   const [streamId, setStreamId] = useState<number | null>(null);
-  const [viewerCount, setViewerCount] = useState<number>(1);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [camEnabled, setCamEnabled] = useState<boolean>(true);
   const [micEnabled, setMicEnabled] = useState<boolean>(true);
+
+  // Daftar Penonton Aktif Real-time dari LiveKit
+  const [activeViewers, setActiveViewers] = useState<ActiveViewer[]>([]);
+  const [showViewersModal, setShowViewersModal] = useState<boolean>(false);
 
   // Chat komentar
   const [comments, setComments] = useState<LiveComment[]>([]);
@@ -127,6 +138,30 @@ export default function SellerLiveBroadcastPage() {
     return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
   };
 
+  // Sinkronkan daftar pembeli yang sedang menonton secara real-time dari LiveKit
+  const syncActiveViewers = (room: Room) => {
+    const nowTime = new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    setActiveViewers((prev) => {
+      const prevMap = new Map(prev.map((v) => [v.identity, v]));
+      const list: ActiveViewer[] = [];
+
+      room.remoteParticipants.forEach((participant) => {
+        const existing = prevMap.get(participant.identity);
+        list.push({
+          identity: participant.identity,
+          name: participant.name || participant.identity || 'Pembeli Pi',
+          joinedAt: existing?.joinedAt || nowTime,
+        });
+      });
+
+      return list;
+    });
+  };
+
   // Muat produk milik seller untuk etalase live
   useEffect(() => {
     productService
@@ -159,6 +194,7 @@ export default function SellerLiveBroadcastPage() {
       roomRef.current.disconnect();
       roomRef.current = null;
     }
+    setActiveViewers([]);
   };
 
   // Mulai Live Streaming
@@ -217,7 +253,13 @@ export default function SellerLiveBroadcastPage() {
       });
       roomRef.current = room;
 
+      // Pantau pembeli yang bergabung & keluar secara real-time
+      room.on(RoomEvent.ParticipantConnected, () => syncActiveViewers(room));
+      room.on(RoomEvent.ParticipantDisconnected, () => syncActiveViewers(room));
+
       await room.connect(ws_url, lkToken);
+      syncActiveViewers(room);
+
       if (vTrack) await room.localParticipant.publishTrack(vTrack);
       if (aTrack) await room.localParticipant.publishTrack(aTrack);
 
@@ -242,7 +284,7 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Polling komentar & jumlah penonton saat sedang LIVE
+  // Polling komentar saat sedang LIVE
   useEffect(() => {
     if (!isLive || !streamId) return;
 
@@ -253,12 +295,20 @@ export default function SellerLiveBroadcastPage() {
           { headers: { Accept: 'application/json' } }
         );
         const json = await res.json();
-        if (json?.success) {
-          setViewerCount(Number(json.viewer_count ?? 1));
-          if (Array.isArray(json.comments) && json.comments.length > 0) {
-            setComments((prev) => [...prev, ...json.comments].slice(-50));
-            lastCommentIdRef.current = json.comments[json.comments.length - 1].id;
-          }
+        if (json?.success && Array.isArray(json.comments) && json.comments.length > 0) {
+          setComments((prev) => {
+            const merged = [...prev];
+            for (const item of json.comments) {
+              if (!merged.some((c) => c.id === item.id)) {
+                merged.push(item);
+              }
+            }
+            return merged.slice(-50);
+          });
+          lastCommentIdRef.current = Math.max(
+            lastCommentIdRef.current,
+            Number(json.comments[json.comments.length - 1].id)
+          );
         }
       } catch {}
     };
@@ -344,7 +394,7 @@ export default function SellerLiveBroadcastPage() {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      await fetch(`${API_BASE_URL}/live/${streamId}/comments`, {
+      const res = await fetch(`${API_BASE_URL}/live/${streamId}/comments`, {
         method: 'POST',
         headers,
         credentials: 'include',
@@ -353,6 +403,15 @@ export default function SellerLiveBroadcastPage() {
           message: text,
         }),
       });
+
+      const json = await res.json();
+      if (json?.success && json?.data) {
+        setComments((prev) => {
+          if (prev.some((c) => c.id === json.data.id)) return prev;
+          return [...prev, json.data].slice(-50);
+        });
+        lastCommentIdRef.current = Math.max(lastCommentIdRef.current, Number(json.data.id));
+      }
     } catch {}
   };
 
@@ -467,7 +526,7 @@ export default function SellerLiveBroadcastPage() {
 
   // TAMPILAN STUDIO LIVE PENJUAL (LAYAR PENUH)
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col lg:flex-row">
+    <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex flex-col lg:flex-row">
       {/* Layar Kamera Penyiar */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
         <video
@@ -478,16 +537,23 @@ export default function SellerLiveBroadcastPage() {
           className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
         />
 
-        {/* Bar Atas Status Live */}
+        {/* Bar Atas Status Live & Tombol Lihat Penonton */}
         <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 z-20">
-          <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white">
+          <div className="flex items-center gap-2 bg-black/65 backdrop-blur-md px-3 py-1.5 rounded-full text-white">
             <span className="inline-flex items-center gap-1 bg-red-600 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
               <Radio className="w-3 h-3" /> LIVE
             </span>
-            <span className="text-xs font-bold truncate max-w-[160px] sm:max-w-xs">{title}</span>
-            <span className="inline-flex items-center gap-1 text-[11px] text-amber-300 font-bold pl-1 border-l border-white/20">
-              <Users className="w-3.5 h-3.5" /> {viewerCount}
-            </span>
+            <span className="text-xs font-bold truncate max-w-[130px] sm:max-w-xs">{title}</span>
+            <button
+              type="button"
+              onClick={() => setShowViewersModal(true)}
+              title="Lihat daftar pembeli yang sedang menonton"
+              className="inline-flex items-center gap-1 text-[11px] text-amber-300 hover:text-amber-200 font-extrabold pl-2 border-l border-white/20 cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>{activeViewers.length}</span>
+              <Eye className="w-3 h-3 ml-0.5 opacity-85" />
+            </button>
           </div>
 
           <button
@@ -565,14 +631,31 @@ export default function SellerLiveBroadcastPage() {
         </form>
       </div>
 
-      {/* Panel Kontrol Etalase Produk & Chat (Sidebar) */}
-      <div className="w-full lg:w-96 bg-white flex flex-col max-h-[42vh] lg:max-h-full border-t lg:border-t-0 lg:border-l border-gray-200">
+      {/* Panel Kontrol Etalase Produk, Daftar Penonton & Chat (Sidebar) */}
+      <div className="w-full lg:w-96 bg-white flex flex-col max-h-[45vh] lg:max-h-full border-t lg:border-t-0 lg:border-l border-gray-200">
+        {/* Bar Penonton Aktif Real-time */}
+        <div className="px-4 py-2.5 bg-amber-50/80 border-b border-amber-100 flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0">
+            <Users className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-xs font-extrabold text-gray-900">
+              Sedang Menonton ({activeViewers.length})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowViewersModal(true)}
+            className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer shrink-0"
+          >
+            Lihat Pembeli
+          </button>
+        </div>
+
         {/* Daftar Produk untuk Disematkan ke Layar Pembeli */}
         <div className="p-4 border-b border-gray-100">
           <h3 className="text-xs font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
             <ShoppingBag className="w-4 h-4 text-amber-500" /> Sematkan Produk di Layar Pembeli
           </h3>
-          <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
             {products.map((prod) => {
               const isPinned = pinnedProductId === prod.id;
               const img = resolveProductImg(prod.image_url);
@@ -652,6 +735,64 @@ export default function SellerLiveBroadcastPage() {
           </form>
         </div>
       </div>
+
+      {/* Modal Daftar Pembeli yang Sedang Menonton Live */}
+      {showViewersModal && (
+        <div
+          onClick={() => setShowViewersModal(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-gray-100 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-rose-600" />
+                <h3 className="text-sm font-extrabold text-gray-900">
+                  Pembeli Menonton ({activeViewers.length})
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowViewersModal(false)}
+                className="p-1.5 rounded-full bg-gray-100 text-gray-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {activeViewers.length === 0 ? (
+              <p className="text-xs text-gray-500 text-center py-6">
+                Belum ada pembeli yang bergabung di siaran ini.
+              </p>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                {activeViewers.map((viewer) => (
+                  <div
+                    key={viewer.identity}
+                    className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-gray-50 border border-gray-100"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center shrink-0 uppercase">
+                        {viewer.name.slice(0, 2)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          @{viewer.name}
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-semibold">
+                          ● Sedang menonton ({viewer.joinedAt})
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
