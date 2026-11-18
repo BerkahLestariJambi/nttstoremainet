@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import {
   Room,
   RoomEvent,
+  Track,
+  RemoteVideoTrack,
   createLocalTracks,
   LocalVideoTrack,
   LocalAudioTrack,
@@ -25,6 +27,9 @@ import {
   ShoppingBag,
   ArrowLeft,
   Eye,
+  UserPlus,
+  Check,
+  PhoneOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
@@ -53,6 +58,11 @@ interface ActiveViewer {
   joinedAt: string;
 }
 
+interface CoHostRequest {
+  identity: string;
+  name: string;
+}
+
 export default function SellerLiveBroadcastPage() {
   const router = useRouter();
 
@@ -73,9 +83,16 @@ export default function SellerLiveBroadcastPage() {
   const [camEnabled, setCamEnabled] = useState<boolean>(true);
   const [micEnabled, setMicEnabled] = useState<boolean>(true);
 
-  // Daftar Penonton Aktif Real-time dari LiveKit
+  // Daftar Penonton Aktif Real-time
   const [activeViewers, setActiveViewers] = useState<ActiveViewer[]>([]);
   const [showViewersModal, setShowViewersModal] = useState<boolean>(false);
+
+  // State Co-Host (Join Live)
+  const [cohostRequest, setCohostRequest] = useState<CoHostRequest | null>(null);
+  const [cohostVideoTrack, setCohostVideoTrack] = useState<RemoteVideoTrack | null>(null);
+  const [cohostName, setCohostName] = useState<string>('');
+  const [activeCohostViewerId, setActiveCohostViewerId] = useState<string>('');
+  const [respondingCohost, setRespondingCohost] = useState<boolean>(false);
 
   // Chat komentar
   const [comments, setComments] = useState<LiveComment[]>([]);
@@ -84,6 +101,8 @@ export default function SellerLiveBroadcastPage() {
 
   // Refs LiveKit
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cohostVideoRef = useRef<HTMLVideoElement | null>(null);
+  const cohostAudioContainerRef = useRef<HTMLDivElement | null>(null);
   const roomRef = useRef<Room | null>(null);
   const videoTrackRef = useRef<LocalVideoTrack | null>(null);
   const audioTrackRef = useRef<LocalAudioTrack | null>(null);
@@ -138,7 +157,6 @@ export default function SellerLiveBroadcastPage() {
     return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
   };
 
-  // Sinkronkan daftar pembeli yang sedang menonton secara real-time dari LiveKit
   const syncActiveViewers = (room: Room) => {
     const nowTime = new Date().toLocaleTimeString('id-ID', {
       hour: '2-digit',
@@ -162,7 +180,32 @@ export default function SellerLiveBroadcastPage() {
     });
   };
 
-  // Muat produk milik seller untuk etalase live
+  // Pasang ulang video kamera penjual saat layout berubah (solo vs split-screen)
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    const vTrack = videoTrackRef.current;
+    if (!videoEl || !vTrack || !isLive) return;
+
+    vTrack.attach(videoEl);
+    return () => {
+      vTrack.detach(videoEl);
+    };
+  }, [isLive, cohostVideoTrack]);
+
+  // Pasang video tamu Join Live ke layar bawah
+  useEffect(() => {
+    const videoEl = cohostVideoRef.current;
+    if (!videoEl || !cohostVideoTrack) return;
+
+    cohostVideoTrack.attach(videoEl);
+    videoEl.muted = true;
+    videoEl.play().catch(() => {});
+
+    return () => {
+      cohostVideoTrack.detach(videoEl);
+    };
+  }, [cohostVideoTrack]);
+
   useEffect(() => {
     productService
       .getSellerProducts()
@@ -195,9 +238,10 @@ export default function SellerLiveBroadcastPage() {
       roomRef.current = null;
     }
     setActiveViewers([]);
+    setCohostVideoTrack(null);
+    setCohostName('');
   };
 
-  // Mulai Live Streaming
   const handleStartLive = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
@@ -231,7 +275,6 @@ export default function SellerLiveBroadcastPage() {
 
       const { id, ws_url, token: lkToken } = json.data;
 
-      // Buat track kamera & mikrofon lokal
       const tracks = await createLocalTracks({
         audio: true,
         video: {
@@ -246,16 +289,47 @@ export default function SellerLiveBroadcastPage() {
       videoTrackRef.current = vTrack;
       audioTrackRef.current = aTrack;
 
-      // Hubungkan ke LiveKit Cloud
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
       });
       roomRef.current = room;
 
-      // Pantau pembeli yang bergabung & keluar secara real-time
       room.on(RoomEvent.ParticipantConnected, () => syncActiveViewers(room));
-      room.on(RoomEvent.ParticipantDisconnected, () => syncActiveViewers(room));
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        syncActiveViewers(room);
+        if (participant.identity.startsWith('cohost-')) {
+          setCohostVideoTrack(null);
+          setCohostName('');
+          setActiveCohostViewerId('');
+          if (cohostAudioContainerRef.current) {
+            cohostAudioContainerRef.current.innerHTML = '';
+          }
+        }
+      });
+
+      // Terima video & suara tamu saat Join Live aktif
+      room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+        if (track.kind === Track.Kind.Video) {
+          setCohostVideoTrack(track as RemoteVideoTrack);
+          setCohostName(participant.name || 'Tamu Live');
+        } else if (track.kind === Track.Kind.Audio && cohostAudioContainerRef.current) {
+          cohostAudioContainerRef.current.innerHTML = '';
+          const audioEl = track.attach() as HTMLAudioElement;
+          audioEl.autoplay = true;
+          audioEl.volume = 1.0;
+          cohostAudioContainerRef.current.appendChild(audioEl);
+          audioEl.play().catch(() => {});
+        }
+      });
+
+      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        if (track.kind === Track.Kind.Video) {
+          setCohostVideoTrack(null);
+          setCohostName('');
+        }
+        track.detach();
+      });
 
       await room.connect(ws_url, lkToken);
       syncActiveViewers(room);
@@ -266,7 +340,6 @@ export default function SellerLiveBroadcastPage() {
       setStreamId(id);
       setIsLive(true);
 
-      // Tempelkan kamera ke elemen <video>
       setTimeout(() => {
         if (videoRef.current && vTrack) {
           vTrack.attach(videoRef.current);
@@ -284,7 +357,7 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Polling komentar saat sedang LIVE
+  // Polling komentar & permintaan Join Live dari pembeli
   useEffect(() => {
     if (!isLive || !streamId) return;
 
@@ -295,20 +368,32 @@ export default function SellerLiveBroadcastPage() {
           { headers: { Accept: 'application/json' } }
         );
         const json = await res.json();
-        if (json?.success && Array.isArray(json.comments) && json.comments.length > 0) {
-          setComments((prev) => {
-            const merged = [...prev];
-            for (const item of json.comments) {
-              if (!merged.some((c) => c.id === item.id)) {
-                merged.push(item);
+        if (json?.success) {
+          if (Array.isArray(json.comments) && json.comments.length > 0) {
+            setComments((prev) => {
+              const merged = [...prev];
+              for (const item of json.comments) {
+                if (!merged.some((c) => c.id === item.id)) {
+                  merged.push(item);
+                }
               }
-            }
-            return merged.slice(-50);
-          });
-          lastCommentIdRef.current = Math.max(
-            lastCommentIdRef.current,
-            Number(json.comments[json.comments.length - 1].id)
-          );
+              return merged.slice(-50);
+            });
+            lastCommentIdRef.current = Math.max(
+              lastCommentIdRef.current,
+              Number(json.comments[json.comments.length - 1].id)
+            );
+          }
+
+          setCohostRequest(json.cohost_request || null);
+
+          if (json.cohost_active) {
+            setActiveCohostViewerId(json.cohost_active.viewer_identity || '');
+            setCohostName(json.cohost_active.name || 'Tamu Live');
+          } else {
+            setActiveCohostViewerId('');
+            setCohostVideoTrack(null);
+          }
         }
       } catch {}
     };
@@ -318,7 +403,51 @@ export default function SellerLiveBroadcastPage() {
     return () => clearInterval(timer);
   }, [isLive, streamId]);
 
-  // Toggle Kamera
+  // Penjual menyetujui / menolak / menurunkan Tamu Join Live
+  const handleRespondCoHost = async (
+    action: 'approve' | 'reject' | 'remove',
+    targetIdentity: string,
+    targetName?: string
+  ) => {
+    if (!streamId || respondingCohost) return;
+    setRespondingCohost(true);
+
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch(`${API_BASE_URL}/live/${streamId}/cohost/respond`, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          action,
+          identity: targetIdentity,
+          name: targetName || 'Tamu Live',
+        }),
+      });
+
+      if (action === 'approve') {
+        setCohostRequest(null);
+        setActiveCohostViewerId(targetIdentity);
+        setCohostName(targetName || 'Tamu Live');
+      } else {
+        setCohostRequest(null);
+        setActiveCohostViewerId('');
+        setCohostVideoTrack(null);
+        setCohostName('');
+      }
+    } catch (err) {
+      console.error('Gagal merespons Join Live:', err);
+    } finally {
+      setRespondingCohost(false);
+    }
+  };
+
   const toggleCamera = async () => {
     if (!videoTrackRef.current) return;
     if (camEnabled) {
@@ -330,7 +459,6 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Toggle Mikrofon
   const toggleMic = async () => {
     if (!audioTrackRef.current) return;
     if (micEnabled) {
@@ -342,7 +470,6 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Ganti Kamera Depan / Belakang
   const handleSwitchCamera = async () => {
     if (!videoTrackRef.current) return;
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
@@ -354,7 +481,6 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Sematkan Produk di Layar Penonton
   const handlePinProduct = async (productId: number) => {
     setPinnedProductId(productId);
     if (!streamId) return;
@@ -378,7 +504,6 @@ export default function SellerLiveBroadcastPage() {
     }
   };
 
-  // Kirim Komentar dari Penjual
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!streamId || !chatInput.trim()) return;
@@ -415,7 +540,6 @@ export default function SellerLiveBroadcastPage() {
     } catch {}
   };
 
-  // Akhiri Siaran Langsung (tanpa menyimpan rekaman)
   const handleEndLive = async () => {
     const confirm = await Swal.fire({
       title: 'Akhiri Siaran Langsung?',
@@ -449,7 +573,6 @@ export default function SellerLiveBroadcastPage() {
     router.push('/seller');
   };
 
-  // TAMPILAN PERSIAPAN SEBELUM LIVE
   if (!isLive) {
     return (
       <div className="max-w-xl mx-auto py-8 px-4">
@@ -468,7 +591,7 @@ export default function SellerLiveBroadcastPage() {
             <div>
               <h1 className="text-xl font-black text-gray-900">Mulai Live Shopping</h1>
               <p className="text-xs text-gray-500">
-                Siaran langsung real-time tanpa rekaman. Pembeli bisa langsung checkout saat Anda live.
+                Siaran langsung real-time tanpa rekaman. Pembeli bisa langsung checkout & Join Live.
               </p>
             </div>
           </div>
@@ -524,18 +647,57 @@ export default function SellerLiveBroadcastPage() {
     );
   }
 
-  // TAMPILAN STUDIO LIVE PENJUAL (LAYAR PENUH)
   return (
     <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex flex-col lg:flex-row">
-      {/* Layar Kamera Penyiar */}
+      {/* Container audio tamu Join Live */}
+      <div
+        ref={cohostAudioContainerRef}
+        className="fixed bottom-0 left-0 w-0 h-0 overflow-hidden pointer-events-none"
+      />
+
+      {/* Layar Kamera Penyiar (Otomatis Split-Screen jika ada Tamu Join Live) */}
       <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
-        />
+        <div
+          className={`w-full h-full grid ${
+            cohostVideoTrack ? 'grid-rows-2' : 'grid-rows-1'
+          }`}
+        >
+          {/* Kamera Penjual */}
+          <div className="relative w-full h-full overflow-hidden">
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+            />
+          </div>
+
+          {/* Kamera Tamu Join Live */}
+          {cohostVideoTrack && (
+            <div className="relative w-full h-full overflow-hidden border-t-2 border-amber-400">
+              <video
+                ref={cohostVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-20">
+                <span className="bg-purple-600 text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow">
+                  Tamu Join Live: @{cohostName}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRespondCoHost('remove', activeCohostViewerId)}
+                  className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold px-3 py-1 rounded-full shadow cursor-pointer"
+                >
+                  <PhoneOff className="w-3.5 h-3.5" /> Turunkan Tamu
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Bar Atas Status Live & Tombol Lihat Penonton */}
         <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 z-20">
@@ -543,7 +705,7 @@ export default function SellerLiveBroadcastPage() {
             <span className="inline-flex items-center gap-1 bg-red-600 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
               <Radio className="w-3 h-3" /> LIVE
             </span>
-            <span className="text-xs font-bold truncate max-w-[130px] sm:max-w-xs">{title}</span>
+            <span className="text-xs font-bold truncate max-w-[120px] sm:max-w-xs">{title}</span>
             <button
               type="button"
               onClick={() => setShowViewersModal(true)}
@@ -564,6 +726,46 @@ export default function SellerLiveBroadcastPage() {
             <X className="w-4 h-4" /> Akhiri Live
           </button>
         </div>
+
+        {/* Notifikasi Permintaan Join Live Masuk dari Pembeli */}
+        {cohostRequest && (
+          <div className="absolute top-16 left-4 right-16 z-30 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-2xl border border-purple-200 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                <UserPlus className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-extrabold text-gray-900 truncate">
+                  @{cohostRequest.name}
+                </p>
+                <p className="text-[11px] text-purple-700 font-semibold">
+                  Meminta Join Live bersama Anda
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                disabled={respondingCohost}
+                onClick={() => handleRespondCoHost('reject', cohostRequest.identity)}
+                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 cursor-pointer"
+                title="Tolak"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                disabled={respondingCohost}
+                onClick={() =>
+                  handleRespondCoHost('approve', cohostRequest.identity, cohostRequest.name)
+                }
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" /> Terima
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Kontrol Kamera & Mic di Samping */}
         <div className="absolute right-4 top-20 flex flex-col gap-2.5 z-20">
@@ -598,7 +800,7 @@ export default function SellerLiveBroadcastPage() {
         </div>
 
         {/* Overlay Komentar di Bawah Kamera (Mobile) */}
-        <div className="lg:hidden absolute bottom-20 left-4 right-16 max-h-40 overflow-y-auto space-y-1.5 z-20 pointer-events-none">
+        <div className="lg:hidden absolute bottom-20 left-4 right-16 max-h-36 overflow-y-auto space-y-1.5 z-20 pointer-events-none">
           {comments.slice(-6).map((c) => (
             <div
               key={c.id}
@@ -610,7 +812,7 @@ export default function SellerLiveBroadcastPage() {
           ))}
         </div>
 
-        {/* Input Chat Penjual di Bawah */}
+        {/* Input Chat Penjual di Bawah (Mobile) */}
         <form
           onSubmit={handleSendComment}
           className="lg:hidden absolute bottom-4 left-4 right-4 flex items-center gap-2 z-20"
@@ -736,7 +938,7 @@ export default function SellerLiveBroadcastPage() {
         </div>
       </div>
 
-      {/* Modal Daftar Pembeli yang Sedang Menonton Live */}
+      {/* Modal Daftar Pembeli yang Sedang Menonton Live (Bisa Langsung Undang Join Live) */}
       {showViewersModal && (
         <div
           onClick={() => setShowViewersModal(false)}
@@ -786,6 +988,19 @@ export default function SellerLiveBroadcastPage() {
                         </p>
                       </div>
                     </div>
+
+                    {!activeCohostViewerId && !viewer.identity.startsWith('cohost-') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowViewersModal(false);
+                          handleRespondCoHost('approve', viewer.identity, viewer.name);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold shrink-0 cursor-pointer"
+                      >
+                        Undang Live
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
