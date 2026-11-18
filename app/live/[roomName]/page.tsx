@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent, Track, RemoteVideoTrack } from 'livekit-client';
 import {
   Radio,
   Users,
@@ -57,6 +57,10 @@ export default function LiveViewerPage() {
   const [showCatalogDrawer, setShowCatalogDrawer] = useState<boolean>(false);
   const [viewerCount, setViewerCount] = useState<number>(1);
   const [muted, setMuted] = useState<boolean>(false);
+  const [hasVideoTrack, setHasVideoTrack] = useState<boolean>(false);
+
+  // Simpan track video remote agar selalu terpasang ke <video> setelah render selesai
+  const [remoteVideoTrack, setRemoteVideoTrack] = useState<RemoteVideoTrack | null>(null);
 
   // Chat
   const [comments, setComments] = useState<LiveComment[]>([]);
@@ -111,6 +115,27 @@ export default function LiveViewerPage() {
     return 'Pembeli Pi';
   };
 
+  // Tempelkan remoteVideoTrack ke elemen <video> kapan pun elemen DOM siap
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl || !remoteVideoTrack) return;
+
+    remoteVideoTrack.attach(videoEl);
+    setHasVideoTrack(true);
+
+    // Paksa play agar tidak tertahan kebijakan autoplay browser mobile / Pi Browser
+    videoEl.play().catch(() => {
+      // Jika autoplay bersuara diblokir browser, mulai dalam mode mute lalu putar
+      videoEl.muted = true;
+      setMuted(true);
+      videoEl.play().catch(() => {});
+    });
+
+    return () => {
+      remoteVideoTrack.detach(videoEl);
+    };
+  }, [remoteVideoTrack, loading]);
+
   useEffect(() => {
     if (!roomName) return;
 
@@ -141,16 +166,24 @@ export default function LiveViewerPage() {
         setPinnedProduct(pinned_product || null);
         setCatalogProducts(Array.isArray(products) ? products : []);
 
-        // Hubungkan ke LiveKit Room sebagai penonton
         const room = new Room({
           adaptiveStream: true,
           dynacast: true,
         });
         roomRef.current = room;
 
+        const updateLiveViewerCount = () => {
+          const totalInRoom = room.remoteParticipants.size + 1;
+          setViewerCount(Math.max(1, totalInRoom - 1));
+        };
+
+        room.on(RoomEvent.ParticipantConnected, updateLiveViewerCount);
+        room.on(RoomEvent.ParticipantDisconnected, updateLiveViewerCount);
+
         room.on(RoomEvent.TrackSubscribed, (track) => {
-          if (track.kind === Track.Kind.Video && videoRef.current) {
-            track.attach(videoRef.current);
+          if (!isMounted) return;
+          if (track.kind === Track.Kind.Video) {
+            setRemoteVideoTrack(track as RemoteVideoTrack);
           } else if (track.kind === Track.Kind.Audio && audioContainerRef.current) {
             const audioEl = track.attach();
             audioContainerRef.current.appendChild(audioEl);
@@ -158,6 +191,10 @@ export default function LiveViewerPage() {
         });
 
         room.on(RoomEvent.TrackUnsubscribed, (track) => {
+          if (track.kind === Track.Kind.Video) {
+            setRemoteVideoTrack(null);
+            setHasVideoTrack(false);
+          }
           track.detach();
         });
 
@@ -166,6 +203,16 @@ export default function LiveViewerPage() {
         });
 
         await room.connect(ws_url, token);
+        updateLiveViewerCount();
+
+        // Cek jika track video penjual sudah ada saat pembeli masuk
+        room.remoteParticipants.forEach((participant) => {
+          participant.videoTrackPublications.forEach((pub) => {
+            if (pub.track && pub.track.kind === Track.Kind.Video) {
+              setRemoteVideoTrack(pub.track as RemoteVideoTrack);
+            }
+          });
+        });
       } catch (err) {
         console.error('Gagal bergabung ke room live:', err);
         if (isMounted) setEnded(true);
@@ -201,7 +248,6 @@ export default function LiveViewerPage() {
             setEnded(true);
             return;
           }
-          setViewerCount(Number(json.viewer_count ?? viewerCount));
           if (json.pinned_product) {
             setPinnedProduct(json.pinned_product);
           }
@@ -232,6 +278,23 @@ export default function LiveViewerPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
+
+  const handleToggleMute = () => {
+    const nextMuted = !muted;
+    setMuted(nextMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+      if (!nextMuted) {
+        videoRef.current.play().catch(() => {});
+      }
+    }
+    if (audioContainerRef.current) {
+      audioContainerRef.current.querySelectorAll('audio').forEach((el) => {
+        el.muted = nextMuted;
+        if (!nextMuted) el.play().catch(() => {});
+      });
+    }
+  };
 
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -370,7 +433,6 @@ export default function LiveViewerPage() {
 
   return (
     <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex items-center justify-center overflow-hidden">
-      {/* Audio tracks container */}
       <div ref={audioContainerRef} className="hidden" />
 
       <div className="relative w-full max-w-md h-[100dvh] bg-black overflow-hidden flex flex-col justify-between">
@@ -382,6 +444,14 @@ export default function LiveViewerPage() {
           muted={muted}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
+
+        {/* Indikator menunggu stream kamera penjual jika belum masuk */}
+        {!hasVideoTrack && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center text-white/80 gap-2 pointer-events-none">
+            <Loader2 className="w-7 h-7 animate-spin text-amber-400" />
+            <span className="text-xs font-semibold">Menunggu video kamera penjual...</span>
+          </div>
+        )}
 
         {/* Header Info Toko & Penonton */}
         <div className="relative z-20 shrink-0 p-3.5 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent">
@@ -404,11 +474,11 @@ export default function LiveViewerPage() {
             </span>
             <button
               type="button"
-              onClick={() => setMuted((m) => !m)}
+              onClick={handleToggleMute}
               className="p-2 rounded-full bg-black/55 text-white cursor-pointer"
-              title="Suara"
+              title={muted ? 'Nyalakan Suara' : 'Matikan Suara'}
             >
-              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              {muted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4" />}
             </button>
             <button
               type="button"
@@ -423,7 +493,6 @@ export default function LiveViewerPage() {
 
         {/* Area Bawah: Live Chat + Pinned Product Card + Input Chat */}
         <div className="relative z-20 shrink-0 p-3.5 pb-5 space-y-2 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
-          {/* Daftar Komentar */}
           <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
             {comments.length === 0 ? (
               <div className="bg-black/45 text-white/80 text-[11px] px-3 py-1.5 rounded-2xl w-fit">
@@ -443,7 +512,6 @@ export default function LiveViewerPage() {
             <div ref={chatBottomRef} />
           </div>
 
-          {/* Kartu Produk yang Disematkan Penjual */}
           {pinnedProduct && (
             <div className="bg-white rounded-2xl p-2.5 shadow-xl flex items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -485,7 +553,6 @@ export default function LiveViewerPage() {
             </div>
           )}
 
-          {/* Bar Input Chat & Tombol Buka Etalase Toko */}
           <div className="flex items-center gap-2 pt-0.5">
             <button
               type="button"
