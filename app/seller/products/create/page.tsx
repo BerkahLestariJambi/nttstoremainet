@@ -15,11 +15,17 @@ import {
   Tag,
   Clock,
   Layers,
+  Plus,
 } from 'lucide-react';
 
 interface Category {
   id: number;
   name: string;
+}
+
+interface ImageItem {
+  file: File;
+  preview: string;
 }
 
 export default function CreateProductPage() {
@@ -29,9 +35,8 @@ export default function CreateProductPage() {
   const [fetchingCategories, setFetchingCategories] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // State untuk Preview & File Gambar
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // State untuk Preview & File Multi-Gambar (maksimal 8 foto, foto pertama jadi sampul utama)
+  const [imageItems, setImageItems] = useState<ImageItem[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -78,23 +83,53 @@ export default function CreateProductPage() {
     if (errorMessage) setErrorMessage(null);
   };
 
-  // Handler Pilih File Gambar
+  // Handler Pilih Multi File Gambar (Maksimal 8 foto, @10MB)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setErrorMessage('Ukuran file maksimal 2MB.');
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    if (imageItems.length + selectedFiles.length > 8) {
+      setErrorMessage('Maksimal 8 foto produk yang dapat diunggah.');
+      e.target.value = '';
+      return;
+    }
+
+    const newItems: ImageItem[] = [];
+    for (const file of selectedFiles) {
+      if (file.size > 10 * 1024 * 1024) {
+        setErrorMessage(`Ukuran file "${file.name}" melebihi batas maksimal 10MB.`);
+        e.target.value = '';
         return;
       }
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-      setErrorMessage(null);
+      newItems.push({
+        file,
+        preview: URL.createObjectURL(file),
+      });
     }
+
+    setImageItems((prev) => [...prev, ...newItems]);
+    setErrorMessage(null);
+    e.target.value = '';
   };
 
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+  const handleRemoveImage = (index: number) => {
+    setImageItems((prev) => {
+      const target = prev[index];
+      if (target) {
+        URL.revokeObjectURL(target.preview);
+      }
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const handleSetPrimaryImage = (index: number) => {
+    if (index === 0) return;
+    setImageItems((prev) => {
+      const copy = [...prev];
+      const [selected] = copy.splice(index, 1);
+      copy.unshift(selected);
+      return copy;
+    });
   };
 
   // Hitung persentase diskon untuk preview UI
@@ -155,13 +190,16 @@ export default function CreateProductPage() {
         }
       }
 
-      if (imageFile) {
-        bodyFormData.append('image', imageFile);
+      if (imageItems.length > 0) {
+        imageItems.forEach((item) => {
+          bodyFormData.append('images[]', item.file);
+        });
       }
 
       const res = await productService.createProduct(bodyFormData);
 
       if (res.success || res.data) {
+        imageItems.forEach((item) => URL.revokeObjectURL(item.preview));
         alert('Produk berhasil ditambahkan!');
         router.push('/');
       }
@@ -405,27 +443,73 @@ export default function CreateProductPage() {
             )}
           </div>
 
-          {/* Area Upload File Gambar */}
+          {/* Area Upload Multi-File Gambar */}
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-              Foto Produk (Upload File)
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                Foto Produk (Bisa Lebih dari 1, Maks. 8 Foto)
+              </label>
+              <span className="text-[11px] font-semibold text-purple-700">
+                {imageItems.length}/8 foto dipilih
+              </span>
+            </div>
 
-            {imagePreview ? (
-              <div className="relative w-full h-56 rounded-2xl overflow-hidden border border-gray-200 group bg-gray-50">
-                <img
-                  src={imagePreview}
-                  alt="Preview Produk"
-                  className="w-full h-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-md"
-                  title="Hapus Gambar"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+            {imageItems.length > 0 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {imageItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`relative aspect-square rounded-2xl overflow-hidden border-2 group bg-gray-50 ${
+                        idx === 0 ? 'border-purple-600' : 'border-gray-200'
+                      }`}
+                    >
+                      <img
+                        src={item.preview}
+                        alt={`Preview Produk ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+
+                      {idx === 0 ? (
+                        <span className="absolute bottom-2 left-2 bg-purple-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                          Foto Utama
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimaryImage(idx)}
+                          className="absolute bottom-2 left-2 bg-black/70 hover:bg-purple-700 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full transition cursor-pointer"
+                        >
+                          Jadikan Utama
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-md cursor-pointer"
+                        title="Hapus Gambar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {imageItems.length < 8 && (
+                    <label className="aspect-square border-2 border-dashed border-gray-200 hover:border-purple-500 bg-gray-50/60 hover:bg-purple-50/30 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition p-3 text-center">
+                      <Plus className="w-6 h-6 text-purple-600 mb-1" />
+                      <span className="text-[11px] font-bold text-gray-700">Tambah Foto</span>
+                      <span className="text-[10px] text-gray-400">Maks 10MB</span>
+                      <input
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/webp"
+                        multiple
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             ) : (
               <label className="border-2 border-dashed border-gray-200 hover:border-purple-500 bg-gray-50/50 hover:bg-purple-50/30 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition">
@@ -433,14 +517,15 @@ export default function CreateProductPage() {
                   <Upload className="w-6 h-6 text-purple-600" />
                 </div>
                 <span className="text-xs font-bold text-gray-700 mb-1">
-                  Klik untuk pilih atau tarik foto produk di sini
+                  Klik untuk pilih beberapa foto produk sekaligus
                 </span>
                 <span className="text-[10px] text-gray-400">
-                  Format: PNG, JPG, WEBP (Maksimal 2MB)
+                  Format: PNG, JPG, WEBP (Maksimal 8 foto, @10MB per foto)
                 </span>
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/jpg, image/webp"
+                  multiple
                   onChange={handleImageChange}
                   className="hidden"
                 />
