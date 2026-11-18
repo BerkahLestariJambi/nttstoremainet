@@ -18,6 +18,7 @@ import {
   Tag,
   Clock,
   Layers,
+  Upload,
 } from 'lucide-react';
 import { productService } from '@/services/productService';
 import Swal from 'sweetalert2';
@@ -36,8 +37,14 @@ interface SellerProduct {
   sisa_stock?: number;
   sold?: number;
   image_url: string;
+  images?: string[];
   category_id?: number;
   category?: { id?: number; name: string };
+}
+
+interface NewImageItem {
+  file: File;
+  preview: string;
 }
 
 // Helper format datetime dari API ke format input datetime-local (YYYY-MM-DDTHH:mm)
@@ -61,6 +68,10 @@ export default function SellerDashboard() {
   const [editingProduct, setEditingProduct] = useState<SellerProduct | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
+  // State Multi-Gambar (foto lama yang dipertahankan + foto baru yang diunggah)
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [newImages, setNewImages] = useState<NewImageItem[]>([]);
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -71,8 +82,33 @@ export default function SellerDashboard() {
     flash_sale_quota: '',
     stock: '',
     category_id: '1',
-    image: null as File | null,
   });
+
+  const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
+  const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
+  const resolveProductImageUrl = (url?: string | null): string => {
+    if (!url || typeof url !== 'string' || url.trim() === '') return '';
+    const clean = url.trim().replace(/\\/g, '/');
+    if (
+      (clean.startsWith('http://') || clean.startsWith('https://')) &&
+      !clean.includes('nttstorepi.mejatika.com')
+    ) {
+      return clean;
+    }
+    const fileName = clean.split('/').filter(Boolean).pop();
+    if (!fileName) return '';
+    return `${DOMAIN_BASE_URL}/public/products/${fileName}`;
+  };
+
+  const formatPiPrice = (rawVal?: string | number | null): string => {
+    if (rawVal === null || rawVal === undefined || rawVal === '') return '0';
+    const str = String(rawVal).trim();
+    const parts = str.split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+  };
 
   const loadSellerProducts = async () => {
     try {
@@ -92,9 +128,16 @@ export default function SellerDashboard() {
     loadSellerProducts();
   }, []);
 
+  const cleanupNewPreviews = (items: NewImageItem[]) => {
+    items.forEach((item) => URL.revokeObjectURL(item.preview));
+  };
+
   // Buka Modal Mode Tambah
   const openAddModal = () => {
+    cleanupNewPreviews(newImages);
     setEditingProduct(null);
+    setExistingImages([]);
+    setNewImages([]);
     setFormData({
       name: '',
       description: '',
@@ -105,14 +148,24 @@ export default function SellerDashboard() {
       flash_sale_quota: '',
       stock: '',
       category_id: '1',
-      image: null,
     });
     setIsModalOpen(true);
   };
 
-  // Buka Modal Mode Edit (Mengisi form dengan data produk + promo/flash sale yang dipilih)
+  // Buka Modal Mode Edit (Mengisi form dengan data produk + promo/flash sale + galeri foto)
   const openEditModal = (product: SellerProduct) => {
+    cleanupNewPreviews(newImages);
     setEditingProduct(product);
+
+    const gallery =
+      Array.isArray(product.images) && product.images.length > 0
+        ? product.images.map(resolveProductImageUrl).filter(Boolean)
+        : product.image_url
+        ? [resolveProductImageUrl(product.image_url)].filter(Boolean)
+        : [];
+
+    setExistingImages(gallery);
+    setNewImages([]);
     setFormData({
       name: product.name || '',
       description: product.description || '',
@@ -129,9 +182,14 @@ export default function SellerDashboard() {
           : '',
       stock: String(product.stock ?? 0),
       category_id: String(product.category_id || product.category?.id || '1'),
-      image: null,
     });
     setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    cleanupNewPreviews(newImages);
+    setNewImages([]);
+    setIsModalOpen(false);
   };
 
   const handleToggleFlashSale = (checked: boolean) => {
@@ -141,6 +199,71 @@ export default function SellerDashboard() {
       flash_sale_ends_at: checked ? prev.flash_sale_ends_at : '',
       flash_sale_quota: checked ? prev.flash_sale_quota : '',
     }));
+  };
+
+  // Handler Pilih Multi-Foto (Maksimal total 8 foto)
+  const handleSelectMultiImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(e.target.files || []);
+    if (selected.length === 0) return;
+
+    const totalCurrent = existingImages.length + newImages.length;
+    if (totalCurrent + selected.length > 8) {
+      Swal.fire('Maksimal 8 Foto', 'Total foto produk maksimal 8 gambar.', 'warning');
+      e.target.value = '';
+      return;
+    }
+
+    const added: NewImageItem[] = [];
+    for (const file of selected) {
+      if (file.size > 10 * 1024 * 1024) {
+        Swal.fire(
+          'Ukuran Terlalu Besar',
+          `File "${file.name}" melebihi batas 10MB.`,
+          'warning'
+        );
+        e.target.value = '';
+        return;
+      }
+      added.push({
+        file,
+        preview: URL.createObjectURL(file),
+      });
+    }
+
+    setNewImages((prev) => [...prev, ...added]);
+    e.target.value = '';
+  };
+
+  const handleRemoveExistingImage = (index: number) => {
+    setExistingImages((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSetPrimaryExistingImage = (index: number) => {
+    if (index === 0) return;
+    setExistingImages((prev) => {
+      const copy = [...prev];
+      const [picked] = copy.splice(index, 1);
+      copy.unshift(picked);
+      return copy;
+    });
+  };
+
+  const handleRemoveNewImage = (index: number) => {
+    setNewImages((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const handleSetPrimaryNewImage = (index: number) => {
+    if (index === 0 && existingImages.length === 0) return;
+    setNewImages((prev) => {
+      const copy = [...prev];
+      const [picked] = copy.splice(index, 1);
+      copy.unshift(picked);
+      return copy;
+    });
   };
 
   // Handler Hapus Produk
@@ -216,7 +339,7 @@ export default function SellerDashboard() {
       data.append('stock', formData.stock);
       data.append('category_id', formData.category_id);
 
-      // Kirim field Promo & Flash Sale (kirim string kosong jika dihapus saat edit agar backend meng-null-kan)
+      // Kirim field Promo & Flash Sale
       data.append(
         'discount_price_pi',
         formData.discount_price_pi && discountPrice > 0 ? formData.discount_price_pi : ''
@@ -231,9 +354,16 @@ export default function SellerDashboard() {
         formData.is_flash_sale && formData.flash_sale_quota ? formData.flash_sale_quota : ''
       );
 
-      if (formData.image) {
-        data.append('image', formData.image);
+      // Kirim galeri multi-foto
+      if (editingProduct) {
+        existingImages.forEach((url) => {
+          data.append('existing_images[]', url);
+        });
       }
+
+      newImages.forEach((item) => {
+        data.append('images[]', item.file);
+      });
 
       if (editingProduct) {
         data.append('_method', 'PUT');
@@ -244,6 +374,8 @@ export default function SellerDashboard() {
         Swal.fire('Berhasil!', 'Produk baru telah ditambahkan.', 'success');
       }
 
+      cleanupNewPreviews(newImages);
+      setNewImages([]);
       setIsModalOpen(false);
       setEditingProduct(null);
       loadSellerProducts();
@@ -277,6 +409,8 @@ export default function SellerDashboard() {
         : parseFloat(String(p.price_pi)) || 0;
     return sum + activePrice * getRemainingStock(p);
   }, 0);
+
+  const totalGalleryCount = existingImages.length + newImages.length;
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-4 sm:p-6 lg:p-8">
@@ -385,6 +519,8 @@ export default function SellerDashboard() {
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {filteredProducts.map((p) => {
                     const sisa = getRemainingStock(p);
+                    const thumbUrl = resolveProductImageUrl(p.image_url);
+                    const photoCount = Array.isArray(p.images) ? p.images.length : thumbUrl ? 1 : 0;
                     const hasPromo =
                       p.discount_price_pi !== null &&
                       p.discount_price_pi !== undefined &&
@@ -394,15 +530,20 @@ export default function SellerDashboard() {
                     return (
                       <tr key={p.id} className="hover:bg-gray-50/50 transition">
                         <td className="p-4 pl-6 flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 flex items-center justify-center">
-                            {p.image_url ? (
+                          <div className="relative w-12 h-12 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-100 flex items-center justify-center">
+                            {thumbUrl ? (
                               <img
-                                src={p.image_url}
+                                src={thumbUrl}
                                 alt={p.name}
                                 className="w-full h-full object-cover"
                               />
                             ) : (
                               <ImageIcon className="w-5 h-5 text-gray-400" />
+                            )}
+                            {photoCount > 1 && (
+                              <span className="absolute bottom-0.5 right-0.5 bg-black/70 text-white text-[9px] font-bold px-1 rounded">
+                                +{photoCount - 1}
+                              </span>
                             )}
                           </div>
                           <div>
@@ -428,14 +569,16 @@ export default function SellerDashboard() {
                           {hasPromo ? (
                             <div className="flex flex-col">
                               <span className="font-extrabold text-orange-600">
-                                π {p.discount_price_pi}
+                                π {formatPiPrice(p.discount_price_pi)}
                               </span>
                               <span className="text-[10px] text-gray-400 line-through">
-                                π {p.price_pi}
+                                π {formatPiPrice(p.price_pi)}
                               </span>
                             </div>
                           ) : (
-                            <span className="font-bold text-amber-600">π {p.price_pi}</span>
+                            <span className="font-bold text-amber-600">
+                              π {formatPiPrice(p.price_pi)}
+                            </span>
                           )}
                         </td>
                         <td className="p-4">
@@ -503,7 +646,7 @@ export default function SellerDashboard() {
                 )}
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCloseModal}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -660,29 +803,139 @@ export default function SellerDashboard() {
                 ></textarea>
               </div>
 
+              {/* Upload & Kelola Multi-Foto Produk */}
               <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  Foto Produk{' '}
-                  {editingProduct && (
-                    <span className="font-normal text-gray-400">
-                      (Kosongkan jika tidak ingin mengubah foto)
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-gray-700">
+                    Foto Produk (Maks. 8 Foto)
+                  </label>
+                  <span className="text-[11px] font-semibold text-amber-700">
+                    {totalGalleryCount}/8 foto
+                  </span>
+                </div>
+
+                {totalGalleryCount > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-2">
+                    {/* Foto lama dari server (saat mode Edit) */}
+                    {existingImages.map((url, idx) => {
+                      const isPrimary = idx === 0;
+                      return (
+                        <div
+                          key={`existing-${idx}`}
+                          className={`relative aspect-square rounded-xl overflow-hidden border-2 bg-gray-100 ${
+                            isPrimary ? 'border-amber-500' : 'border-gray-200'
+                          }`}
+                        >
+                          <img
+                            src={url}
+                            alt={`Foto Produk ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          {isPrimary ? (
+                            <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                              Utama
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryExistingImage(idx)}
+                              className="absolute bottom-1 left-1 bg-black/70 hover:bg-amber-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-full cursor-pointer"
+                            >
+                              Utama
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExistingImage(idx)}
+                            className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 cursor-pointer"
+                            title="Hapus foto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {/* Foto baru yang baru dipilih dari perangkat */}
+                    {newImages.map((item, idx) => {
+                      const isPrimary = existingImages.length === 0 && idx === 0;
+                      return (
+                        <div
+                          key={`new-${idx}`}
+                          className={`relative aspect-square rounded-xl overflow-hidden border-2 bg-gray-100 ${
+                            isPrimary ? 'border-amber-500' : 'border-emerald-300'
+                          }`}
+                        >
+                          <img
+                            src={item.preview}
+                            alt={`Foto Baru ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          {isPrimary ? (
+                            <span className="absolute bottom-1 left-1 bg-amber-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                              Utama
+                            </span>
+                          ) : (
+                            existingImages.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetPrimaryNewImage(idx)}
+                                className="absolute bottom-1 left-1 bg-black/70 hover:bg-amber-600 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-full cursor-pointer"
+                              >
+                                Utama
+                              </button>
+                            )
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveNewImage(idx)}
+                            className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow hover:bg-red-700 cursor-pointer"
+                            title="Hapus foto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {totalGalleryCount < 8 && (
+                      <label className="aspect-square border-2 border-dashed border-gray-200 hover:border-amber-500 bg-gray-50 hover:bg-amber-50/40 rounded-xl flex flex-col items-center justify-center cursor-pointer transition p-2 text-center">
+                        <Plus className="w-5 h-5 text-amber-600 mb-0.5" />
+                        <span className="text-[10px] font-bold text-gray-700">Tambah</span>
+                        <input
+                          type="file"
+                          accept="image/png, image/jpeg, image/jpg, image/webp"
+                          multiple
+                          onChange={handleSelectMultiImages}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-gray-200 hover:border-amber-500 bg-gray-50/60 hover:bg-amber-50/30 rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition">
+                    <Upload className="w-5 h-5 text-amber-600 mb-1" />
+                    <span className="text-xs font-bold text-gray-700">
+                      Pilih beberapa foto produk (PNG, JPG, WEBP)
                     </span>
-                  )}
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) =>
-                    setFormData({ ...formData, image: e.target.files ? e.target.files[0] : null })
-                  }
-                  className="w-full text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100"
-                />
+                    <span className="text-[10px] text-gray-400 mt-0.5">
+                      Maksimal 8 foto (@10MB per foto)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg, image/webp"
+                      multiple
+                      onChange={handleSelectMultiImages}
+                      className="hidden"
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={handleCloseModal}
                   className="px-4 py-2.5 rounded-xl border border-gray-200 font-bold text-gray-600 hover:bg-gray-50"
                 >
                   Batal
