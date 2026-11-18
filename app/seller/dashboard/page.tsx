@@ -432,6 +432,13 @@ export default function SellerDashboard() {
             <Plus className="w-5 h-5" />
             <span>Tambah Produk</span>
           </button>
+          <Link
+  href="/seller/live"
+  className="inline-flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-bold px-5 py-3 rounded-2xl shadow-sm transition text-sm"
+>
+  <Radio className="w-5 h-5" />
+  <span>Mulai Live</span>
+</Link>
         </div>
 
         {/* Card Statistik */}
