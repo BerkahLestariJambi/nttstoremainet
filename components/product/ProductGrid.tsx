@@ -27,9 +27,9 @@ interface Product {
   name: string;
   slug: string;
   description: string;
-  price_pi: string;
-  discount_price_pi?: string | null;
-  effective_price_pi?: number;
+  price_pi: string | number;
+  discount_price_pi?: string | number | null;
+  effective_price_pi?: string | number;
   is_promo_active?: boolean;
   image_url: string;
   stock?: number;
@@ -116,6 +116,35 @@ export default function ProductGrid() {
       });
   }, [t]);
 
+  /**
+   * Menampilkan seluruh digit desimal apa adanya (misal: 6.000510, 6.50000)
+   * tanpa memotong trailing zero maupun membulatkan angka.
+   */
+  const formatPiPrice = (rawVal?: string | number | null): string => {
+    if (rawVal === null || rawVal === undefined || rawVal === '') return '0';
+    const str = String(rawVal).trim();
+    const parts = str.split('.');
+    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
+  };
+
+  const getDisplayPrices = (product: Product) => {
+    const hasActivePromo =
+      Boolean(product.is_promo_active) &&
+      product.discount_price_pi !== null &&
+      product.discount_price_pi !== undefined &&
+      String(product.discount_price_pi).trim() !== '';
+
+    const activeRaw = hasActivePromo ? product.discount_price_pi : product.price_pi;
+
+    return {
+      hasActivePromo,
+      activeFormatted: formatPiPrice(activeRaw),
+      originalFormatted: formatPiPrice(product.price_pi),
+      numericPrice: Number(activeRaw ?? product.effective_price_pi ?? 0) || 0,
+    };
+  };
+
   const getFullImageUrl = (url: string | null) => {
     if (!url || typeof url !== 'string' || url.trim() === '') return '';
 
@@ -135,22 +164,22 @@ export default function ProductGrid() {
   };
 
   const getReviewMediaUrl = (url?: string | null) => {
-  if (!url || typeof url !== 'string' || url.trim() === '') return '';
+    if (!url || typeof url !== 'string' || url.trim() === '') return '';
 
-  const clean = url.trim().replace(/\\/g, '/');
+    const clean = url.trim().replace(/\\/g, '/');
 
-  if (
-    (clean.startsWith('http://') || clean.startsWith('https://')) &&
-    !clean.includes('nttstorepi.mejatika.com')
-  ) {
-    return clean;
-  }
+    if (
+      (clean.startsWith('http://') || clean.startsWith('https://')) &&
+      !clean.includes('nttstorepi.mejatika.com')
+    ) {
+      return clean;
+    }
 
-  const fileName = clean.split('/').filter(Boolean).pop();
-  if (!fileName) return '';
+    const fileName = clean.split('/').filter(Boolean).pop();
+    if (!fileName) return '';
 
-  return `${DOMAIN_BASE_URL}/public/reviews/${fileName}`;
-};
+    return `${DOMAIN_BASE_URL}/public/reviews/${fileName}`;
+  };
 
   // Helper menghitung sisa stok, jumlah terjual, & rating ulasan
   const getProductMetrics = (product: Product) => {
@@ -216,6 +245,7 @@ export default function ProductGrid() {
     if (!selectedProductForCart) return;
     const product = selectedProductForCart;
     const { remainingStock } = getProductMetrics(product);
+    const { numericPrice } = getDisplayPrices(product);
     const qtyToAdd = Math.max(1, Math.min(remainingStock || 1, customQty));
 
     setAddingCartId(product.id);
@@ -227,7 +257,7 @@ export default function ProductGrid() {
           name: product.name,
           category: 'Umum',
           priceIdr: 0,
-          pricePi: Number(product.effective_price_pi ?? product.price_pi) || 0,
+          pricePi: numericPrice,
           image: product.image_url,
           image_url: product.image_url,
           description: product.description,
@@ -257,6 +287,7 @@ export default function ProductGrid() {
 
   const handleBuyNow = async (product: Product) => {
     const { remainingStock } = getProductMetrics(product);
+    const { numericPrice } = getDisplayPrices(product);
     if (remainingStock <= 0) {
       Swal.fire('Stok Habis', 'Maaf, stok produk ini sedang kosong.', 'warning');
       return;
@@ -271,7 +302,7 @@ export default function ProductGrid() {
           name: product.name,
           category: 'Umum',
           priceIdr: 0,
-          pricePi: Number(product.effective_price_pi ?? product.price_pi) || 0,
+          pricePi: numericPrice,
           image: product.image_url,
           image_url: product.image_url,
           description: product.description,
@@ -325,6 +356,7 @@ export default function ProductGrid() {
           const isAddingThis = addingCartId === product.id;
           const isBuyingThis = buyingId === product.id;
           const { sold, remainingStock, reviewCount, avgRating } = getProductMetrics(product);
+          const { hasActivePromo, activeFormatted, originalFormatted } = getDisplayPrices(product);
           const isOutOfStock = remainingStock <= 0;
 
           return (
@@ -419,16 +451,16 @@ export default function ProductGrid() {
               </div>
 
               <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-col gap-2">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-xs font-bold text-amber-600">π</span>
-                  <span className="text-sm font-extrabold text-amber-600 truncate">
-                    {product.is_promo_active && product.discount_price_pi
-                      ? product.discount_price_pi
-                      : product.price_pi}
-                  </span>
-                  {product.is_promo_active && product.discount_price_pi && (
-                    <span className="text-[11px] text-gray-400 line-through ml-1">
-                      π {product.price_pi}
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                  <div className="inline-flex items-baseline gap-1">
+                    <span className="text-xs font-bold text-amber-600">π</span>
+                    <span className="text-sm font-extrabold text-amber-600 break-all">
+                      {activeFormatted}
+                    </span>
+                  </div>
+                  {hasActivePromo && (
+                    <span className="text-[11px] text-gray-400 line-through break-all">
+                      π {originalFormatted}
                     </span>
                   )}
                 </div>
@@ -665,6 +697,7 @@ export default function ProductGrid() {
       {/* Modal Pilih Jumlah Produk Saat Klik Ikon Keranjang */}
       {selectedProductForCart && (() => {
         const { remainingStock } = getProductMetrics(selectedProductForCart);
+        const { activeFormatted } = getDisplayPrices(selectedProductForCart);
         return (
           <div
             onClick={() => setSelectedProductForCart(null)}
@@ -687,12 +720,8 @@ export default function ProductGrid() {
                     <h4 className="text-sm font-bold text-gray-900 truncate">
                       {selectedProductForCart.name}
                     </h4>
-                    <p className="text-xs font-extrabold text-amber-600 mt-0.5">
-                      π{' '}
-                      {selectedProductForCart.is_promo_active &&
-                      selectedProductForCart.discount_price_pi
-                        ? selectedProductForCart.discount_price_pi
-                        : selectedProductForCart.price_pi}
+                    <p className="text-xs font-extrabold text-amber-600 mt-0.5 break-all">
+                      π {activeFormatted}
                     </p>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       Sisa stok: <strong className="text-gray-800">{remainingStock}</strong>
