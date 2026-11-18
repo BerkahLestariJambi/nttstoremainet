@@ -135,12 +135,22 @@ export default function ProductGrid() {
   };
 
   const getReviewMediaUrl = (url?: string | null) => {
-    if (!url || typeof url !== 'string') return '';
-    const clean = url.trim().replace(/\\/g, '/');
-    if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
-    const normalized = clean.startsWith('/') ? clean : `/${clean}`;
-    return `${DOMAIN_BASE_URL}${normalized.startsWith('/public/') ? normalized : `/public${normalized}`}`;
-  };
+  if (!url || typeof url !== 'string' || url.trim() === '') return '';
+
+  const clean = url.trim().replace(/\\/g, '/');
+
+  if (
+    (clean.startsWith('http://') || clean.startsWith('https://')) &&
+    !clean.includes('nttstorepi.mejatika.com')
+  ) {
+    return clean;
+  }
+
+  const fileName = clean.split('/').filter(Boolean).pop();
+  if (!fileName) return '';
+
+  return `${DOMAIN_BASE_URL}/public/reviews/${fileName}`;
+};
 
   // Helper menghitung sisa stok, jumlah terjual, & rating ulasan
   const getProductMetrics = (product: Product) => {
