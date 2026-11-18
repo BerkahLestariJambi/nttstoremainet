@@ -61,7 +61,9 @@ export default function LiveViewerPage() {
   // Chat
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [chatInput, setChatInput] = useState<string>('');
+  const [sendingChat, setSendingChat] = useState<boolean>(false);
   const lastCommentIdRef = useRef<number>(0);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
 
   // Refs LiveKit
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -204,37 +206,78 @@ export default function LiveViewerPage() {
             setPinnedProduct(json.pinned_product);
           }
           if (Array.isArray(json.comments) && json.comments.length > 0) {
-            setComments((prev) => [...prev, ...json.comments].slice(-50));
-            lastCommentIdRef.current = json.comments[json.comments.length - 1].id;
+            setComments((prev) => {
+              const merged = [...prev];
+              for (const item of json.comments) {
+                if (!merged.some((c) => c.id === item.id)) {
+                  merged.push(item);
+                }
+              }
+              return merged.slice(-50);
+            });
+            lastCommentIdRef.current = Math.max(
+              lastCommentIdRef.current,
+              Number(json.comments[json.comments.length - 1].id)
+            );
           }
         }
       } catch {}
     };
 
+    pollState();
     const timer = setInterval(pollState, 2500);
     return () => clearInterval(timer);
   }, [streamInfo?.id, ended]);
 
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments]);
+
   const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!streamInfo?.id || !chatInput.trim()) return;
+    if (!streamInfo?.id || !chatInput.trim() || sendingChat) return;
 
     const text = chatInput.trim();
+    const sender = getViewerName() || 'Pembeli Pi';
     setChatInput('');
+    setSendingChat(true);
 
     try {
-      await fetch(`${API_BASE_URL}/live/${streamInfo.id}/comments`, {
+      const res = await fetch(`${API_BASE_URL}/live/${streamInfo.id}/comments`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sender_name: getViewerName(),
+          sender_name: sender,
           message: text,
         }),
       });
-    } catch {}
+
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || 'Gagal mengirim pesan.');
+      }
+
+      if (json.data) {
+        setComments((prev) => {
+          if (prev.some((c) => c.id === json.data.id)) return prev;
+          return [...prev, json.data].slice(-50);
+        });
+        lastCommentIdRef.current = Math.max(lastCommentIdRef.current, Number(json.data.id));
+      }
+    } catch (err: any) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Pesan Gagal Terkirim',
+        text: err?.message || 'Periksa koneksi Anda atau pastikan siaran masih berlangsung.',
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } finally {
+      setSendingChat(false);
+    }
   };
 
   const handleBuyProduct = async (product: LiveProduct, goToCart: boolean) => {
@@ -290,7 +333,7 @@ export default function LiveViewerPage() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center text-white gap-3">
+      <div className="fixed inset-0 z-[70] bg-black flex flex-col items-center justify-center text-white gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-rose-500" />
         <p className="text-xs font-semibold">Menghubungkan ke siaran langsung...</p>
       </div>
@@ -299,7 +342,7 @@ export default function LiveViewerPage() {
 
   if (ended) {
     return (
-      <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col items-center justify-center text-white p-6 text-center space-y-4">
+      <div className="fixed inset-0 z-[70] bg-gray-950 flex flex-col items-center justify-center text-white p-6 text-center space-y-4">
         <Radio className="w-12 h-12 text-gray-500" />
         <h2 className="text-lg font-extrabold">Siaran Langsung Telah Berakhir</h2>
         <p className="text-xs text-gray-400 max-w-xs">
@@ -326,22 +369,22 @@ export default function LiveViewerPage() {
     : '0';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+    <div className="fixed inset-0 z-[70] h-[100dvh] bg-black flex items-center justify-center overflow-hidden">
       {/* Audio tracks container */}
       <div ref={audioContainerRef} className="hidden" />
 
-      <div className="relative w-full max-w-md h-full bg-black overflow-hidden flex flex-col justify-between">
+      <div className="relative w-full max-w-md h-[100dvh] bg-black overflow-hidden flex flex-col justify-between">
         {/* Video Stream */}
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted={muted}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
         />
 
         {/* Header Info Toko & Penonton */}
-        <div className="relative z-20 p-4 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent">
+        <div className="relative z-20 shrink-0 p-3.5 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent">
           <div className="flex items-center gap-2 min-w-0">
             <span className="inline-flex items-center gap-1 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse shrink-0">
               <Radio className="w-3 h-3" /> LIVE
@@ -379,18 +422,25 @@ export default function LiveViewerPage() {
         </div>
 
         {/* Area Bawah: Live Chat + Pinned Product Card + Input Chat */}
-        <div className="relative z-20 p-4 space-y-2.5 bg-gradient-to-t from-black/85 via-black/45 to-transparent">
+        <div className="relative z-20 shrink-0 p-3.5 pb-5 space-y-2 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
           {/* Daftar Komentar */}
-          <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-            {comments.map((c) => (
-              <div
-                key={c.id}
-                className="bg-black/50 backdrop-blur-xs text-white text-xs px-3 py-1.5 rounded-2xl w-fit max-w-full"
-              >
-                <span className="font-bold text-amber-300">{c.sender_name}: </span>
-                <span>{c.message}</span>
+          <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
+            {comments.length === 0 ? (
+              <div className="bg-black/45 text-white/80 text-[11px] px-3 py-1.5 rounded-2xl w-fit">
+                Selamat datang di Live {streamInfo?.store_name}! Silakan tanya produk di kolom chat.
               </div>
-            ))}
+            ) : (
+              comments.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-black/55 backdrop-blur-xs text-white text-xs px-3 py-1.5 rounded-2xl w-fit max-w-full"
+                >
+                  <span className="font-bold text-amber-300">{c.sender_name}: </span>
+                  <span>{c.message}</span>
+                </div>
+              ))
+            )}
+            <div ref={chatBottomRef} />
           </div>
 
           {/* Kartu Produk yang Disematkan Penjual */}
@@ -401,7 +451,7 @@ export default function LiveViewerPage() {
                   <img
                     src={pinnedImg}
                     alt={pinnedProduct.name}
-                    className="w-12 h-12 rounded-xl object-cover border border-gray-100 shrink-0"
+                    className="w-11 h-11 rounded-xl object-cover border border-gray-100 shrink-0"
                   />
                 )}
                 <div className="min-w-0">
@@ -436,7 +486,7 @@ export default function LiveViewerPage() {
           )}
 
           {/* Bar Input Chat & Tombol Buka Etalase Toko */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-0.5">
             <button
               type="button"
               onClick={() => setShowCatalogDrawer(true)}
@@ -456,14 +506,20 @@ export default function LiveViewerPage() {
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Tulis komentar..."
-                className="flex-1 bg-white/15 backdrop-blur-md text-white placeholder-white/70 text-xs px-4 py-2.5 rounded-full border border-white/20 focus:outline-none"
+                placeholder="Tulis komentar / tanya penjual..."
+                className="flex-1 bg-white/20 backdrop-blur-md text-white placeholder-white/80 text-xs px-4 py-2.5 rounded-full border border-white/30 focus:outline-none focus:border-amber-400"
               />
               <button
                 type="submit"
-                className="p-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white cursor-pointer"
+                disabled={sendingChat || !chatInput.trim()}
+                className="p-2.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50 shrink-0 cursor-pointer"
+                title="Kirim Pesan"
               >
-                <Send className="w-4 h-4" />
+                {sendingChat ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </button>
             </form>
           </div>
