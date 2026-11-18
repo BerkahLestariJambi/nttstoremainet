@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   ShoppingBag,
   Star,
-  Crown,
   Store,
   Reply,
   Send,
@@ -108,25 +107,22 @@ export default function BuyerOrdersPage() {
   const [replyText, setReplyText] = useState<string>('');
   const [submittingReply, setSubmittingReply] = useState<boolean>(false);
 
-  const hasUsedTrialReview =
-    reviewedKeys.length > 0 ||
-    orders.some((o) => o.items?.some((it) => Boolean(it.is_reviewed || it.review)));
-
   const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nttstorepi.mejatika.com/api';
   const DOMAIN_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
   const getFullImageUrl = (url?: string | null) => {
     if (!url || typeof url !== 'string' || url.trim() === '') return undefined;
-    let cleanUrl = url.trim();
-    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    const cleanUrl = url.trim().replace(/\\/g, '/');
+    if (
+      (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) &&
+      !cleanUrl.includes('nttstorepi.mejatika.com')
+    ) {
       return cleanUrl;
     }
-    cleanUrl = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
-    if (!cleanUrl.startsWith('/public')) {
-      cleanUrl = `/public${cleanUrl}`;
-    }
-    return `${DOMAIN_BASE_URL}${cleanUrl}`;
+    const fileName = cleanUrl.split('/').filter(Boolean).pop();
+    if (!fileName) return undefined;
+    return `${DOMAIN_BASE_URL}/public/products/${fileName}`;
   };
 
   const loadOrders = useCallback(() => {
@@ -217,25 +213,6 @@ export default function BuyerOrdersPage() {
     } finally {
       setSubmittingReply(false);
     }
-  };
-
-  const handlePremiumPrompt = () => {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Batas Uji Coba Tercapai (1x per User)',
-      html: `
-        <p class="text-sm text-gray-600">
-          Fitur ini <strong>hanya uji coba dan hanya dapat digunakan 1 kali saja</strong> per akun.
-        </p>
-        <p class="text-sm text-gray-800 font-semibold mt-2">
-          Untuk menggunakan fitur ulasan & upload foto/video seterusnya, silakan aktivasi versi <strong>Premium</strong>.
-        </p>
-      `,
-      confirmButtonText: 'Aktivasi Premium',
-      confirmButtonColor: '#7e22ce',
-      showCancelButton: true,
-      cancelButtonText: 'Tutup',
-    });
   };
 
   // Render rekursif percakapan balasan antara Seller & Buyer di kartu pesanan
@@ -491,15 +468,6 @@ export default function BuyerOrdersPage() {
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
                                   <CheckCircle2 className="w-3.5 h-3.5" /> Sudah Diulas
                                 </span>
-                              ) : hasUsedTrialReview ? (
-                                <button
-                                  type="button"
-                                  onClick={handlePremiumPrompt}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold border border-purple-200 transition cursor-pointer"
-                                >
-                                  <Crown className="w-3.5 h-3.5 text-purple-700" />
-                                  <span>Uji Coba 1x Selesai • Aktivasi Premium</span>
-                                </button>
                               ) : (
                                 <button
                                   type="button"
