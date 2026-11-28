@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   ShieldCheck,
   Users,
@@ -24,12 +25,21 @@ import {
   Pencil,
   Check,
   X,
+  FileText,
+  Save,
+  Eye,
+  Edit3,
+  ExternalLink,
+  Heading2,
+  List,
+  Bold,
+  Type,
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { apiClient } from '@/lib/apiClient';
 import { useLanguage } from '@/context/LanguageContext';
 
-type AdminTab = 'overview' | 'users' | 'categories' | 'products' | 'orders' | 'finance';
+type AdminTab = 'overview' | 'users' | 'categories' | 'products' | 'orders' | 'finance' | 'legal';
 type UserRole = 'customer' | 'seller' | 'admin';
 
 interface AdminUser {
@@ -97,8 +107,27 @@ interface FinanceHistoryItem {
   shipping_fee: number;
 }
 
+interface LegalDoc {
+  id?: number;
+  slug: string;
+  title: string;
+  version: string;
+  content: string;
+  updated_at?: string;
+}
+
 export default function AdminDashboardPage() {
-  const { t } = useLanguage();
+  const langCtx: any = useLanguage();
+  const { t } = langCtx;
+  const currentLang = String(langCtx?.language || langCtx?.lang || 'id').toLowerCase();
+  const isEn = currentLang.startsWith('en');
+
+  // Helper terjemahan dinamis untuk fitur Legal & Kebijakan (mendukung key LanguageContext + fallback ID/EN)
+  const tr = (key: string, idText: string, enText: string): string => {
+    const val = typeof t === 'function' ? t(key) : '';
+    if (val && val !== key) return val;
+    return isEn ? enText : idText;
+  };
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState<boolean>(true);
@@ -115,6 +144,19 @@ export default function AdminDashboardPage() {
     total_shipping: 0,
     total_revenue: 0,
   });
+
+  // State Dokumen Legal (Privacy Policy & Terms of Service)
+  const [legalDocsMap, setLegalDocsMap] = useState<Record<string, LegalDoc>>({});
+  const [activeLegalSlug, setActiveLegalSlug] = useState<'privacy-policy' | 'terms-of-service'>(
+    'privacy-policy'
+  );
+  const [legalTitle, setLegalTitle] = useState<string>('');
+  const [legalVersion, setLegalVersion] = useState<string>('1.0');
+  const [legalContent, setLegalContent] = useState<string>('');
+  const [legalLastUpdated, setLegalLastUpdated] = useState<string>('');
+  const [legalPreviewMode, setLegalPreviewMode] = useState<boolean>(false);
+  const [savingLegal, setSavingLegal] = useState<boolean>(false);
+  const legalTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Form State Tambah / Edit Kategori
   const [categoryName, setCategoryName] = useState('');
@@ -158,13 +200,14 @@ export default function AdminDashboardPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const [usersJson, categoriesJson, productsJson, ordersJson, financeJson]: any[] =
+      const [usersJson, categoriesJson, productsJson, ordersJson, financeJson, legalJson]: any[] =
         await Promise.all([
           apiClient('/admin/users'),
           apiClient('/admin/categories').catch(() => ({ success: false, data: [] })),
           apiClient('/admin/products'),
           apiClient('/admin/orders'),
           apiClient('/admin/finance'),
+          apiClient('/admin/legal').catch(() => ({ success: false, data: [] })),
         ]);
 
       if (usersJson?.success) setUsers(usersJson.data || []);
@@ -189,6 +232,22 @@ export default function AdminDashboardPage() {
           }
         );
       }
+
+      if (legalJson?.success && Array.isArray(legalJson.data)) {
+        const map: Record<string, LegalDoc> = {};
+        for (const item of legalJson.data) {
+          map[item.slug] = item;
+        }
+        setLegalDocsMap(map);
+
+        const initialDoc = map[activeLegalSlug] || map['privacy-policy'];
+        if (initialDoc) {
+          setLegalTitle(initialDoc.title);
+          setLegalVersion(initialDoc.version);
+          setLegalContent(initialDoc.content);
+          setLegalLastUpdated(initialDoc.updated_at || '');
+        }
+      }
     } catch (error: any) {
       console.error('Admin Dashboard fetch error:', error);
       setFetchError(error?.message || t('serverLoadErrorTitle'));
@@ -200,6 +259,111 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     fetchAllAdminData();
   }, []);
+
+  // --- HANDLER DOKUMEN LEGAL (PRIVACY POLICY & TERMS) ---
+  const handleSelectLegalTab = (slug: 'privacy-policy' | 'terms-of-service') => {
+    setActiveLegalSlug(slug);
+    setLegalPreviewMode(false);
+    const selected = legalDocsMap[slug];
+    if (selected) {
+      setLegalTitle(selected.title);
+      setLegalVersion(selected.version);
+      setLegalContent(selected.content);
+      setLegalLastUpdated(selected.updated_at || '');
+    } else {
+      setLegalTitle(
+        slug === 'privacy-policy'
+          ? 'Kebijakan Privasi (Privacy Policy) — NTTStorePi'
+          : 'Syarat & Ketentuan Layanan (Terms of Service) — NTTStorePi'
+      );
+      setLegalVersion('1.0');
+      setLegalContent('');
+      setLegalLastUpdated('');
+    }
+  };
+
+  const insertLegalSnippet = (snippet: string) => {
+    const el = legalTextareaRef.current;
+    if (!el) {
+      setLegalContent((prev) => `${prev}\n${snippet}`);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const updated = legalContent.substring(0, start) + snippet + legalContent.substring(end);
+    setLegalContent(updated);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + snippet.length, start + snippet.length);
+    }, 20);
+  };
+
+  const handleSaveLegalDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!legalTitle.trim() || !legalContent.trim()) {
+      Swal.fire(
+        tr('legalIncompleteTitle', 'Data Belum Lengkap', 'Incomplete Data'),
+        tr(
+          'legalIncompleteText',
+          'Judul dan isi dokumen wajib diisi.',
+          'Document title and content are required.'
+        ),
+        'warning'
+      );
+      return;
+    }
+
+    setSavingLegal(true);
+    try {
+      const json: any = await apiClient(`/admin/legal/${activeLegalSlug}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: legalTitle.trim(),
+          version: legalVersion.trim() || '1.0',
+          content: legalContent,
+        }),
+      });
+
+      if (json && json.success === false) {
+        throw new Error(json.message || t('failedTitle'));
+      }
+
+      if (json?.data) {
+        setLegalDocsMap((prev) => ({
+          ...prev,
+          [activeLegalSlug]: json.data,
+        }));
+        setLegalLastUpdated(json.data.updated_at || '');
+      }
+
+      Swal.fire({
+        icon: 'success',
+        title: t('successTitle'),
+        text:
+          json?.message ||
+          tr(
+            'legalSavedSuccess',
+            'Perubahan dokumen berhasil dipublikasikan ke halaman publik.',
+            'Document changes have been published to the public page.'
+          ),
+        timer: 1600,
+        showConfirmButton: false,
+      });
+    } catch (err: any) {
+      Swal.fire(
+        t('failedTitle'),
+        err?.message ||
+          tr(
+            'legalSaveError',
+            'Gagal menyimpan dokumen legal.',
+            'Failed to save legal document.'
+          ),
+        'error'
+      );
+    } finally {
+      setSavingLegal(false);
+    }
+  };
 
   // --- HANDLER TAMBAH / EDIT KATEGORI ---
   const resetCategoryForm = () => {
@@ -475,6 +639,11 @@ export default function AdminDashboardPage() {
     { id: 'products', label: t('adminTabProducts'), icon: <Package className="w-4 h-4" />, badge: products.length },
     { id: 'orders', label: t('adminTabOrders'), icon: <ShoppingBag className="w-4 h-4" />, badge: orders.length },
     { id: 'finance', label: t('adminTabFinance'), icon: <Coins className="w-4 h-4" /> },
+    {
+      id: 'legal',
+      label: tr('adminTabLegal', 'Legal & Kebijakan', 'Legal & Policies'),
+      icon: <FileText className="w-4 h-4" />,
+    },
   ];
 
   return (
@@ -623,7 +792,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Pintasan Cepat */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="font-bold text-gray-900 text-base">
@@ -653,6 +822,31 @@ export default function AdminDashboardPage() {
                       className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer"
                     >
                       {t('addCategoryShortcutBtn')}
+                    </button>
+                  </div>
+
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base">
+                        {tr(
+                          'legalShortcutTitle',
+                          'Privacy Policy & Terms',
+                          'Privacy Policy & Terms'
+                        )}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {tr(
+                          'legalShortcutDesc',
+                          'Perbarui dokumen kepatuhan Pi Mainnet & UU PDP kapan saja.',
+                          'Update Pi Mainnet & data privacy compliance documents anytime.'
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('legal')}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer"
+                    >
+                      {tr('manageLegalBtn', 'Kelola Legal', 'Manage Legal')}
                     </button>
                   </div>
                 </div>
@@ -1301,6 +1495,264 @@ export default function AdminDashboardPage() {
                     </table>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TAB 7: KELOLA PRIVACY POLICY & TERMS OF SERVICE           */}
+            {/* ========================================================= */}
+            {activeTab === 'legal' && (
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4">
+                  <div>
+                    <h2 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                      {tr(
+                        'legalEditorHeading',
+                        'Kelola Privacy Policy & Terms of Service',
+                        'Manage Privacy Policy & Terms of Service'
+                      )}
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {tr(
+                        'legalEditorSubtitle',
+                        'Perbarui dokumen kepatuhan Pi Network Mainnet & UU PDP kapan saja.',
+                        'Update Pi Network Mainnet & data privacy compliance documents anytime.'
+                      )}
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/${activeLegalSlug}`}
+                    target="_blank"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-extrabold"
+                  >
+                    <span>
+                      {tr('viewPublicPageBtn', 'Lihat Halaman Publik', 'View Public Page')}
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                {/* Sub-Tab Pilihan Dokumen */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl w-fit">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectLegalTab('privacy-policy')}
+                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition ${
+                        activeLegalSlug === 'privacy-policy'
+                          ? 'bg-white text-emerald-700 shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>
+                        {tr('privacyPolicyTab', 'Kebijakan Privasi (Privacy Policy)', 'Privacy Policy')}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectLegalTab('terms-of-service')}
+                      className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition ${
+                        activeLegalSlug === 'terms-of-service'
+                          ? 'bg-white text-purple-700 shadow-xs'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>
+                        {tr('termsOfServiceTab', 'Syarat & Ketentuan (Terms)', 'Terms of Service')}
+                      </span>
+                    </button>
+                  </div>
+
+                  {legalLastUpdated && (
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      {tr('lastUpdatedLabel', 'Terakhir diperbarui:', 'Last updated:')}{' '}
+                      {new Date(legalLastUpdated).toLocaleString(isEn ? 'en-US' : 'id-ID', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveLegalDocument} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                        {tr('legalTitleField', 'Judul Dokumen', 'Document Title')}{' '}
+                        <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={legalTitle}
+                        onChange={(e) => setLegalTitle(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                        {tr('legalVersionField', 'Versi Dokumen', 'Document Version')}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="1.0"
+                        value={legalVersion}
+                        onChange={(e) => setLegalVersion(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Toolbar Format Cepat & Switch Mode Edit / Pratinjau */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {!legalPreviewMode ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              insertLegalSnippet(
+                                isEn
+                                  ? '\n<h2>New Section Title</h2>\n'
+                                  : '\n<h2>Judul Bagian Baru</h2>\n'
+                              )
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <Heading2 className="w-3.5 h-3.5" />
+                            <span>{tr('snippetHeading', 'Subjudul', 'Subheading')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              insertLegalSnippet(
+                                isEn
+                                  ? '\n<p>Write paragraph text here...</p>\n'
+                                  : '\n<p>Tulis paragraf di sini...</p>\n'
+                              )
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <Type className="w-3.5 h-3.5" />
+                            <span>{tr('snippetParagraph', 'Paragraf', 'Paragraph')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              insertLegalSnippet(
+                                isEn
+                                  ? '\n<ul>\n  <li><strong>Point 1:</strong> Description</li>\n  <li><strong>Point 2:</strong> Description</li>\n</ul>\n'
+                                  : '\n<ul>\n  <li><strong>Poin 1:</strong> Keterangan</li>\n  <li><strong>Poin 2:</strong> Keterangan</li>\n</ul>\n'
+                              )
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <List className="w-3.5 h-3.5" />
+                            <span>{tr('snippetList', 'Daftar Poin', 'Bullet List')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              insertLegalSnippet(
+                                isEn ? '<strong>Bold Text</strong>' : '<strong>Teks Tebal</strong>'
+                              )
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold cursor-pointer"
+                          >
+                            <Bold className="w-3.5 h-3.5" />
+                            <span>{tr('snippetBold', 'Tebal', 'Bold')}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-bold text-purple-700">
+                          {tr(
+                            'legalPreviewModeLabel',
+                            'Mode Pratinjau Tampilan Publik',
+                            'Public Page Preview Mode'
+                          )}
+                        </span>
+                      )}
+
+                      <div className="flex gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => setLegalPreviewMode(false)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                            !legalPreviewMode
+                              ? 'bg-purple-700 text-white'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>{tr('editBtn', 'Edit', 'Edit')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLegalPreviewMode(true)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                            legalPreviewMode
+                              ? 'bg-purple-700 text-white'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>{tr('previewBtn', 'Pratinjau', 'Preview')}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {legalPreviewMode ? (
+                      <div className="min-h-[360px] p-6 rounded-2xl border border-gray-200 bg-gray-50/50">
+                        <article
+                          className="prose prose-sm max-w-none text-gray-700 prose-headings:font-extrabold prose-headings:text-gray-900 prose-h2:text-base prose-h2:mt-5 prose-h2:mb-2 prose-ul:list-disc prose-ul:pl-5"
+                          dangerouslySetInnerHTML={{ __html: legalContent }}
+                        />
+                      </div>
+                    ) : (
+                      <textarea
+                        ref={legalTextareaRef}
+                        rows={15}
+                        required
+                        value={legalContent}
+                        onChange={(e) => setLegalContent(e.target.value)}
+                        className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end pt-1">
+                    <button
+                      type="submit"
+                      disabled={savingLegal}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-extrabold shadow-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingLegal ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>
+                        {savingLegal
+                          ? tr('savingText', 'Menyimpan...', 'Saving...')
+                          : tr(
+                              'saveAndPublishBtn',
+                              'Simpan & Publikasikan Sekarang',
+                              'Save & Publish Now'
+                            )}
+                      </span>
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
           </>
