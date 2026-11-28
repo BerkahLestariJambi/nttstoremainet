@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sparkles,
   Crown,
+  FileText,
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -29,7 +30,17 @@ type UserRole = 'customer' | 'seller' | 'admin';
 export default function AccountPage() {
   const router = useRouter();
   const { piUser, setPiUser } = useCart();
-  const { t } = useLanguage();
+  const langCtx: any = useLanguage();
+  const { t } = langCtx;
+  const currentLang = String(langCtx?.language || langCtx?.lang || 'id').toLowerCase();
+  const isEn = currentLang.startsWith('en');
+
+  const tr = (key: string, idText: string, enText: string): string => {
+    const val = typeof t === 'function' ? t(key) : '';
+    if (val && val !== key) return val;
+    return isEn ? enText : idText;
+  };
+
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [userRoles, setUserRoles] = useState<UserRole[]>(['customer']);
@@ -333,13 +344,76 @@ export default function AccountPage() {
               <div>
                 <p className="text-sm font-extrabold text-purple-950">Admin Control Center</p>
                 <p className="text-xs text-purple-700">
-                  Kelola pengguna, multi-role, produk & keuangan
+                  {tr(
+                    'adminControlCenterSubtitle',
+                    'Kelola pengguna, multi-role, produk, keuangan & legal',
+                    'Manage users, multi-role, products, finance & legal policies'
+                  )}
                 </p>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-purple-700" />
           </Link>
         )}
+
+        {/* 7. Dokumen Legal & Kepatuhan (Tampil untuk Semua Pengguna & Peninjau Mainnet) */}
+        <div className="pt-2 space-y-2.5">
+          <p className="px-1 text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+            {tr('legalSectionTitle', 'Informasi Legal & Kepatuhan', 'Legal & Compliance')}
+          </p>
+
+          <Link
+            href="/privacy-policy"
+            className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">
+                  {tr('privacyPolicyMenu', 'Kebijakan Privasi (Privacy Policy)', 'Privacy Policy')}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {tr(
+                    'privacyPolicyMenuDesc',
+                    'Perlindungan data pribadi Pi Network & UU PDP',
+                    'Pi Network & personal data protection policy'
+                  )}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+          </Link>
+
+          <Link
+            href="/terms-of-service"
+            className="flex items-center justify-between p-4 bg-white hover:bg-gray-50 rounded-2xl border border-gray-100 shadow-sm transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">
+                  {tr(
+                    'termsOfServiceMenu',
+                    'Syarat & Ketentuan (Terms of Service)',
+                    'Terms of Service'
+                  )}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {tr(
+                    'termsOfServiceMenuDesc',
+                    'Aturan penggunaan layanan & transaksi NTTStorePi',
+                    'Rules for using NTTStorePi services & transactions'
+                  )}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-400" />
+          </Link>
+        </div>
       </div>
 
       {/* Tombol Logout */}
