@@ -21,7 +21,7 @@ import { authService } from '@/services/authService';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import logoNtt from '@/app/logonttstorepi.ico';
 
-const CLIENT_ID = 'I3j4kvxCJb0ZixCLzM5tgTV8TaKuN5oq1qQNAk14s9s';
+const CLIENT_ID = 'h6x8XNlBlh5p2PmDyyMJUIRJ1wvGkApNxtPosrjCD3I';
 
 export default function Navbar() {
   const router = useRouter();
