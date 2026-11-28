@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
       </head>
-      <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased pb-24 md:pb-0">
+      <body className="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col antialiased">
         <LanguageProvider>
           <CartProvider>
             {/* Header & Menu Utama */}
@@ -38,12 +38,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {children}
             </main>
 
-            {/* Simple Clean Footer */}
-            <footer className="border-t border-gray-200 bg-white py-6 text-center text-xs text-gray-500">
-              <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <p>© {new Date().getFullYear()} NTTStorePi. Powered by Pi Network.</p>
+            {/* Footer Utama (pb-28 di mobile agar tidak tertutup BottomNav) */}
+            <footer className="relative z-10 border-t border-gray-200 bg-white pt-6 pb-28 md:pb-6 text-center text-xs text-gray-500 mt-auto">
+              <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p className="font-medium text-gray-600">
+                  © {new Date().getFullYear()} NTTStorePi. Powered by Pi Network.
+                </p>
 
-                <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+                <div className="flex flex-wrap items-center justify-center gap-3 text-gray-400">
                   <span>Tenun Ikat</span>
                   <span>•</span>
                   <span>Kopi Flores</span>
@@ -52,17 +54,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
 
                 {/* Tautan Legal Wajib untuk Verifikasi Pi Network Mainnet */}
-                <div className="flex items-center justify-center gap-4 font-semibold text-gray-600">
+                <div className="flex items-center justify-center gap-3 font-bold text-gray-700">
                   <Link
                     href="/privacy-policy"
-                    className="hover:text-amber-600 transition-colors"
+                    className="hover:text-amber-600 underline decoration-gray-300 underline-offset-4 transition-colors"
                   >
                     Privacy Policy
                   </Link>
                   <span className="text-gray-300">|</span>
                   <Link
                     href="/terms-of-service"
-                    className="hover:text-amber-600 transition-colors"
+                    className="hover:text-amber-600 underline decoration-gray-300 underline-offset-4 transition-colors"
                   >
                     Terms of Service
                   </Link>
