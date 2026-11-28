@@ -69,11 +69,8 @@ function autoFormatToHtml(rawInput: string): string {
 
   const formatInline = (str: string) => {
     let out = escapeHtml(str);
-    // **teks tebal** -> <strong>teks tebal</strong>
     out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // *teks miring* -> <em>teks miring</em>
     out = out.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-    // `kode` -> <code>kode</code>
     out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
     return out;
   };
@@ -97,7 +94,6 @@ function autoFormatToHtml(rawInput: string): string {
       continue;
     }
 
-    // Deteksi Subjudul: diawali "## " atau nomor bab seperti "1. Judul Bagian" (pendek tanpa titik akhir)
     if (/^#{1,3}\s+/.test(line)) {
       flushList();
       const headingText = line.replace(/^#{1,3}\s+/, '');
@@ -111,10 +107,8 @@ function autoFormatToHtml(rawInput: string): string {
       continue;
     }
 
-    // Deteksi Daftar Poin: diawali "- ", "* ", atau "• "
     if (/^[-*•]\s+/.test(line)) {
       const itemText = line.replace(/^[-*•]\s+/, '');
-      // Jika formatnya "Judul Poin: penjelasan", tebalkan otomatis label sebelum titik dua
       const colonIdx = itemText.indexOf(':');
       if (colonIdx > 0 && colonIdx < 45 && !itemText.includes('**')) {
         const label = itemText.slice(0, colonIdx + 1);
@@ -128,7 +122,6 @@ function autoFormatToHtml(rawInput: string): string {
       continue;
     }
 
-    // Paragraf biasa
     flushList();
     htmlBlocks.push(`<p>${formatInline(line)}</p>`);
   }
@@ -138,30 +131,27 @@ function autoFormatToHtml(rawInput: string): string {
 }
 
 /**
- * Mengonversi HTML tersimpan di database kembali ke teks bersih yang mudah dibaca/diedit admin
- * tanpa harus melihat tag HTML mentah.
+ * Mengonversi HTML tersimpan di database kembali ke teks bersih yang mudah diedit admin.
  */
 function htmlToEditablePlainText(html: string): string {
   const trimmed = (html || '').trim();
   if (!trimmed) return '';
 
-  // Jika tidak ada tag HTML, kembalikan langsung
   if (!/<[a-z][\s\S]*>/i.test(trimmed)) {
     return trimmed;
   }
 
   let text = trimmed;
+  text = text.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
+  text = text.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
+  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
   text = text.replace(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi, '\n\n## $1\n');
   text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
   text = text.replace(/<\/?(ul|ol)[^>]*>/gi, '\n');
   text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n$1\n');
   text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<(strong|b)[^>]*>([\s\S]*?)<\/\1>/gi, '**$2**');
-  text = text.replace(/<(em|i)[^>]*>([\s\S]*?)<\/\1>/gi, '*$2*');
-  text = text.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`');
   text = text.replace(/<[^>]+>/g, '');
 
-  // Decode entitas HTML umum
   text = text
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -284,6 +274,7 @@ export default function AdminLegalEditorPage() {
         const res = await fetch(`${API_BASE_URL}/admin/legal`, {
           headers,
           credentials: 'include',
+          cache: 'no-store',
         });
         const json = await res.json();
         if (json?.success && Array.isArray(json.data)) {
@@ -313,7 +304,6 @@ export default function AdminLegalEditorPage() {
     applyDocToForm(slug, docsMap[slug]);
   };
 
-  // Helper sisipkan format teks sederhana (tanpa kode HTML mentah) pada posisi kursor
   const insertTextFormat = (prefix: string, placeholder: string, suffix = '') => {
     const el = textareaRef.current;
     const currentText = contents[activeLang] || '';
@@ -362,19 +352,35 @@ export default function AdminLegalEditorPage() {
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const payload = {
+      const existing = docsMap[activeSlug];
+
+      // Hanya kirim kolom bahasa jika terisi di form, atau pertahankan nilai lama dari database
+      const payload: Record<string, string | null> = {
         version: version.trim() || '1.0',
         title: titles.id.trim(),
-        title_en: titles.en.trim() || null,
-        title_zh: titles.zh.trim() || null,
-        title_ja: titles.ja.trim() || null,
-        title_ar: titles.ar.trim() || null,
         content: autoFormatToHtml(contents.id),
-        content_en: contents.en.trim() ? autoFormatToHtml(contents.en) : null,
-        content_zh: contents.zh.trim() ? autoFormatToHtml(contents.zh) : null,
-        content_ja: contents.ja.trim() ? autoFormatToHtml(contents.ja) : null,
-        content_ar: contents.ar.trim() ? autoFormatToHtml(contents.ar) : null,
       };
+
+      const extraLangs: Exclude<LanguageCode, 'id'>[] = ['en', 'zh', 'ja', 'ar'];
+      for (const code of extraLangs) {
+        const titleKey = `title_${code}` as keyof LegalDoc;
+        const contentKey = `content_${code}` as keyof LegalDoc;
+
+        const cleanTitle = titles[code]?.trim();
+        const cleanContent = contents[code]?.trim();
+
+        if (cleanTitle) {
+          payload[titleKey] = cleanTitle;
+        } else if (existing?.[titleKey]) {
+          payload[titleKey] = String(existing[titleKey]);
+        }
+
+        if (cleanContent) {
+          payload[contentKey] = autoFormatToHtml(cleanContent);
+        } else if (existing?.[contentKey]) {
+          payload[contentKey] = String(existing[contentKey]);
+        }
+      }
 
       const res = await fetch(`${API_BASE_URL}/admin/legal/${activeSlug}`, {
         method: 'PUT',
@@ -388,11 +394,12 @@ export default function AdminLegalEditorPage() {
         throw new Error(json?.message || 'Gagal menyimpan perubahan.');
       }
 
+      const updatedDoc: LegalDoc = json.data;
       setDocsMap((prev) => ({
         ...prev,
-        [activeSlug]: json.data,
+        [activeSlug]: updatedDoc,
       }));
-      setLastUpdated(json.data?.updated_at || '');
+      applyDocToForm(activeSlug, updatedDoc);
 
       Swal.fire({
         icon: 'success',
@@ -408,7 +415,7 @@ export default function AdminLegalEditorPage() {
     }
   };
 
-  const activeLangMeta = LANGUAGES.find((l) => l.code === activeLang) || LANGUAGES[1];
+  const activeLangMeta = LANGUAGES.find((l) => l.code === activeLang) || LANGUAGES[0];
   const generatedPreviewHtml = autoFormatToHtml(contents[activeLang] || '');
 
   return (
@@ -593,7 +600,11 @@ export default function AdminLegalEditorPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      insertTextFormat('\n- ', 'Poin Pertama: Keterangan lengkap', '\n- Poin Kedua: Keterangan lengkap\n')
+                      insertTextFormat(
+                        '\n- ',
+                        'Poin Pertama: Keterangan lengkap',
+                        '\n- Poin Kedua: Keterangan lengkap\n'
+                      )
                     }
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold cursor-pointer"
                   >
