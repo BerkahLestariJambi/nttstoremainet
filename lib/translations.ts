@@ -2049,4 +2049,4 @@ export const translations: Record<LanguageCode, Record<string, string>> = {
     versionLabel: 'الإصدار',
   },
 };
-```[cite: 2]
+
