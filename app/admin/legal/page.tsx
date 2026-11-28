@@ -179,6 +179,7 @@ export default function AdminLegalEditorPage() {
   const [contents, setContents] = useState<LangFieldMap>({ ...EMPTY_LANG_MAP });
   const [version, setVersion] = useState<string>('1.0');
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [autoTranslateAll, setAutoTranslateAll] = useState<boolean>(true);
   const [previewMode, setPreviewMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
@@ -304,6 +305,14 @@ export default function AdminLegalEditorPage() {
     applyDocToForm(slug, docsMap[slug]);
   };
 
+  const handleSelectLangTab = (code: LanguageCode) => {
+    setActiveLang(code);
+    // Jika admin berpindah ke tab selain Indonesia untuk mengedit manual, matikan auto_translate agar editan manualnya tidak tertimpa
+    if (code !== 'id') {
+      setAutoTranslateAll(false);
+    }
+  };
+
   const insertTextFormat = (prefix: string, placeholder: string, suffix = '') => {
     const el = textareaRef.current;
     const currentText = contents[activeLang] || '';
@@ -354,31 +363,34 @@ export default function AdminLegalEditorPage() {
 
       const existing = docsMap[activeSlug];
 
-      // Hanya kirim kolom bahasa jika terisi di form, atau pertahankan nilai lama dari database
-      const payload: Record<string, string | null> = {
+      const payload: Record<string, any> = {
         version: version.trim() || '1.0',
         title: titles.id.trim(),
         content: autoFormatToHtml(contents.id),
+        auto_translate: autoTranslateAll,
       };
 
-      const extraLangs: Exclude<LanguageCode, 'id'>[] = ['en', 'zh', 'ja', 'ar'];
-      for (const code of extraLangs) {
-        const titleKey = `title_${code}` as keyof LegalDoc;
-        const contentKey = `content_${code}` as keyof LegalDoc;
+      // Jika auto_translate tidak dicentang, kirim perubahan manual per bahasa (atau pertahankan data lama DB)
+      if (!autoTranslateAll) {
+        const extraLangs: Exclude<LanguageCode, 'id'>[] = ['en', 'zh', 'ja', 'ar'];
+        for (const code of extraLangs) {
+          const titleKey = `title_${code}` as keyof LegalDoc;
+          const contentKey = `content_${code}` as keyof LegalDoc;
 
-        const cleanTitle = titles[code]?.trim();
-        const cleanContent = contents[code]?.trim();
+          const cleanTitle = titles[code]?.trim();
+          const cleanContent = contents[code]?.trim();
 
-        if (cleanTitle) {
-          payload[titleKey] = cleanTitle;
-        } else if (existing?.[titleKey]) {
-          payload[titleKey] = String(existing[titleKey]);
-        }
+          if (cleanTitle) {
+            payload[titleKey] = cleanTitle;
+          } else if (existing?.[titleKey]) {
+            payload[titleKey] = String(existing[titleKey]);
+          }
 
-        if (cleanContent) {
-          payload[contentKey] = autoFormatToHtml(cleanContent);
-        } else if (existing?.[contentKey]) {
-          payload[contentKey] = String(existing[contentKey]);
+          if (cleanContent) {
+            payload[contentKey] = autoFormatToHtml(cleanContent);
+          } else if (existing?.[contentKey]) {
+            payload[contentKey] = String(existing[contentKey]);
+          }
         }
       }
 
@@ -404,8 +416,10 @@ export default function AdminLegalEditorPage() {
       Swal.fire({
         icon: 'success',
         title: 'Berhasil Disimpan!',
-        text: 'Semua versi bahasa telah dikonversi rapi & aktif di halaman publik.',
-        timer: 1800,
+        text:
+          json.message ||
+          'Semua versi bahasa telah dikonversi rapi & aktif di halaman publik.',
+        timer: 2000,
         showConfirmButton: false,
       });
     } catch (err: any) {
@@ -433,7 +447,7 @@ export default function AdminLegalEditorPage() {
               Kelola Kebijakan Privasi &amp; Syarat Layanan
             </h1>
             <p className="text-xs text-gray-500">
-              Ketik langsung teks biasa (tanpa kode HTML) dalam 5 bahasa — sistem otomatis memformatnya.
+              Ketik langsung teks biasa (tanpa kode HTML) — sistem otomatis memformat &amp; menyinkronkan 5 bahasa.
             </p>
           </div>
         </div>
@@ -507,7 +521,7 @@ export default function AdminLegalEditorPage() {
                 <Globe className="w-3.5 h-3.5 text-amber-600" /> Pilih Bahasa Dokumen (5 Bahasa)
               </span>
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                <Sparkles className="w-3 h-3" /> Auto-HTML Aktif
+                <Sparkles className="w-3 h-3" /> Auto-HTML &amp; Sync Aktif
               </span>
             </div>
 
@@ -519,7 +533,7 @@ export default function AdminLegalEditorPage() {
                   <button
                     key={lang.code}
                     type="button"
-                    onClick={() => setActiveLang(lang.code)}
+                    onClick={() => handleSelectLangTab(lang.code)}
                     className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
                       isSelected
                         ? 'bg-amber-500 text-white border-amber-500 shadow-xs'
@@ -692,7 +706,19 @@ export default function AdminLegalEditorPage() {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoTranslateAll}
+                onChange={(e) => setAutoTranslateAll(e.target.checked)}
+                className="w-4 h-4 rounded accent-amber-500 cursor-pointer"
+              />
+              <span>
+                Terjemahkan &amp; perbarui otomatis ke Inggris, Mandarin, Jepang, dan Arab dari teks Indonesia
+              </span>
+            </label>
+
             <button
               type="submit"
               disabled={saving}
@@ -703,7 +729,13 @@ export default function AdminLegalEditorPage() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              <span>{saving ? 'Menyimpan...' : 'Simpan & Publikasikan 5 Bahasa'}</span>
+              <span>
+                {saving
+                  ? autoTranslateAll
+                    ? 'Menyimpan & Menerjemahkan...'
+                    : 'Menyimpan...'
+                  : 'Simpan & Publikasikan 5 Bahasa'}
+              </span>
             </button>
           </div>
         </form>
